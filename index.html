@@ -371,6 +371,11 @@ const MODULES = {
     cols:[["nom","Nom"],["role","Rôle",v=>esc(ROLE_LABELS[v]||v)],["statut","Statut",v=>pill(v)]],
     fields:[["nom","Nom",{}],["role","Rôle",{opts:["proprietaire_compte","administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner","proprietaire_bien","partenaire"],def:"gestionnaire"}],
       ["statut","Statut",{opts:["actif","invite","suspendu"],def:"actif"}]]},
+  connaissances:{title:"Base de connaissances",add:"Ajouter un fait",table:"fait_connaissance",
+    cols:[["bien_id","Bien",v=>v?refName("bien",v):'<span class="pill gray">Général</span>'],["categorie","Catégorie"],["texte","Information",v=>esc((v||"").slice(0,90))]],
+    fields:[["bien_id","Bien concerné (vide = tous)",{ref:"bien"}],
+      ["categorie","Catégorie",{opts:["Arrivée & départ","Logement","Équipements","Quartier & transports","Règles de la maison","Autre"]}],
+      ["texte","Information",{long:1,req:1}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
 const PILLMAP={actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
@@ -388,10 +393,11 @@ const RUBRIQUES=[
     ["mult","Multiple",{cm:1}],["mois","Mensuel",{c:1}],["an","Annuel",{ca:1}]]},
   {k:"inbox",label:"Boîte de réception",icon:"✉",subs:[
     ["conv","Conversations",{m:"messagerie"}],
-    ["ia","Réponses IA",{ph:"Assistant IA : ton de voix, délai de réponse automatique, base de connaissances par bien, règles « Quand / Répondre / Sauf si », test de l'IA."}],
+    ["ia","Réponses IA",{iaconfig:1}],
+    ["kb","Base de connaissances",{m:"connaissances"}],
     ["mod","Modèles de message",{m:"modeles"}],
-    ["auto","Messages automatisés",{ph:"Déclencheurs par événement (arrivée, réservation, départ…), canal, annonces concernées, activation."}],
-    ["env","Gérer les envois",{ph:"File des envois programmés : objet, statut, événement déclencheur, voyageur, annonce."}]]},
+    ["auto","Messages automatisés",{autosmsg:1}],
+    ["env","Gérer les envois",{ph:"File des envois programmés : les messages générés par l'automatisation apparaissent dans Conversations avec leur statut (brouillon → envoyé)."}]]},
   {k:"resa",label:"Réservations",icon:"▦",subs:[
     ["liste","Liste",{m:"reservations"}],
     ["coup","Coupons",{ph:"Codes promo : montant ou %, durée de séjour, dates de validité, utilisations max, annonces, statut."}],
@@ -493,6 +499,8 @@ function goRub(rk,sk){
   if(t.groupes)return renderGroupes();
   if(t.kanban){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle tâche";$("#topAdd").onclick=()=>openForm('taches');return renderTaches();}
   if(t.autotaches)return renderTachesAuto();
+  if(t.iaconfig)return renderIaConfig();
+  if(t.autosmsg)return renderAutoMsg();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -811,6 +819,65 @@ async function renderTaches(){
   document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+}
+
+/* ---------- REPONSES IA (reglages) ---------- */
+async function renderIaConfig(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data}=await sb.from("reglage").select("valeur").eq("cle","ia").maybeSingle();
+  const v=(data&&data.valeur)||{};
+  const opt=(arr,cur)=>arr.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join("");
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Réponses IA — réglages</h3></div>
+    <div style="padding:16px">
+      <div class="row2">
+        <div class="field"><label>Mode de réponse</label><select id="iaAuto"><option value="brouillon" ${v.auto!=='auto'?'selected':''}>Brouillon à relire</option><option value="auto" ${v.auto==='auto'?'selected':''}>Réponse automatique</option></select></div>
+        <div class="field"><label>Délai de réponse</label><select id="iaDelai">${opt(['Immédiat','1 min','2 min','5 min','10 min'],v.delai||'Immédiat')}</select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Ton de la voix</label><select id="iaTon">${opt(['Professionnel','Amical','Neutre'],v.ton||'Professionnel')}</select></div>
+        <div class="field"><label>Longueur</label><select id="iaLong">${opt(['Standard','Concis','Approfondi'],v.longueur||'Standard')}</select></div>
+      </div>
+      <div class="field"><label>Signature / instructions supplémentaires</label><textarea id="iaSign" rows="3">${esc(v.signature||'')}</textarea></div>
+      <div class="phnote">L'IA s'appuiera sur ta <b>Base de connaissances</b>, les détails du bien et de la réservation. ⚠️ La génération de réponses en direct nécessite une clé d'IA (OpenAI / Anthropic), service payant — je ne l'active pas sans ton accord.</div>
+      <div style="margin-top:12px"><button class="btn g" id="iaSave">Enregistrer les réglages</button> <span class="ok" id="iaOk"></span></div>
+    </div></div>`;
+  $("#iaSave").onclick=async()=>{
+    const valeur={auto:$("#iaAuto").value,delai:$("#iaDelai").value,ton:$("#iaTon").value,longueur:$("#iaLong").value,signature:$("#iaSign").value};
+    $("#iaSave").disabled=true;
+    const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle:"ia",valeur},{onConflict:"tenant_id,cle"});
+    $("#iaSave").disabled=false;
+    if(error){$("#iaOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}
+    $("#iaOk").textContent="Enregistré ✓"; toast("Réglages IA enregistrés");
+  };
+}
+
+/* ---------- MESSAGES AUTOMATISES ---------- */
+async function renderAutoMsg(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  const back=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const horizon=new Date(Date.now()+60*864e5).toISOString().slice(0,10);
+  const [{data:modeles},{data:resa},{data:existing}]=await Promise.all([
+    sb.from("modele_message").select("*").not("evenement","is",null).order("evenement"),
+    sb.from("reservation").select("*").in("statut",["confirmee","terminee"]).gte("depart",back).lte("arrivee",horizon),
+    sb.from("message").select("reservation_id,corps"),
+  ]);
+  const seen=new Set((existing||[]).map(m=>m.reservation_id+"|"+(m.corps||"")));
+  const sub=(txt,r)=>(txt||"").replace(/\{nom\}/g,(refName("voyageur",r.voyageur_id)||"")).replace(/\{bien\}/g,(refName("bien",r.bien_id)||""));
+  const planned=[];
+  (modeles||[]).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
+  const EVL={avant_arrivee:"Avant l'arrivée",arrivee:"À l'arrivée",depart:"Au départ",apres_depart:"Après le départ",reservation:"À la réservation"};
+  const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td></tr>`).join("");
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Règles de messages automatisés</h3><span class="sp"></span><span class="muted">${(modeles||[]).length} règle(s)</span></div>
+      <div style="overflow:auto">${(modeles&&modeles.length)?`<table><thead><tr><th>Modèle</th><th>Événement</th><th>Canal</th><th>Délai</th></tr></thead><tbody>${rulesRows}</tbody></table>`:'<div class="empty">Aucun modèle avec événement. Ajoutez-en dans « Modèles de message » en renseignant un événement.</div>'}</div></div>
+    <div class="panel"><div class="phead"><h3>Programmer les messages</h3></div>
+      <div style="padding:16px">
+        <div class="phnote">Pour chaque règle et chaque réservation à venir (sans doublon), crée un message <b>brouillon</b> personnalisé (nom du voyageur, bien), visible dans <b>Conversations</b>. Rien n'est envoyé tout seul : tu relis puis tu envoies.</div>
+        <div style="margin-top:12px"><button class="btn g" id="pmBtn" ${planned.length?'':'disabled'}>${planned.length?('Préparer '+planned.length+' message(s)'):'Tout est à jour'}</button> <span class="ok" id="pmOk"></span></div>
+      </div></div>`;
+  const pb=$("#pmBtn"); if(pb&&planned.length) pb.onclick=async()=>{pb.disabled=true;const {error}=await sb.from("message").insert(planned);pb.disabled=false;if(error){$("#pmOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}toast(planned.length+" message(s) préparés");renderAutoMsg();};
 }
 
 /* ---------- TACHES AUTOMATIQUES ---------- */
