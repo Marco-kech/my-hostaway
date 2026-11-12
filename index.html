@@ -143,6 +143,17 @@ td .act{display:flex;gap:6px}
 .mtable th:first-child,.mtable td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;z-index:1}
 .mtable td.bk{background:var(--brand);color:#fff;font-weight:700}
 .mtable td.bl{background:#f6e3df}
+.kboard{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+@media(max-width:900px){.kboard{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.kboard{grid-template-columns:1fr}}
+.kcol{background:#fbfaf6;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:80px}
+.kcol-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.kc{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:10px;margin-bottom:8px;box-shadow:0 1px 2px rgba(20,53,42,.05)}
+.kc-t{font-weight:700;font-size:13.5px;margin-bottom:4px}
+.kc-m{font-size:12px;margin-bottom:3px}
+.kc-s{font-size:12px;color:var(--muted);margin-bottom:8px}
+.kc-a{display:flex;flex-wrap:wrap;gap:4px}
+.kc-a .btn{padding:4px 8px;font-size:11.5px}
 </style>
 </head>
 <body>
@@ -390,7 +401,7 @@ const RUBRIQUES=[
     ["liste","Liste",{m:"biens"}],
     ["cp","Champs personnalisés",{ph:"Champs sur mesure par annonce : code de porte, guide voyageur, IBAN, instructions, contact d'urgence…"}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
-    ["gerer","Gérer les tâches",{m:"taches"}],
+    ["gerer","Gérer les tâches",{kanban:1}],
     ["auto","Tâches automatiques",{ph:"Génération auto : catégorie, début d'événement (ex. 2 h après départ), échéance avant prochaine arrivée, récurrence, coût, affectation."}],
     ["check","Modèles de checklist",{ph:"Listes de contrôle réutilisables : ménage, panier de bienvenue, inspection chambre."}],
     ["arch","Archivé",{ph:"Tâches archivées (titre, catégories, affecté, superviseur, dates)."}],
@@ -480,6 +491,7 @@ function goRub(rk,sk){
   if(t.ca)return renderCalAnnuel();
   if(t.fi)return renderFinances();
   if(t.groupes)return renderGroupes();
+  if(t.kanban){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle tâche";$("#topAdd").onclick=()=>openForm('taches');return renderTaches();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
@@ -583,7 +595,7 @@ async function openForm(k,row){
     else res=await sb.from(m.table).insert(d);
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
-    invalidate(m.table); fermer(); toast("Enregistré"); renderList(k);
+    invalidate(m.table); fermer(); toast("Enregistré"); goRub(state.rub,state.sub);
   };
 }
 async function delRow(k,id){
@@ -594,7 +606,7 @@ async function delRow(k,id){
   $("#dOk").onclick=async()=>{
     const {error}=await sb.from(m.table).delete().eq("id",id);
     if(error){$("#dErr").textContent=error.message;return;}
-    invalidate(m.table);fermer();toast("Supprimé");renderList(k);
+    invalidate(m.table);fermer();toast("Supprimé");goRub(state.rub,state.sub);
   };
 }
 
@@ -771,6 +783,32 @@ function payForm(resaId){
     if(error){$("#pErr").textContent=error.message;return;}
     fermer();toast("Paiement enregistré");renderFinances();
   };
+}
+
+/* ---------- TACHES (Kanban) ---------- */
+async function renderTaches(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("intervenant")]);
+  const {data}=await sb.from("tache").select("*").order("date_prevue");
+  const cols=[["a_faire","À faire","gold"],["en_cours","En cours","blue"],["fait","Fait","green"],["annulee","Annulée","red"]];
+  state.cache=state.cache||{}; state.cache.taches=data||[];
+  const card=t=>{
+    const moves=cols.filter(c=>c[0]!==t.statut).map(c=>`<button class="btn o sm" data-mv="${t.id}" data-to="${c[0]}">→ ${c[1]}</button>`).join("");
+    return `<div class="kc">
+      <div class="kc-t">${esc(t.titre)}</div>
+      <div class="kc-m">${pill(t.type)}${t.bien_id?(' · '+esc(refName("bien",t.bien_id))):''}</div>
+      <div class="kc-s">${t.date_prevue?fdate(t.date_prevue):'—'}${t.heure_prevue?(' '+String(t.heure_prevue).slice(0,5)):''}${t.intervenant_id?(' · '+esc(refName("intervenant",t.intervenant_id))):''}${t.cout?(' · '+money(t.cout)):''}</div>
+      <div class="kc-a">${moves}<button class="btn o sm" data-edt="${t.id}">Modifier</button><button class="btn d sm" data-delt="${t.id}">×</button></div>
+    </div>`;
+  };
+  const colHtml=cols.map(c=>{
+    const items=(data||[]).filter(t=>t.statut===c[0]);
+    return `<div class="kcol"><div class="kcol-h"><span class="pill ${c[2]}">${c[1]}</span><span class="muted">${items.length}</span></div>${items.map(card).join("")||'<div class="muted" style="padding:8px;font-size:12px">Vide</div>'}</div>`;
+  }).join("");
+  $("#content").innerHTML=`<div class="kboard">${colHtml}</div>`;
+  document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
+  document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
+  document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
 }
 
 /* ---------- GROUPES / DROITS ---------- */
