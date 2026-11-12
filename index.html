@@ -427,17 +427,17 @@ const RUBRIQUES=[
   {k:"resa",label:"Réservations",icon:"▦",subs:[
     ["liste","Liste",{m:"reservations"}],
     ["coup","Coupons",{m:"coupons"}],
-    ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les réservations (nom, type, public, variable)."}],
+    ["cp","Champs personnalisés",{champperso:"reservation"}],
     ["livre","Livre d'or",{m:"voyageurs"}]]},
   {k:"annonces",label:"Annonces",icon:"⌂",subs:[
     ["liste","Liste",{m:"biens"}],
-    ["cp","Champs personnalisés",{ph:"Champs sur mesure par annonce : code de porte, guide voyageur, IBAN, instructions, contact d'urgence…"}]]},
+    ["cp","Champs personnalisés",{champperso:"bien"}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["auto","Tâches automatiques",{autotaches:1}],
     ["check","Modèles de checklist",{checklists:1}],
     ["arch","Archivé",{ph:"Tâches archivées (titre, catégories, affecté, superviseur, dates)."}],
-    ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les tâches (temps de ménage, problèmes de départ…)."}]]},
+    ["cp","Champs personnalisés",{champperso:"tache"}]]},
   {k:"avis",label:"Avis",icon:"★",subs:[
     ["gerer","Gérer les avis",{m:"avis"}],
     ["auto","Avis automatiques",{avisauto:1}],
@@ -508,6 +508,60 @@ function renderSubtabs(rub){
   bar.innerHTML=rub.subs.map(s=>`<button data-sk="${s[0]}" class="${s[0]===state.sub?'on':''}">${esc(s[1])}</button>`).join("");
   bar.querySelectorAll("[data-sk]").forEach(b=>b.onclick=()=>goRub(state.rub,b.dataset.sk));
 }
+const CP_TYPES={texte:"Texte",zone:"Zone de texte",nombre:"Nombre",liste:"Liste déroulante"};
+const CP_LBL={reservation:"réservations",bien:"annonces",tache:"tâches"};
+async function renderChampsPerso(objet){
+  $("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau champ";$("#topAdd").onclick=()=>champPersoForm(objet,null);
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data,error}=await sb.from("champ_perso").select("*").eq("objet",objet).order("ordre");
+  if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
+  state.cache=state.cache||{}; state.cache.champperso=data||[];
+  const rows=(data||[]).map(c=>`<tr><td>${esc(c.nom)}</td><td>${esc(CP_TYPES[c.type]||c.type)}</td>
+    <td>${c.variable?('<code>'+esc(c.variable)+'</code>'):'<span class="muted">—</span>'}</td>
+    <td>${c.public?pill('actif'):pill('inactif')}</td><td class="muted">${esc(c.valeurs||'')}</td>
+    <td style="text-align:right"><button class="btn o sm" data-edcp="${c.id}">Modifier</button> <button class="btn d sm" data-delcp="${c.id}">×</button></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Champs personnalisés — ${CP_LBL[objet]||objet}</h3><span class="sp"></span><span class="muted">${(data||[]).length} champ(s)</span></div>
+    ${(data&&data.length)?`<table><thead><tr><th>Nom</th><th>Type</th><th>Variable</th><th>Public</th><th>Valeurs</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun champ personnalisé. Cliquez sur « + Nouveau champ ».</div>'}</div>`;
+  document.querySelectorAll("[data-edcp]").forEach(b=>b.onclick=()=>champPersoForm(objet,b.dataset.edcp));
+  document.querySelectorAll("[data-delcp]").forEach(b=>b.onclick=()=>champPersoDel(objet,b.dataset.delcp));
+}
+function champPersoForm(objet,id){
+  const c=id?((state.cache.champperso||[]).find(x=>x.id===id)||{}):{};
+  const t=c.type||"texte";
+  ouvrir(`<div class="h"><h3>${id?"Modifier le":"Nouveau"} champ personnalisé</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="field"><label>Nom *</label><input id="cpNom" value="${esc(c.nom||'')}" placeholder="Ex. Code du portail"></div>
+      <div class="field"><label>Variable</label><input id="cpVar" value="${esc(c.variable||'')}" placeholder="custom_code_portail"></div>
+      <div class="field"><label>Type</label><select id="cpType">${["texte","zone","nombre","liste"].map(o=>`<option value="${o}" ${t===o?'selected':''}>${CP_TYPES[o]}</option>`).join("")}</select></div>
+      <div class="field"><label>Valeurs (pour une liste, séparées par ;)</label><input id="cpVal" value="${esc(c.valeurs||'')}" placeholder="Option 1; Option 2; Option 3"></div>
+      <div class="field"><label><input type="checkbox" id="cpPub" ${c.public?'checked':''}> Visible côté voyageur (public)</label></div>
+      <div class="field"><label>Ordre d'affichage</label><input id="cpOrdre" type="number" value="${c.ordre!=null?c.ordre:0}"></div>
+      <div class="err" id="cpErr"></div>
+    </div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="cpSave">Enregistrer</button></div>`);
+  $("#cpSave").onclick=async()=>{
+    const nom=$("#cpNom").value.trim();
+    if(!nom){$("#cpErr").textContent="Donnez un nom au champ.";return;}
+    const payload={nom,variable:$("#cpVar").value.trim()||null,type:$("#cpType").value,valeurs:$("#cpVal").value.trim()||null,public:$("#cpPub").checked,ordre:Number($("#cpOrdre").value)||0};
+    $("#cpSave").disabled=true;
+    let res;
+    if(id) res=await sb.from("champ_perso").update(payload).eq("id",id);
+    else res=await sb.from("champ_perso").insert({tenant_id:state.tenant.id,objet,...payload});
+    $("#cpSave").disabled=false;
+    if(res.error){$("#cpErr").textContent=res.error.message;return;}
+    fermer(); toast("Enregistré"); renderChampsPerso(objet);
+  };
+}
+function champPersoDel(objet,id){
+  ouvrir(`<div class="h"><h3>Supprimer ?</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><p class="muted">Ce champ personnalisé sera supprimé.</p><div class="err" id="cpErr2"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="cpDok">Supprimer</button></div>`);
+  $("#cpDok").onclick=async()=>{
+    const {error}=await sb.from("champ_perso").delete().eq("id",id);
+    if(error){$("#cpErr2").textContent=error.message;return;}
+    fermer(); toast("Supprimé"); renderChampsPerso(objet);
+  };
+}
 function goRub(rk,sk){
   const rub=RUBRIQUES.find(r=>r.k===rk)||RUBRIQUES[0];
   state.rub=rub.k;
@@ -547,6 +601,7 @@ function goRub(rk,sk){
   if(t.paramcompte)return renderParamCompte();
   if(t.paramlangues)return renderParamLangues();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
+  if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
