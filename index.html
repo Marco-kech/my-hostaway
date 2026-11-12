@@ -427,13 +427,13 @@ const RUBRIQUES=[
     ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les tâches (temps de ménage, problèmes de départ…)."}]]},
   {k:"avis",label:"Avis",icon:"★",subs:[
     ["gerer","Gérer les avis",{m:"avis"}],
-    ["auto","Avis automatiques",{ph:"Demande d'avis envoyée automatiquement X jours après le départ — à venir."}],
+    ["auto","Avis automatiques",{avisauto:1}],
     ["mod","Modèles d'avis",{ph:"Modèles de réponse aux avis (message, note privée) — à venir."}],
     ["ia","Analyses IA",{qualavis:1}]]},
   {k:"rapports",label:"Rapports financiers",icon:"€",subs:[
     ["ana","Analytique",{fi:1}],
-    ["activite","Activité de location",{ph:"Revenus par réservation / par annonce, annonces à 0 réservation, export du rapport."}],
-    ["occ","Taux d'occupation",{ph:"Nuits disponibles / réservées / propriétaire, taux d'occupation par annonce, totaux."}],
+    ["activite","Activité de location",{activite:1}],
+    ["occ","Taux d'occupation",{occupation:1}],
     ["form","Formules",{formules:1}],
     ["tax","Taxes",{ph:"La taxe de séjour se règle par bien (fiche bien → « Taxe de séjour / nuit »)."}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
@@ -448,7 +448,7 @@ const RUBRIQUES=[
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
-    ["auto","Relevés automatiques",{ph:"Génération mensuelle automatique + message d'envoi au propriétaire — à venir."}]]},
+    ["auto","Relevés automatiques",{relevesauto:1}]]},
   {k:"qualite",label:"Qualité d'hébergement",icon:"◈",subs:[
     ["ann","Qualité des annonces",{qualann:1}],
     ["avis","Qualité des avis",{qualavis:1}]]},
@@ -524,6 +524,10 @@ function goRub(rk,sk){
   if(t.canauxcarte)return renderCanauxCarte();
   if(t.icalsync)return renderIcalSync();
   if(t.emailcfg)return renderEmailConfig();
+  if(t.activite)return renderActivite();
+  if(t.occupation)return renderOccupation();
+  if(t.avisauto)return renderAvisAuto();
+  if(t.relevesauto)return renderRelevesAuto();
   if(t.sitedesign)return renderSiteDesign();
   if(t.siteparams)return renderSiteParams();
   if(t.paramcompte)return renderParamCompte();
@@ -980,6 +984,78 @@ async function renderEmailConfig(){
     </div></div>`;
   $("#emSave").onclick=async()=>{const valeur={provider:$("#emProv").value,api_key:$("#emKey").value.trim(),sender_name:$("#emName").value.trim(),sender_email:$("#emFrom").value.trim(),reply_to:$("#emReply").value.trim()};const e=await reglSet("email",valeur);if(e){$("#emOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#emOk").textContent="Enregistré ✓";toast("Configuration e-mail enregistrée");renderEmailConfig();};
   $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";try{const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"Test DPM Conciergerie",html:"<p>Ceci est un e-mail de test depuis votre application DPM.</p>"}});if(error){$("#emOk").innerHTML='<span class="err">'+esc(error.message||'echec')+'</span>';toast("Echec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}}catch(e){$("#emOk").innerHTML='<span class="err">'+esc(''+e)+'</span>';}};
+}
+
+/* ---------- RAPPORTS : ACTIVITE & OCCUPATION ---------- */
+async function renderActivite(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [{data:resas},{data:biens}]=await Promise.all([
+    sb.from("reservation").select("bien_id,statut,prix_total,arrivee,depart"),
+    sb.from("bien").select("id,nom").order("nom")
+  ]);
+  const real=new Set(["confirmee","terminee"]);
+  const fmtMad=(n)=> (Math.round(n||0)).toLocaleString('fr-FR')+' MAD';
+  const nights=(a,d)=> (a&&d)? Math.max(0,Math.round((new Date(d)-new Date(a))/86400000)):0;
+  const agg={}; (biens||[]).forEach(b=>agg[b.id]={nom:b.nom,nb:0,rev:0,nu:0});
+  (resas||[]).forEach(r=>{ if(!agg[r.bien_id])return; if(real.has(r.statut)){ agg[r.bien_id].nb++; agg[r.bien_id].rev+=(+r.prix_total||0); agg[r.bien_id].nu+=nights(r.arrivee,r.depart);} });
+  const arr=Object.values(agg).sort((a,b)=>b.rev-a.rev);
+  const tot={nb:0,rev:0,nu:0}; arr.forEach(a=>{tot.nb+=a.nb;tot.rev+=a.rev;tot.nu+=a.nu;});
+  const rows=arr.map(a=>`<tr><td>${esc(a.nom)}</td><td style="text-align:center">${a.nb||'<span class="muted">0</span>'}</td><td style="text-align:center">${a.nu}</td><td style="text-align:right">${a.nb?fmtMad(a.rev):'<span class="muted">—</span>'}</td><td style="text-align:right">${a.nb?fmtMad(a.rev/a.nb):'—'}</td></tr>`).join("");
+  const zero=arr.filter(a=>a.nb===0).length;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Activité de location</h3><span class="sp"></span><span class="muted">Réservations confirmées et terminées</span></div>
+    <div style="padding:14px"><div class="phnote">Revenus et nuitées par annonce. ${zero} annonce(s) sans réservation.</div></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Réserv.</th><th style="text-align:center">Nuits</th><th style="text-align:right">Revenu</th><th style="text-align:right">Panier moyen</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" class="muted">Aucune annonce</td></tr>'}</tbody>
+    <tfoot><tr style="font-weight:700;border-top:2px solid rgba(128,128,128,.4)"><td>Total</td><td style="text-align:center">${tot.nb}</td><td style="text-align:center">${tot.nu}</td><td style="text-align:right">${fmtMad(tot.rev)}</td><td></td></tr></tfoot></table></div></div>`;
+}
+async function renderOccupation(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [{data:resas},{data:biens}]=await Promise.all([
+    sb.from("reservation").select("bien_id,statut,arrivee,depart"),
+    sb.from("bien").select("id,nom").order("nom")
+  ]);
+  const occ=new Set(["confirmee","terminee","en_attente","bloque"]);
+  const y=new Date().getFullYear();
+  const yStart=new Date(Date.UTC(y,0,1)), yEnd=new Date(Date.UTC(y+1,0,1));
+  const dispo=Math.round((yEnd-yStart)/86400000);
+  const ov=(a,d)=>{ const s=Math.max(new Date(a),yStart), e=Math.min(new Date(d),yEnd); return Math.max(0,Math.round((e-s)/86400000)); };
+  const agg={}; (biens||[]).forEach(b=>agg[b.id]={nom:b.nom,nu:0});
+  (resas||[]).forEach(r=>{ if(!agg[r.bien_id]||!occ.has(r.statut)||!r.arrivee||!r.depart)return; agg[r.bien_id].nu+=ov(r.arrivee,r.depart); });
+  const arr=Object.values(agg).sort((a,b)=>b.nu-a.nu);
+  const rows=arr.map(a=>{const tx=dispo?Math.round(a.nu/dispo*100):0; return `<tr><td>${esc(a.nom)}</td><td style="text-align:center">${a.nu}</td><td style="text-align:center">${dispo}</td><td style="text-align:right">${tx}%</td><td><div style="background:rgba(128,128,128,.2);border-radius:6px;height:8px;overflow:hidden"><div style="width:${tx}%;height:100%;background:var(--gold,#C9A227)"></div></div></td></tr>`;}).join("");
+  const totNu=arr.reduce((s,a)=>s+a.nu,0); const totTx=(arr.length&&dispo)?Math.round(totNu/(dispo*arr.length)*100):0;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Taux d'occupation ${y}</h3><span class="sp"></span><span class="muted">Occupation globale ${totTx}%</span></div>
+    <div style="padding:14px"><div class="phnote">Nuits occupées (réservations + blocages iCal) sur l'année ${y}, par annonce.</div></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Nuits occupées</th><th style="text-align:center">Nuits dispo</th><th style="text-align:right">Taux</th><th style="width:140px"></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" class="muted">Aucune annonce</td></tr>'}</tbody></table></div></div>`;
+}
+
+/* ---------- AVIS & RELEVES AUTOMATIQUES ---------- */
+async function renderAvisAuto(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("avis_auto");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Avis automatiques</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Envoie automatiquement une demande d'avis au voyageur quelques jours après son départ.</div>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="aaActif" ${v.actif?'checked':''} style="width:auto"> Activer les demandes d'avis automatiques</label>
+      <div class="field"><label>Délai après le départ (jours)</label><input id="aaDelai" type="number" value="${v.delai_jours!=null?v.delai_jours:3}" style="max-width:160px"></div>
+      <div class="field"><label>Message envoyé</label><textarea id="aaMsg" rows="4">${esc(v.modele||"Bonjour, merci d'avoir séjourné chez nous ! Si vous avez un instant, votre avis nous aiderait beaucoup. À très bientôt.")}</textarea></div>
+      <button class="btn g" id="aaSave">Enregistrer</button> <span class="ok" id="aaOk"></span>
+    </div></div>`;
+  $("#aaSave").onclick=async()=>{const e=await reglSet("avis_auto",{actif:$("#aaActif").checked,delai_jours:+$("#aaDelai").value||0,modele:$("#aaMsg").value});if(e){$("#aaOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#aaOk").textContent="Enregistré ✓";toast("Avis automatiques enregistrés");};
+}
+async function renderRelevesAuto(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("releves_auto");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Relevés automatiques</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Génère chaque mois le relevé de chaque propriétaire et prépare le message d'envoi.</div>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="raActif" ${v.actif?'checked':''} style="width:auto"> Activer la génération mensuelle automatique</label>
+      <div class="field"><label>Jour du mois pour la génération</label><input id="raJour" type="number" min="1" max="28" value="${v.jour!=null?v.jour:5}" style="max-width:160px"></div>
+      <div class="field"><label>Message d'accompagnement au propriétaire</label><textarea id="raMsg" rows="4">${esc(v.message||"Bonjour, veuillez trouver ci-joint votre relevé de gestion locative du mois. N'hésitez pas à nous contacter pour toute question.")}</textarea></div>
+      <button class="btn g" id="raSave">Enregistrer</button> <span class="ok" id="raOk"></span>
+    </div></div>`;
+  $("#raSave").onclick=async()=>{const e=await reglSet("releves_auto",{actif:$("#raActif").checked,jour:+$("#raJour").value||1,message:$("#raMsg").value});if(e){$("#raOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#raOk").textContent="Enregistré ✓";toast("Relevés automatiques enregistrés");};
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
