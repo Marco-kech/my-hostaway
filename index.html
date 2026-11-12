@@ -376,6 +376,12 @@ const MODULES = {
     fields:[["bien_id","Bien concerné (vide = tous)",{ref:"bien"}],
       ["categorie","Catégorie",{opts:["Arrivée & départ","Logement","Équipements","Quartier & transports","Règles de la maison","Autre"]}],
       ["texte","Information",{long:1,req:1}]]},
+  depense:{title:"Dépenses & suppléments",add:"Ajouter",table:"depense",
+    cols:[["date_op","Date",v=>fdate(v)],["libelle","Libellé"],["type","Type",v=>pill(v)],["categorie","Catégorie"],["bien_id","Bien",v=>v?refName("bien",v):'—'],["montant","Montant",v=>money(v)]],
+    fields:[["type","Type",{opts:["depense","supplement"],def:"depense"}],["date_op","Date",{type:"date",req:1}],["libelle","Libellé",{req:1}],
+      ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
+      ["bien_id","Bien",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["reservation_id","Réservation",{ref:"reservation"}],
+      ["montant","Montant",{type:"number",req:1}],["notes","Notes",{long:1}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
 const PILLMAP={actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
@@ -421,21 +427,21 @@ const RUBRIQUES=[
     ["ana","Analytique",{fi:1}],
     ["activite","Activité de location",{ph:"Revenus par réservation / par annonce, annonces à 0 réservation, export du rapport."}],
     ["occ","Taux d'occupation",{ph:"Nuits disponibles / réservées / propriétaire, taux d'occupation par annonce, totaux."}],
-    ["form","Formules",{ph:"Formules paramétrables par canal : versement propriétaire, commission de gestion, part gestionnaire, revenu locatif, frais de paiement."}],
-    ["tax","Taxes",{ph:"Configuration des taxes (séjour, nuitée, par personne)."}]]},
+    ["form","Formules",{formules:1}],
+    ["tax","Taxes",{ph:"La taxe de séjour se règle par bien (fiche bien → « Taxe de séjour / nuit »)."}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
-    ["dep","Dépenses",{ph:"Dépenses : date, catégorie, annonce, réservation, propriétaire, relevé, montant, pièces jointes."}],
-    ["sup","Suppléments",{ph:"Suppléments facturés aux réservations ou aux propriétaires."}],
-    ["cat","Catégories",{ph:"Catégories : ménage, maintenance, loyer, fournitures, réparation, taxe foncière, commission…"}],
-    ["auto","Automatisations",{ph:"Dépenses récurrentes (ex. loyer chaque mois) par annonce / propriétaire."}]]},
+    ["dep","Dépenses",{m:"depense"}],
+    ["sup","Suppléments",{ph:"Les suppléments se saisissent dans « Dépenses » en choisissant le type « supplement »."}],
+    ["cat","Catégories",{catdep:1}],
+    ["auto","Automatisations",{ph:"Dépenses récurrentes (ex. loyer chaque mois) par annonce / propriétaire — à venir."}]]},
   {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
     ["frais","Frais",{ph:"Charges par réservation : canal, solde, statut (en attente, en retard), échéance."}],
     ["auto","Paiements automatiques",{ph:"Échéanciers : acompte à la réservation, solde X jours avant l'arrivée, caution par pré-autorisation, cartes virtuelles Booking."}],
     ["doc","Modèles de document",{ph:"Factures et reçus personnalisés : logo, couleurs, ID fiscal, statut et solde."}]]},
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
-    ["rel","Relevés",{ph:"Relevés par propriétaire : prix total, versement total, part propriétaire, part gestionnaire, activité ligne par ligne, dépenses rattachées."}],
-    ["auto","Relevés automatiques",{ph:"Génération mensuelle automatique + message d'envoi au propriétaire."}]]},
+    ["rel","Relevés",{releves:1}],
+    ["auto","Relevés automatiques",{ph:"Génération mensuelle automatique + message d'envoi au propriétaire — à venir."}]]},
   {k:"qualite",label:"Qualité d'hébergement",icon:"◈",subs:[
     ["ann","Qualité des annonces",{ph:"Score par annonce, statut de qualité Airbnb, annulations, violations des conditions."}],
     ["avis","Qualité des avis",{ph:"Scores moyens par critère, taux de 5 étoiles, avis à répondre."}]]},
@@ -501,6 +507,9 @@ function goRub(rk,sk){
   if(t.autotaches)return renderTachesAuto();
   if(t.iaconfig)return renderIaConfig();
   if(t.autosmsg)return renderAutoMsg();
+  if(t.catdep)return renderCatDep();
+  if(t.releves)return renderReleves();
+  if(t.formules)return renderFormules();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -819,6 +828,117 @@ async function renderTaches(){
   document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+}
+
+/* ---------- CATEGORIES DE DEPENSES ---------- */
+async function renderCatDep(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data}=await sb.from("depense").select("categorie,montant,type");
+  const map={};
+  (data||[]).forEach(d=>{const k=d.categorie||'Sans catégorie';map[k]=map[k]||{dep:0,sup:0};if(d.type==='supplement')map[k].sup+=Number(d.montant||0);else map[k].dep+=Number(d.montant||0);});
+  const rows=Object.keys(map).sort().map(k=>`<tr><td>${esc(k)}</td><td style="text-align:right">${money(map[k].dep)}</td><td style="text-align:right">${money(map[k].sup)}</td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Totaux par catégorie</h3></div>
+    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr><th>Catégorie</th><th style="text-align:right">Dépenses</th><th style="text-align:right">Suppléments</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucune dépense saisie. Ajoutez-en dans « Dépenses ».</div>'}</div></div>`;
+}
+
+/* ---------- FORMULES ---------- */
+async function renderFormules(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("proprietaire");
+  const props=state.opts.proprietaire||[];
+  const rows=props.map(p=>`<tr><td>${esc(p.nom)}</td><td style="text-align:center">${p.commission_pct!=null?p.commission_pct+' %':'—'}</td></tr>`).join("");
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Formules de calcul</h3></div>
+      <div style="padding:16px">
+        <ul class="phlist">
+          <li><b>Revenu locatif</b> = hébergement + frais voyageurs + taxes</li>
+          <li><b>Commission de gestion DPM</b> = prix total × commission&nbsp;%</li>
+          <li><b>Versement propriétaire (net)</b> = prix total − commission − dépenses</li>
+          <li><b>Part gestionnaire DPM</b> = commission + frais voyageurs</li>
+        </ul>
+        <div class="phnote">Les versements sont calculés par canal (Airbnb, Booking, direct…) à partir du prix total de chaque réservation. Le taux de commission est défini par propriétaire ci-dessous.</div>
+      </div></div>
+    <div class="panel"><div class="phead"><h3>Commission par propriétaire</h3></div>
+      <div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th style="text-align:center">Commission</th></tr></thead><tbody>${rows||'<tr><td colspan="2" class="muted">Aucun propriétaire</td></tr>'}</tbody></table></div></div>`;
+}
+
+/* ---------- RELEVES PROPRIETAIRES ---------- */
+async function renderReleves(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("proprietaire"),loadOpts("bien")]);
+  const {data:releves}=await sb.from("releve_proprietaire").select("*").order("genere_le",{ascending:false});
+  const props=state.opts.proprietaire||[];
+  const first=new Date(); first.setDate(1); const defDebut=first.toISOString().slice(0,10);
+  const defFin=new Date().toISOString().slice(0,10);
+  const propOpts=props.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join("");
+  const relRows=(releves||[]).map(r=>`<tr>
+    <td>${esc(refName("proprietaire",r.proprietaire_id))}</td>
+    <td>${fdate(r.periode_debut)} → ${fdate(r.periode_fin)}</td>
+    <td style="text-align:right">${money(r.montant_brut)}</td>
+    <td style="text-align:right">${money(r.commission)}</td>
+    <td style="text-align:right"><b>${money(r.montant_net)}</b></td>
+    <td>${pill(r.statut)}</td>
+    <td><div class="act"><button class="btn o sm" data-vr="${r.id}">Voir</button><button class="btn d sm" data-dr="${r.id}">×</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Générer un relevé propriétaire</h3></div>
+      <div style="padding:16px"><div class="row3">
+        <div class="field"><label>Propriétaire *</label><select id="rvProp"><option value="">—</option>${propOpts}</select></div>
+        <div class="field"><label>Début *</label><input id="rvDeb" type="date" value="${defDebut}"></div>
+        <div class="field"><label>Fin *</label><input id="rvFin" type="date" value="${defFin}"></div>
+      </div>
+      <button class="btn g" id="rvGen">Générer le relevé</button> <span class="ok" id="rvOk"></span></div></div>
+    <div class="panel"><div class="phead"><h3>Relevés existants</h3><span class="sp"></span><span class="muted">${(releves||[]).length}</span></div>
+      <div style="overflow:auto">${(releves&&releves.length)?`<table><thead><tr><th>Propriétaire</th><th>Période</th><th style="text-align:right">Brut</th><th style="text-align:right">Commission</th><th style="text-align:right">Net</th><th>Statut</th><th></th></tr></thead><tbody>${relRows}</tbody></table>`:'<div class="empty">Aucun relevé. Générez-en un ci-dessus.</div>'}</div></div>`;
+  state.cache=state.cache||{}; state.cache.releves=releves||[];
+  $("#rvGen").onclick=async()=>{
+    const pid=$("#rvProp").value, deb=$("#rvDeb").value, fin=$("#rvFin").value;
+    if(!pid||!deb||!fin){$("#rvOk").innerHTML='<span class="err">Remplissez propriétaire et période.</span>';return;}
+    const prop=(state.opts.proprietaire||[]).find(p=>p.id===pid);
+    const comm=Number(prop.commission_pct||0);
+    const biensProp=(state.opts.bien||[]).filter(b=>b.proprietaire_id===pid).map(b=>b.id);
+    if(!biensProp.length){$("#rvOk").innerHTML='<span class="err">Ce propriétaire n’a aucun bien.</span>';return;}
+    $("#rvGen").disabled=true;
+    const {data:resa}=await sb.from("reservation").select("*").in("bien_id",biensProp).neq("statut","annulee").gte("depart",deb).lte("depart",fin);
+    const {data:deps}=await sb.from("depense").select("*").eq("proprietaire_id",pid).gte("date_op",deb).lte("date_op",fin);
+    let brut=0, commission=0, frais=0; const lignes=[];
+    (resa||[]).forEach(r=>{const b=Number(r.prix_total||0);const c=b*comm/100;brut+=b;commission+=c;lignes.push({libelle:refName("bien",r.bien_id)+" · "+fdate(r.arrivee),montant_brut:b,commission:c,montant_net:b-c});});
+    (deps||[]).forEach(d=>{const m=Number(d.montant||0);frais+=m;lignes.push({libelle:"Dépense : "+(d.libelle||d.categorie||''),montant_brut:0,commission:0,montant_net:-m});});
+    const net=brut-commission-frais;
+    const {data:rel,error}=await sb.from("releve_proprietaire").insert({tenant_id:state.tenant.id,proprietaire_id:pid,periode_debut:deb,periode_fin:fin,montant_brut:brut,commission,frais,montant_net:net,statut:"brouillon"}).select().single();
+    if(error){$("#rvGen").disabled=false;$("#rvOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}
+    if(lignes.length){ await sb.from("ligne_releve").insert(lignes.map(l=>({tenant_id:state.tenant.id,releve_id:rel.id,libelle:l.libelle,montant_brut:l.montant_brut,commission:l.commission,montant_net:l.montant_net}))); }
+    $("#rvGen").disabled=false; toast("Relevé généré"); renderReleves();
+  };
+  document.querySelectorAll("[data-vr]").forEach(b=>b.onclick=()=>releveDetail(b.dataset.vr));
+  document.querySelectorAll("[data-dr]").forEach(b=>b.onclick=()=>releveDel(b.dataset.dr));
+}
+async function releveDetail(id){
+  const r=(state.cache.releves||[]).find(x=>x.id===id); if(!r)return;
+  const {data:lignes}=await sb.from("ligne_releve").select("*").eq("releve_id",id);
+  const rows=(lignes||[]).map(l=>`<tr><td>${esc(l.libelle)}</td><td style="text-align:right">${money(l.montant_brut)}</td><td style="text-align:right">${money(l.commission)}</td><td style="text-align:right">${money(l.montant_net)}</td></tr>`).join("");
+  ouvrir(`<div class="h"><h3>Relevé — ${esc(refName("proprietaire",r.proprietaire_id))}</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <p class="muted">${fdate(r.periode_debut)} → ${fdate(r.periode_fin)}</p>
+      <div class="kpis" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
+        <div class="kpi"><div class="l">Brut</div><div class="v" style="font-size:20px">${money(r.montant_brut)}</div></div>
+        <div class="kpi"><div class="l">Commission DPM</div><div class="v" style="font-size:20px">${money(r.commission)}</div></div>
+        <div class="kpi"><div class="l">Dépenses</div><div class="v" style="font-size:20px">${money(r.frais)}</div></div>
+        <div class="kpi"><div class="l">Net propriétaire</div><div class="v" style="font-size:20px">${money(r.montant_net)}</div></div>
+      </div>
+      <div style="overflow:auto"><table><thead><tr><th>Ligne</th><th style="text-align:right">Brut</th><th style="text-align:right">Comm.</th><th style="text-align:right">Net</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucune ligne</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="f"><button class="btn" onclick="fermer()">Fermer</button></div>`);
+}
+function releveDel(id){
+  ouvrir(`<div class="h"><h3>Supprimer ce relevé ?</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><p class="muted">Le relevé et ses lignes seront supprimés.</p><div class="err" id="rdErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="rdOk">Supprimer</button></div>`);
+  $("#rdOk").onclick=async()=>{
+    await sb.from("ligne_releve").delete().eq("releve_id",id);
+    const {error}=await sb.from("releve_proprietaire").delete().eq("id",id);
+    if(error){$("#rdErr").textContent=error.message;return;}
+    fermer(); toast("Supprimé"); renderReleves();
+  };
 }
 
 /* ---------- REPONSES IA (reglages) ---------- */
