@@ -472,7 +472,7 @@ const RUBRIQUES=[
   {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
     ["frais","Frais",{ph:"Charges par réservation : canal, solde, statut (en attente, en retard), échéance."}],
     ["auto","Paiements automatiques",{ph:"Échéanciers : acompte à la réservation, solde X jours avant l'arrivée, caution par pré-autorisation, cartes virtuelles Booking."}],
-    ["doc","Modèles de document",{ph:"Factures et reçus personnalisés : logo, couleurs, ID fiscal, statut et solde."}]]},
+    ["doc","Modèles de document",{docmodeles:1}]]},
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
@@ -577,6 +577,44 @@ function champPersoDel(objet,id){
     fermer(); toast("Supprimé"); renderChampsPerso(objet);
   };
 }
+async function renderDocModeles(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const c=await reglGet("doc_modeles")||{};
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Modèles de document — factures & reçus</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Personnalise les documents générés pour les voyageurs : facture (émise à la réservation), reçu de frais (à l'encaissement) et reçu de remboursement. Ces réglages pilotent la génération PDF.</div>
+      <div class="fsec">Émetteur</div>
+      <div class="row2">
+        <div class="field"><label>Nom de l'hôte / société</label><input id="dmHote" value="${esc(c.hote||'DPM Conciergerie')}"></div>
+        <div class="field"><label>ID fiscal / ICE</label><input id="dmFiscal" value="${esc(c.fiscal||'')}"></div></div>
+      <div class="row2">
+        <div class="field"><label>Téléphone</label><input id="dmTel" value="${esc(c.tel||'')}"></div>
+        <div class="field"><label>E-mail</label><input id="dmEmail" value="${esc(c.email||'')}"></div></div>
+      <div class="field"><label>Logo (URL)</label><input id="dmLogo" value="${esc(c.logo||'')}" placeholder="https://…/logo.png"></div>
+      <div class="field"><label>Informations complémentaires (bas de document)</label><textarea id="dmInfos" rows="2">${esc(c.infos||'')}</textarea></div>
+      <div class="fsec">Apparence</div>
+      <div class="row2">
+        <div class="field"><label>Couleur de fond</label><input id="dmBg" type="color" value="${esc(c.bg||'#0f2d4a')}"></div>
+        <div class="field"><label>Couleur d'accentuation</label><input id="dmAcc" type="color" value="${esc(c.acc||'#c9a24a')}"></div></div>
+      <div class="fsec">Titres des documents</div>
+      <div class="row2">
+        <div class="field"><label>Facture</label><input id="dmTfact" value="${esc(c.titre_facture||'Facture')}"></div>
+        <div class="field"><label>Reçu de frais</label><input id="dmTrecu" value="${esc(c.titre_recu||'Reçu')}"></div></div>
+      <div class="field"><label>Reçu de remboursement</label><input id="dmTremb" value="${esc(c.titre_remb||'Reçu de remboursement')}"></div>
+      <div class="fsec">Champs affichés</div>
+      <div class="chk">
+        <label><input type="checkbox" id="dmStatut" ${c.aff_statut!==false?'checked':''}> Statut et solde</label>
+        <label><input type="checkbox" id="dmFrais" ${c.aff_frais!==false?'checked':''}> Détail des frais (payé, échéance, remboursé)</label>
+        <label><input type="checkbox" id="dmChamps" ${c.aff_champs?'checked':''}> Champs personnalisés</label></div>
+      <div style="margin-top:14px"><button class="btn g" id="dmSave">Enregistrer</button> <span class="ok" id="dmOk"></span></div>
+    </div></div>`;
+  $("#dmSave").onclick=async()=>{
+    const val={hote:$("#dmHote").value.trim(),fiscal:$("#dmFiscal").value.trim(),tel:$("#dmTel").value.trim(),email:$("#dmEmail").value.trim(),logo:$("#dmLogo").value.trim(),infos:$("#dmInfos").value.trim(),bg:$("#dmBg").value,acc:$("#dmAcc").value,titre_facture:$("#dmTfact").value.trim(),titre_recu:$("#dmTrecu").value.trim(),titre_remb:$("#dmTremb").value.trim(),aff_statut:$("#dmStatut").checked,aff_frais:$("#dmFrais").checked,aff_champs:$("#dmChamps").checked};
+    const e=await reglSet("doc_modeles",val);
+    if(e){$("#dmOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#dmOk").textContent="Enregistré ✓"; toast("Modèles de document enregistrés");
+  };
+}
 async function renderDepenses(type){
   const m=MODULES['depense']; const isSup=type==='supplement';
   $("#topAdd").hidden=false;$("#topAdd").textContent=isSup?"+ Ajouter un supplément":"+ Ajouter une dépense";
@@ -634,6 +672,7 @@ function goRub(rk,sk){
   if(t.paramcompte)return renderParamCompte();
   if(t.paramlangues)return renderParamLangues();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
+  if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
