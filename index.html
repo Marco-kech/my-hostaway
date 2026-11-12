@@ -571,6 +571,7 @@ async function renderList(k){
   const rows=(data||[]).map(r=>{
     const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
     return `<tr>${tds}<td><div class="act">
+      ${(k==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
       <button class="btn o sm" data-ed="${r.id}">Modifier</button>
       <button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;
   }).join("");
@@ -581,6 +582,19 @@ async function renderList(k){
   state.cache=state.cache||{}; state.cache[k]=data||[];
   document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
+  document.querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>sendMessageEmail(k,b.dataset.send));
+}
+async function sendMessageEmail(k,id){
+  const msg=(state.cache[k]||[]).find(x=>x.id===id); if(!msg)return;
+  const voy=(state.opts.voyageur||[]).find(x=>x.id===msg.voyageur_id);
+  const to=voy&&voy.email;
+  if(!to){toast("Pas d'e-mail voyageur sur ce message");return;}
+  toast("Envoi en cours…");
+  const html='<div style="font-family:sans-serif;white-space:pre-wrap">'+esc(msg.corps||"")+'</div>';
+  const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"DPM Conciergerie",html}});
+  if(error){ let m="Échec de l'envoi"; try{const j=await error.context.json(); if(j&&j.error)m=j.error;}catch(e){} toast(m); await sb.from("message").update({statut:"echoue"}).eq("id",id); }
+  else { toast("E-mail envoyé ✓"); await sb.from("message").update({statut:"envoye"}).eq("id",id); }
+  renderList(k);
 }
 
 /* ---------- FORM ---------- */
