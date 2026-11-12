@@ -336,27 +336,29 @@ const MODULES = {
     cols:[["code","Code"],["type","Type",v=>pill(v)],["valeur","Valeur"],["sejour_min","Séjour min",v=>v?v+" nuits":""],["validite_fin","Validité",v=>fdate(v)],["utilisations_max","Max"],["utilisations","Utilisé"],["statut","Statut",v=>pill(v)]],
     fields:[["code","Code du coupon",{req:1}],
       ["type","Type",{opts:["montant","pourcentage"],def:"pourcentage"}],
-      ["valeur","Montant ou %",{type:"number",req:1,p:1}],
-      ["sejour_min","Longueur de séjour min (nuits)",{type:"number",p:1}],
-      ["arrivee_debut","Arrivée — du",{type:"date",p:1}],
-      ["arrivee_fin","Arrivée — au",{type:"date",p:1}],
-      ["validite_debut","Validité — du",{type:"date",p:1}],
-      ["validite_fin","Validité — au",{type:"date",p:1}],
-      ["utilisations_max","Utilisations maximum",{type:"number",p:1}],
-      ["utilisations","Utilisations actuelles",{type:"number",def:0,p:1}],
+      ["valeur","Montant ou %",{type:"number",req:1}],
+      ["sejour_min","Longueur de séjour min (nuits)",{type:"number"}],
+      ["arrivee_debut","Arrivée — du",{type:"date"}],
+      ["arrivee_fin","Arrivée — au",{type:"date"}],
+      ["validite_debut","Validité — du",{type:"date"}],
+      ["validite_fin","Validité — au",{type:"date"}],
+      ["utilisations_max","Utilisations maximum",{type:"number"}],
+      ["utilisations","Utilisations actuelles",{type:"number",def:0}],
       ["statut","Statut",{opts:["actif","inactif","expire"],def:"actif"}]]},
   modeles_avis:{title:"Modèles d'avis",add:"Ajouter un modèle",table:"modele_avis",
     cols:[["nom","Nom"],["recommande","Recommandé",v=>pill(v)],["note_proprete","Propreté"],["note_communication","Communication"],["note_regles","Règles"]],
     fields:[["nom","Nom du modèle",{req:1}],["recommande","Recommandé",{opts:["Oui","Non"],def:"Oui"}],
       ["message","Message public",{long:1}],["note_privee","Note privée (interne)",{long:1}],
-      ["note_proprete","Propreté (1-5)",{type:"number",p:1}],["note_communication","Communication (1-5)",{type:"number",p:1}],["note_regles","Règles de la maison (1-5)",{type:"number",p:1}]]},
+      ["note_proprete","Propreté (1-5)",{type:"number"}],["note_communication","Communication (1-5)",{type:"number"}],["note_regles","Règles de la maison (1-5)",{type:"number"}]]},
   voyageurs:{title:"Voyageurs — Livre d'or",add:"Ajouter un voyageur",table:"voyageur",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["ville","Ville"],["pays","Pays"],["numero_id","N° ID"],["marketing","Marketing",v=>v?pill(v):'—']],
-    fields:[["nom","Nom complet",{req:1}],["email","E-mail",{p:1}],["tel","Téléphone",{p:1}],["whatsapp","WhatsApp",{p:1}],
-      ["date_naissance","Date de naissance",{type:"date",p:1}],["numero_id","N° de pièce d'identité",{p:1}],
-      ["ville","Ville",{p:1}],["pays","Pays",{p:1}],
-      ["langue","Langue",{opts:["Français","Anglais","Arabe","Espagnol","Allemand","Italien"],p:1}],
-      ["marketing","Accepté marketing",{opts:["Oui","Non"],p:1}],["notes","Notes",{long:1}]]},
+    fields:[["nom","Nom complet",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["whatsapp","WhatsApp",{}],
+      ["date_naissance","Date de naissance",{type:"date"}],["numero_id","N° de pièce d'identité",{}],
+      ["ville","Ville",{}],["pays","Pays",{}],
+      ["langue","Langue",{opts:["Français","Anglais","Arabe","Espagnol","Allemand","Italien"]}],
+      ["marketing","Accepté marketing",{opts:["Oui","Non"]}],
+      ["photo_id_url","Photo pièce d'identité",{file:1}],["selfie_url","Selfie",{file:1}],
+      ["notes","Notes",{long:1}]]},
   tarifs:{title:"Tarifs saisonniers",add:"Ajouter un tarif",table:"tarif",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["nom","Saison"],["debut","Début",v=>fdate(v)],["fin","Fin",v=>fdate(v)],["prix_nuit","Prix/nuit",v=>money(v)],["priorite","Priorité"]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["nom","Nom de la saison",{}],["debut","Début",{type:"date",req:1}],["fin","Fin",{type:"date",req:1}],
@@ -407,7 +409,7 @@ const MODULES = {
     cols:[["nom","Nom"],["nature","Nature",v=>pill(v)],["categorie","Catégorie"],["repetition","Répétition",v=>pill(v)],["bien_id","Bien",v=>v?refName("bien",v):'Tous les biens'],["montant","Montant",v=>money(v)],["actif","Actif",v=>v?pill('actif'):pill('inactif')]],
     fields:[["nom","Nom",{req:1}],["nature","Nature",{opts:["depense","supplement"],def:"depense"}],
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
-      ["repetition","Répétition",{opts:["mensuel","hebdomadaire","annuel"],def:"mensuel"}],["jour_mois","Jour du mois (1-31)",{type:"number",p:1}],
+      ["repetition","Répétition",{opts:["mensuel","hebdomadaire","annuel"],def:"mensuel"}],["jour_mois","Jour du mois (1-31)",{type:"number"}],
       ["bien_id","Bien (vide = tous)",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
       ["montant","Montant",{type:"number",req:1}]]},
   avis:{title:"Avis",add:"Ajouter un avis",table:"avis",
@@ -868,7 +870,8 @@ async function openForm(k,row){
     }else if(o.opts){
       const blank=(!o.req&&o.def==null)?'<option value="">—</option>':'';
       inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
-    }else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
+    }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*">${v?' <a href="'+esc(v)+'" target="_blank" class="muted" style="font-size:11px">fichier actuel</a>':''}`; }
+    else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
     return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
   });
@@ -879,6 +882,13 @@ async function openForm(k,row){
     const d={}; const params={...(row.parametres||{})};
     for(const f of m.fields){const[key,,o]=f;
       if(o.section)continue;
+      if(o.file){const el=document.getElementById('f_'+key);const file=el&&el.files&&el.files[0];
+        if(file){const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=state.tenant.id+'/'+key+'_'+Date.now()+'_'+safe;
+          const up=await sb.storage.from('voyageur-docs').upload(path,file,{upsert:true});
+          if(up.error){$("#fErr").textContent='Upload : '+up.error.message;return;}
+          d[key]=sb.storage.from('voyageur-docs').getPublicUrl(path).data.publicUrl;
+        } else if(row[key]!=null){ d[key]=row[key]; }
+        continue;}
       let val;
       if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
       else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); }
