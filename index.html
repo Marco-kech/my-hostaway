@@ -410,7 +410,7 @@ const RUBRIQUES=[
     ["kb","Base de connaissances",{m:"connaissances"}],
     ["mod","Modèles de message",{m:"modeles"}],
     ["auto","Messages automatisés",{autosmsg:1}],
-    ["env","Gérer les envois",{ph:"File des envois programmés : les messages générés par l'automatisation apparaissent dans Conversations avec leur statut (brouillon → envoyé)."}]]},
+    ["env","Gérer les envois",{envois:1}]]},
   {k:"resa",label:"Réservations",icon:"▦",subs:[
     ["liste","Liste",{m:"reservations"}],
     ["coup","Coupons",{ph:"Codes promo : montant ou %, durée de séjour, dates de validité, utilisations max, annonces, statut."}],
@@ -528,6 +528,7 @@ function goRub(rk,sk){
   if(t.occupation)return renderOccupation();
   if(t.avisauto)return renderAvisAuto();
   if(t.relevesauto)return renderRelevesAuto();
+  if(t.envois)return renderEnvois();
   if(t.sitedesign)return renderSiteDesign();
   if(t.siteparams)return renderSiteParams();
   if(t.paramcompte)return renderParamCompte();
@@ -598,7 +599,26 @@ async function sendMessageEmail(k,id){
   const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"DPM Conciergerie",html}});
   if(error){ let m="Échec de l'envoi"; try{const j=await error.context.json(); if(j&&j.error)m=j.error;}catch(e){} toast(m); await sb.from("message").update({statut:"echoue"}).eq("id",id); }
   else { toast("E-mail envoyé ✓"); await sb.from("message").update({statut:"envoye"}).eq("id",id); }
-  renderList(k);
+  if(k==='envois'){renderEnvois();}else{renderList(k);}
+}
+async function renderEnvois(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all(['voyageur','reservation','bien'].map(loadOpts));
+  const {data}=await sb.from("message").select("*").eq("sens","sortant").order("cree_le",{ascending:false});
+  const msgs=data||[]; state.cache=state.cache||{}; state.cache['envois']=msgs;
+  const byStat={}; msgs.forEach(m=>{byStat[m.statut]=(byStat[m.statut]||0)+1;});
+  const chips=['brouillon','envoye','echoue','recu','lu'].filter(s=>byStat[s]).map(s=>`${pill(s)} ${byStat[s]}`).join(' &nbsp; ');
+  const rows=msgs.map(m=>{
+    const dest = m.voyageur_id? refName('voyageur',m.voyageur_id) : (m.reservation_id?refName('reservation',m.reservation_id):'—');
+    const canEmail = m.canal==='email' && (m.statut==='brouillon'||m.statut==='echoue');
+    return `<tr><td>${esc(dest)}</td><td>${pill(m.canal)}</td><td>${esc((m.corps||'').slice(0,60))}</td><td>${pill(m.statut)}</td><td class="muted">${fdate(m.cree_le)}</td>
+      <td style="text-align:right">${canEmail?`<button class="btn g sm" data-send="${m.id}">Envoyer</button>`:''}</td></tr>`;
+  }).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Gérer les envois</h3><span class="sp"></span><span class="muted">${msgs.length} message(s) sortant(s)</span></div>
+    <div style="padding:12px 16px">${chips||'<span class="muted">Aucun envoi</span>'}</div>
+    <div style="overflow:auto"><table><thead><tr><th>Destinataire</th><th>Canal</th><th>Message</th><th>Statut</th><th>Créé</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" class="muted">Aucun message sortant</td></tr>'}</tbody></table></div></div>`;
+  document.querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>sendMessageEmail('envois',b.dataset.send));
 }
 
 /* ---------- FORM ---------- */
