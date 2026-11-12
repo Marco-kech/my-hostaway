@@ -493,7 +493,7 @@ function goRub(rk,sk){
   if(t.groupes)return renderGroupes();
   if(t.kanban){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle tâche";$("#topAdd").onclick=()=>openForm('taches');return renderTaches();}
   if(t.autotaches)return renderTachesAuto();
-  if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(-1);return renderChecklists();}
+  if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
@@ -861,27 +861,22 @@ async function renderTachesAuto(){
   };
 }
 
-/* ---------- MODELES DE CHECKLIST ---------- */
-function _checklists(){ return (state.tenant.parametres&&state.tenant.parametres.checklists)||[]; }
-async function saveChecklists(list){
-  const params={...(state.tenant.parametres||{}),checklists:list};
-  const {error}=await sb.from("tenant").update({parametres:params}).eq("id",state.tenant.id);
-  if(!error) state.tenant.parametres=params;
-  return error;
-}
-function renderChecklists(){
-  const cl=_checklists();
-  const rows=cl.map((c,i)=>`<div class="panel"><div class="phead"><h3>${esc(c.nom)}</h3><span class="sp"></span><span class="muted">${(c.items||[]).length} points</span>
-    <button class="btn o sm" data-edc="${i}">Modifier</button><button class="btn d sm" data-delc="${i}">×</button></div>
+/* ---------- MODELES DE CHECKLIST (table modele_checklist) ---------- */
+async function renderChecklists(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data,error}=await sb.from("modele_checklist").select("*").order("cree_le");
+  if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
+  state.cache=state.cache||{}; state.cache.checklists=data||[];
+  const rows=(data||[]).map(c=>`<div class="panel"><div class="phead"><h3>${esc(c.nom)}</h3><span class="sp"></span><span class="muted">${(c.items||[]).length} points</span>
+    <button class="btn o sm" data-edc="${c.id}">Modifier</button><button class="btn d sm" data-delc="${c.id}">×</button></div>
     <div style="padding:10px 16px"><ul class="phlist" style="margin:4px 0">${(c.items||[]).map(it=>`<li>${esc(it)}</li>`).join("")||'<li class="muted">Vide</li>'}</ul></div></div>`).join("");
-  $("#content").innerHTML=cl.length?rows:'<div class="panel"><div class="empty">Aucun modèle de checklist. Cliquez sur « + Nouveau modèle ».</div></div>';
-  document.querySelectorAll("[data-edc]").forEach(b=>b.onclick=()=>checklistForm(+b.dataset.edc));
-  document.querySelectorAll("[data-delc]").forEach(b=>b.onclick=()=>checklistDel(+b.dataset.delc));
+  $("#content").innerHTML=(data&&data.length)?rows:'<div class="panel"><div class="empty">Aucun modèle de checklist. Cliquez sur « + Nouveau modèle ».</div></div>';
+  document.querySelectorAll("[data-edc]").forEach(b=>b.onclick=()=>checklistForm(b.dataset.edc));
+  document.querySelectorAll("[data-delc]").forEach(b=>b.onclick=()=>checklistDel(b.dataset.delc));
 }
-function checklistForm(idx){
-  const cl=_checklists();
-  const c=idx>=0?cl[idx]:{nom:"",items:[]};
-  ouvrir(`<div class="h"><h3>${idx>=0?"Modifier le":"Nouveau"} modèle</h3><button class="x" onclick="fermer()">×</button></div>
+function checklistForm(id){
+  const c=id?((state.cache.checklists||[]).find(x=>x.id===id)||{nom:"",items:[]}):{nom:"",items:[]};
+  ouvrir(`<div class="h"><h3>${id?"Modifier le":"Nouveau"} modèle</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
       <div class="field"><label>Nom du modèle *</label><input id="clNom" value="${esc(c.nom)}" placeholder="Ménage standard"></div>
       <div class="field"><label>Points de contrôle (un par ligne)</label><textarea id="clItems" rows="8" placeholder="Nettoyer la cuisine&#10;Changer les draps&#10;Vérifier les serviettes">${esc((c.items||[]).join("\n"))}</textarea></div>
@@ -892,22 +887,21 @@ function checklistForm(idx){
     const nom=$("#clNom").value.trim();
     const items=$("#clItems").value.split("\n").map(s=>s.trim()).filter(Boolean);
     if(!nom){$("#clErr").textContent="Donnez un nom au modèle.";return;}
-    const list=_checklists().slice();
-    if(idx>=0) list[idx]={nom,items}; else list.push({nom,items});
     $("#clSave").disabled=true;
-    const error=await saveChecklists(list);
+    let res;
+    if(id) res=await sb.from("modele_checklist").update({nom,items}).eq("id",id);
+    else res=await sb.from("modele_checklist").insert({tenant_id:state.tenant.id,nom,items});
     $("#clSave").disabled=false;
-    if(error){$("#clErr").textContent=error.message;return;}
+    if(res.error){$("#clErr").textContent=res.error.message;return;}
     fermer(); toast("Enregistré"); renderChecklists();
   };
 }
-function checklistDel(idx){
+function checklistDel(id){
   ouvrir(`<div class="h"><h3>Supprimer ?</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b"><p class="muted">Ce modèle de checklist sera supprimé.</p><div class="err" id="clErr2"></div></div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="clDok">Supprimer</button></div>`);
   $("#clDok").onclick=async()=>{
-    const list=_checklists().slice(); list.splice(idx,1);
-    const error=await saveChecklists(list);
+    const {error}=await sb.from("modele_checklist").delete().eq("id",id);
     if(error){$("#clErr2").textContent=error.message;return;}
     fermer(); toast("Supprimé"); renderChecklists();
   };
