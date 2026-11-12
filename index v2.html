@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Hostaway — DPM Conciergerie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F7F6F1; --surface:#FFFFFF; --ink:#152e25; --muted:#64756c; --line:#E5E2D8;
+  --brand:#14352A; --brand2:#1d4a3a; --gold:#C9A227; --gold-soft:#F4ECCF; --onbrand:#F7F6F1;
+  --danger:#A33A2A; --ok:#2e7d52; --warn:#b7791f; --info:#2c6e9b;
+  --display:"Cormorant Garamond",Georgia,serif; --body:"Manrope",system-ui,sans-serif;
+  --r:12px; --sh:0 1px 3px rgba(20,53,42,.08),0 4px 16px rgba(20,53,42,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14.5px;line-height:1.5}
+[hidden]{display:none!important}
+a{color:var(--brand2)}
+button{font-family:inherit;cursor:pointer}
+.btn{border:0;border-radius:9px;padding:10px 16px;background:var(--brand);color:var(--onbrand);font-weight:600;font-size:14px}
+.btn:hover{background:var(--brand2)}
+.btn.g{background:var(--gold);color:#14352A}
+.btn.o{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.o:hover{border-color:var(--gold)}
+.btn.d{background:var(--danger)}
+.btn.sm{padding:6px 11px;font-size:13px;border-radius:7px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input,select,textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold-soft);border-color:var(--gold)}
+label{font-size:12.5px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px}
+.field{margin-bottom:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:640px){.row2,.row3{grid-template-columns:1fr}}
+
+/* ---------- Auth ---------- */
+#auth{min-height:100%;display:grid;place-items:center;padding:24px;background:
+  radial-gradient(1200px 600px at 100% -10%,rgba(201,162,39,.12),transparent),
+  radial-gradient(900px 500px at -10% 110%,rgba(20,53,42,.10),transparent),var(--bg)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);padding:30px;width:min(420px,100%)}
+.logo{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+.logomark{width:46px;height:46px;border:1.5px solid var(--gold);border-radius:10px;display:grid;place-items:center;font-family:var(--display);font-weight:700;color:var(--gold);font-size:17px}
+h1{font-family:var(--display);font-weight:700;margin:0;line-height:1;font-size:clamp(26px,4vw,34px)}
+.tag{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-top:4px}
+.err{color:var(--danger);font-size:13px;min-height:18px;margin:4px 0}
+.ok{color:var(--ok);font-size:13px;margin:4px 0}
+.switch{text-align:center;margin-top:12px;font-size:13.5px;color:var(--muted)}
+.switch a{cursor:pointer;color:var(--brand2);font-weight:600}
+
+/* ---------- Shell ---------- */
+#app{display:grid;grid-template-columns:238px 1fr;min-height:100%}
+#side{background:var(--brand);color:var(--onbrand);padding:16px 12px;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;height:100vh;overflow:auto}
+#side .logo{margin-bottom:12px;padding:0 2px}
+#side h1{font-size:20px;color:var(--onbrand)}
+#side .logomark{color:var(--gold);width:40px;height:40px;font-size:15px}
+.nav{display:flex;flex-direction:column;gap:1px;margin-top:4px}
+.nav button{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;color:#cfdbd4;padding:8px 11px;border-radius:8px;font-weight:600;font-size:13.3px;width:100%;line-height:1.25}
+.nav button .ic{width:18px;text-align:center;flex:0 0 18px}
+.nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav button.on{background:var(--gold);color:#14352A}
+#side .foot{margin-top:auto;padding-top:12px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#aebbb3}
+#side .foot b{color:#fff;display:block;font-size:13.5px;overflow-wrap:anywhere}
+#main{min-width:0;display:flex;flex-direction:column}
+#top{background:var(--surface);border-bottom:1px solid var(--line);padding:13px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+#top h2{font-family:var(--display);font-weight:700;margin:0;font-size:24px}
+#top .sp{flex:1}
+#subtabs{display:flex;gap:2px;overflow:auto;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:55px;z-index:4}
+#subtabs button{white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:11px 12px;font-weight:600;font-size:13.5px}
+#subtabs button:hover{color:var(--ink)}
+#subtabs button.on{color:var(--brand);border-bottom-color:var(--gold)}
+#content{padding:22px;max-width:1240px;width:100%}
+.mobnav{display:none}
+@media(max-width:820px){
+  #app{grid-template-columns:1fr}
+  #side{display:none}
+  .mobnav{display:flex;gap:6px;overflow:auto;padding:10px 14px;background:var(--brand)}
+  .mobnav button{white-space:nowrap;background:rgba(255,255,255,.08);border:0;color:#cfdbd4;padding:8px 12px;border-radius:999px;font-weight:600;font-size:13px}
+  .mobnav button .ic{display:none}
+  .mobnav button.on{background:var(--gold);color:#14352A}
+}
+
+/* ---------- Pieces ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
+.kpi .l{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.kpi .v{font-family:var(--display);font-size:30px;font-weight:700;margin-top:4px;line-height:1}
+.kpi .s{font-size:12.5px;color:var(--muted);margin-top:3px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;margin-bottom:18px}
+.phead{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.phead h3{margin:0;font-size:16px;font-weight:700}
+.phead .sp{flex:1}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700;background:#fbfaf6}
+tr:last-child td{border-bottom:0}
+td .act{display:flex;gap:6px}
+.empty{padding:34px 16px;text-align:center;color:var(--muted)}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.pill.green{background:#e4f1e9;color:#236b45}
+.pill.gold{background:var(--gold-soft);color:#86661a}
+.pill.red{background:#f6e3df;color:#8e3022}
+.pill.gray{background:#eee;color:#555}
+.pill.blue{background:#e2eef6;color:#235d82}
+.phnote{background:var(--gold-soft);border:1px solid #e8dcae;border-radius:10px;padding:12px 14px;font-size:13px;color:#6b5a1f;margin-top:4px}
+.phlist{margin:0 0 14px;padding-left:18px;color:var(--muted);font-size:13.5px}
+.phlist li{margin:3px 0}
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(10,22,18,.5);display:grid;place-items:start center;padding:5vh 14px;overflow:auto;z-index:40}
+.dlg{background:var(--surface);border-radius:14px;width:min(560px,100%);box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.dlg .h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.dlg .h h3{margin:0;font-family:var(--display);font-size:22px;font-weight:700}
+.dlg .b{padding:18px}
+.dlg .f{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.x{margin-left:auto;background:none;border:0;font-size:20px;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--brand);color:var(--onbrand);padding:11px 18px;border-radius:999px;font-weight:600;font-size:13.5px;border:1px solid var(--gold);z-index:60;box-shadow:var(--sh)}
+.spin{width:20px;height:20px;border:2.5px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:s .7s linear infinite;display:inline-block}
+@keyframes s{to{transform:rotate(360deg)}}
+.center{display:grid;place-items:center;padding:60px}
+.muted{color:var(--muted)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .d{background:#fbfaf6;border:1px solid var(--line);border-radius:7px;min-height:64px;padding:5px 6px;font-size:12px}
+.cal .d .n{font-weight:700;color:var(--muted)}
+.cal .ev{margin-top:3px;background:var(--brand);color:#fff;border-radius:5px;padding:2px 5px;font-size:10.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cal .ev.b{background:var(--danger)}
+.cal .hd{text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;padding:4px}
+.calm{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.calm .mo{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fbfaf6}
+.calm .mo h4{margin:0 0 6px;font-size:13px;text-transform:capitalize}
+.calm .mini{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.calm .mini span{text-align:center;font-size:10px;padding:3px 0;border-radius:4px;color:var(--muted)}
+.calm .mini .bk{background:var(--brand);color:#fff;font-weight:700}
+.gridscroll{overflow:auto}
+.mtable{border-collapse:collapse;font-size:12px;white-space:nowrap}
+.mtable th,.mtable td{border:1px solid var(--line);padding:5px 7px;text-align:center}
+.mtable th:first-child,.mtable td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;z-index:1}
+.mtable td.bk{background:var(--brand);color:#fff;font-weight:700}
+.mtable td.bl{background:#f6e3df}
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH ============ -->
+<div id="auth">
+  <div class="card">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>My Hostaway</h1><div class="tag">DPM Conciergerie</div></div></div>
+    <p class="muted" style="margin:10px 0 18px">Gestion de locations saisonnières — multi-propriétés.</p>
+    <div id="authForm">
+      <div class="field"><label>E-mail</label><input id="aEmail" type="email" autocomplete="email" placeholder="vous@exemple.com"></div>
+      <div class="field"><label>Mot de passe</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+      <div class="err" id="aErr"></div><div class="ok" id="aOk"></div>
+      <button class="btn" id="aBtn" style="width:100%">Se connecter</button>
+      <div class="switch" id="aSwitch">Pas encore de compte ? <a id="aToggle">Créer un compte</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ONBOARDING ============ -->
+<div id="onboard" hidden>
+  <div id="auth" style="min-height:100vh">
+  <div class="card">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>Votre espace</h1><div class="tag">Première connexion</div></div></div>
+    <p class="muted" style="margin:10px 0 16px">Créez l'espace de votre conciergerie. Il sera totalement isolé des autres comptes.</p>
+    <div class="field"><label>Nom de la conciergerie</label><input id="obNom" placeholder="DPM Conciergerie"></div>
+    <div class="err" id="obErr"></div>
+    <button class="btn g" id="obBtn" style="width:100%">Créer mon espace</button>
+    <div class="switch"><a id="obOut">Se déconnecter</a></div>
+  </div></div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" hidden>
+  <aside id="side">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>My Hostaway</h1><div class="tag">Conciergerie</div></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot"><span>Espace</span><b id="tenantName">—</b><span id="userEmail" style="font-size:11.5px"></span>
+      <button class="btn o sm" id="logout" style="margin-top:8px;width:100%;color:#cfdbd4;border-color:rgba(255,255,255,.2)">Se déconnecter</button></div>
+  </aside>
+  <div id="main">
+    <div class="mobnav" id="mobnav"></div>
+    <header id="top"><h2 id="pageTitle">Tableau de bord</h2><div class="sp"></div><button class="btn g sm" id="topAdd" hidden></button></header>
+    <div class="subtabs" id="subtabs" hidden></div>
+    <main id="content"><div class="center"><span class="spin"></span></div></main>
+  </div>
+</div>
+
+<div id="ov" class="ov" hidden><div class="dlg" id="dlg"></div></div>
+<div id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://eztwwzzjzwmhfzmcafyu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (n,d="MAD") => (n==null?"—":Number(n).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:2})+" "+d);
+const fdate = d => d? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+let TT; function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(TT);TT=setTimeout(()=>t.hidden=true,2200);}
+function ouvrir(h){$("#dlg").innerHTML=h;$("#ov").hidden=false;const i=$("#dlg").querySelector("input,select,textarea");if(i)i.focus();}
+function fermer(){$("#ov").hidden=true;$("#dlg").innerHTML="";}
+$("#ov").addEventListener("click",e=>{if(e.target===$("#ov"))fermer();});
+
+const state = { user:null, tenant:null, rub:"apercu", sub:null, opts:{} };
+
+/* ---------- AUTH ---------- */
+let signup=false;
+$("#aToggle").addEventListener("click",()=>{
+  signup=!signup;
+  $("#aBtn").textContent = signup?"Créer mon compte":"Se connecter";
+  $("#aSwitch").innerHTML = signup?'Déjà un compte ? <a id="aToggle">Se connecter</a>':'Pas encore de compte ? <a id="aToggle">Créer un compte</a>';
+  $("#aToggle").addEventListener("click",arguments.callee);
+  $("#aErr").textContent="";$("#aOk").textContent="";
+});
+$("#aBtn").addEventListener("click",async()=>{
+  const email=$("#aEmail").value.trim(), pass=$("#aPass").value;
+  $("#aErr").textContent="";$("#aOk").textContent="";
+  if(!email||!pass){$("#aErr").textContent="E-mail et mot de passe requis.";return;}
+  $("#aBtn").disabled=true;
+  try{
+    if(signup){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error)throw error;
+      if(data.session){ /* connecte direct */ }
+      else { $("#aOk").textContent="Compte créé. Si la confirmation par e-mail est activée, validez le lien reçu puis connectez-vous."; }
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error)throw error;
+    }
+  }catch(e){ $("#aErr").textContent = e.message||"Erreur d'authentification."; }
+  $("#aBtn").disabled=false;
+});
+
+$("#obOut").addEventListener("click",()=>sb.auth.signOut());
+$("#logout").addEventListener("click",()=>sb.auth.signOut());
+$("#obBtn").addEventListener("click",async()=>{
+  const nom=$("#obNom").value.trim(); $("#obErr").textContent="";
+  if(!nom){$("#obErr").textContent="Donnez un nom à votre conciergerie.";return;}
+  $("#obBtn").disabled=true;
+  const {data,error}=await sb.rpc("creer_espace",{p_nom:nom});
+  $("#obBtn").disabled=false;
+  if(error){$("#obErr").textContent=error.message;return;}
+  await boot();
+});
+
+sb.auth.onAuthStateChange((_e,session)=>{ route(session); });
+async function init(){ const {data}=await sb.auth.getSession(); route(data.session); }
+function show(id){ for(const s of ["auth","onboard","app"]) $("#"+s).hidden = (s!==id); }
+
+async function route(session){
+  if(!session){ state.user=null; show("auth"); return; }
+  state.user=session.user; await boot();
+}
+async function boot(){
+  const {data:membres,error}=await sb.from("membre").select("tenant_id,role").eq("user_id",state.user.id).eq("statut","actif").limit(1);
+  if(error){ show("auth"); toast("Erreur: "+error.message); return; }
+  if(!membres||!membres.length){ show("onboard"); return; }
+  const {data:ten}=await sb.from("tenant").select("*").eq("id",membres[0].tenant_id).single();
+  state.tenant=ten; state.role=membres[0].role;
+  $("#tenantName").textContent=ten?ten.nom:"—";
+  $("#userEmail").textContent=state.user.email;
+  show("app"); buildNav(); goRub(state.rub||"apercu");
+}
+
+/* ---------- MODULES (data screens) ---------- */
+const MODULES = {
+  biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
+    cols:[["nom","Nom"],["type","Type"],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
+    fields:[["nom","Nom",{req:1}],["type","Type",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
+      ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["adresse","Adresse",{}],
+      ["capacite","Capacité (pers.)",{type:"number"}],["nb_chambres","Chambres",{type:"number"}],["nb_sdb","Salles de bain",{type:"number"}],
+      ["prix_nuit_base","Prix de base / nuit",{type:"number"}],["frais_menage","Frais de ménage",{type:"number"}],
+      ["nuits_min","Nuits minimum",{type:"number"}],["statut","Statut",{opts:["actif","inactif"],def:"actif"}]]},
+  reservations:{title:"Réservations",add:"Nouvelle réservation",table:"reservation",
+    cols:[["bien_id","Bien",v=>refName("bien",v)],["voyageur_id","Voyageur",v=>refName("voyageur",v)],
+      ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
+      ["prix_total","Total",v=>money(v)],["statut_paiement","Paiement",v=>pill(v)],["statut","Statut",v=>pill(v)]],
+    fields:[["bien_id","Bien",{ref:"bien",req:1}],["voyageur_id","Voyageur",{ref:"voyageur"}],
+      ["arrivee","Arrivée",{type:"date",req:1}],["depart","Départ",{type:"date",req:1}],
+      ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
+      ["reference_canal","Réf. canal",{}],["prix_total","Prix total",{type:"number"}],
+      ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show"],def:"confirmee"}],["notes","Notes",{long:1}]]},
+  voyageurs:{title:"Voyageurs",add:"Ajouter un voyageur",table:"voyageur",
+    cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["langue","Langue"],["pays","Pays"]],
+    fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["whatsapp","WhatsApp",{}],
+      ["langue","Langue",{opts:["Français","Anglais","Arabe","Espagnol","Allemand","Italien"]}],["pays","Pays",{}],["notes","Notes",{long:1}]]},
+  tarifs:{title:"Tarifs saisonniers",add:"Ajouter un tarif",table:"tarif",
+    cols:[["bien_id","Bien",v=>refName("bien",v)],["nom","Saison"],["debut","Début",v=>fdate(v)],["fin","Fin",v=>fdate(v)],["prix_nuit","Prix/nuit",v=>money(v)],["priorite","Priorité"]],
+    fields:[["bien_id","Bien",{ref:"bien",req:1}],["nom","Nom de la saison",{}],["debut","Début",{type:"date",req:1}],["fin","Fin",{type:"date",req:1}],
+      ["prix_nuit","Prix / nuit",{type:"number",req:1}],["nuits_min","Nuits minimum",{type:"number"}],["priorite","Priorité (plus haut = prioritaire)",{type:"number",def:0}]]},
+  intervenants:{title:"Intervenants",add:"Ajouter un intervenant",table:"intervenant",
+    cols:[["nom","Nom"],["type","Rôle",v=>pill(v)],["tel","Téléphone"],["whatsapp","WhatsApp"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom",{req:1}],["type","Rôle",{opts:["menage","chauffeur","petit_dejeuner","maintenance","accueil","autre"],def:"menage"}],
+      ["tel","Téléphone",{}],["whatsapp","WhatsApp",{}],["email","E-mail",{}],["notes","Notes",{long:1}]]},
+  taches:{title:"Tâches",add:"Nouvelle tâche",table:"tache",
+    cols:[["titre","Titre"],["type","Type",v=>pill(v)],["bien_id","Bien",v=>refName("bien",v)],["intervenant_id","Intervenant",v=>refName("intervenant",v)],
+      ["date_prevue","Prévue",v=>fdate(v)],["statut","Statut",v=>pill(v)]],
+    fields:[["titre","Titre",{req:1}],["type","Type",{opts:["menage","checkin","checkout","petit_dejeuner","transport","maintenance","inspection","autre"],def:"menage"}],
+      ["bien_id","Bien",{ref:"bien"}],["reservation_id","Réservation",{ref:"reservation"}],["intervenant_id","Intervenant",{ref:"intervenant"}],
+      ["date_prevue","Date prévue",{type:"date"}],["heure_prevue","Heure",{type:"time"}],["cout","Coût",{type:"number"}],
+      ["statut","Statut",{opts:["a_faire","en_cours","fait","annulee"],def:"a_faire"}],["description","Description",{long:1}]]},
+  messagerie:{title:"Conversations",add:"Nouveau message",table:"message",
+    cols:[["reservation_id","Réservation",v=>refName("reservation",v)],["canal","Canal",v=>pill(v)],["sens","Sens",v=>pill(v)],["corps","Message",v=>esc((v||"").slice(0,60))],["statut","Statut",v=>pill(v)]],
+    fields:[["reservation_id","Réservation",{ref:"reservation"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
+      ["canal","Canal",{opts:["whatsapp","email","sms","interne"],def:"whatsapp"}],["sens","Sens",{opts:["sortant","entrant"],def:"sortant"}],
+      ["corps","Message",{long:1,req:1}],["statut","Statut",{opts:["brouillon","envoye","recu","lu","echoue"],def:"envoye"}]]},
+  modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
+    cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
+      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation"]}],["delai_h","Délai (heures)",{type:"number"}]]},
+  proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
+    cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
+    fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes",{long:1}]]},
+  canaux:{title:"Canaux connectés",add:"Connecter un canal",table:"canal_connexion",
+    cols:[["bien_id","Bien",v=>refName("bien",v)],["canal","Canal",v=>pill(v)],["statut_sync","Sync"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["bien_id","Bien",{ref:"bien",req:1}],["canal","Canal",{opts:["airbnb","booking","vrbo","expedia","abritel","direct","autre"],def:"airbnb"}],
+      ["ical_import_url","URL iCal (import)",{}],["statut_sync","Statut de synchro",{}]]},
+};
+const PILLMAP={actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
+  acompte:"gold",en_attente:"gold",a_faire:"gold",demande:"gold",brouillon:"gray",
+  non_paye:"red",annulee:"red",echoue:"red",no_show:"red",inactif:"gray",en_cours:"blue",
+  direct:"blue",airbnb:"red",booking:"blue",vrbo:"gold",whatsapp:"green",email:"blue",sms:"gold",interne:"gray",sortant:"blue",entrant:"gold",
+  menage:"blue",chauffeur:"gold",petit_dejeuner:"green",maintenance:"red",accueil:"blue",checkin:"green",checkout:"gold",transport:"blue",inspection:"gray"};
+function pill(v){if(v==null||v==="")return "—";const c=PILLMAP[v]||"gray";return `<span class="pill ${c}">${esc(String(v).replace(/_/g," "))}</span>`;}
+
+/* ---------- RUBRIQUES (18 Hostaway menu) ---------- */
+/* sub = [key, label, target]; target: {d}=dashboard {c}=calendrier {cm}=cal multiple {ca}=cal annuel {fi}=finances {m:module} {ph:"desc"} */
+const RUBRIQUES=[
+  {k:"apercu",label:"Vue d'ensemble",icon:"◆",subs:[["dash","Tableau de bord",{d:1}]]},
+  {k:"calendrier",label:"Calendrier",icon:"▤",subs:[
+    ["mult","Multiple",{cm:1}],["mois","Mensuel",{c:1}],["an","Annuel",{ca:1}]]},
+  {k:"inbox",label:"Boîte de réception",icon:"✉",subs:[
+    ["conv","Conversations",{m:"messagerie"}],
+    ["ia","Réponses IA",{ph:"Assistant IA : ton de voix, délai de réponse automatique, base de connaissances par bien, règles « Quand / Répondre / Sauf si », test de l'IA."}],
+    ["mod","Modèles de message",{m:"modeles"}],
+    ["auto","Messages automatisés",{ph:"Déclencheurs par événement (arrivée, réservation, départ…), canal, annonces concernées, activation."}],
+    ["env","Gérer les envois",{ph:"File des envois programmés : objet, statut, événement déclencheur, voyageur, annonce."}]]},
+  {k:"resa",label:"Réservations",icon:"▦",subs:[
+    ["liste","Liste",{m:"reservations"}],
+    ["coup","Coupons",{ph:"Codes promo : montant ou %, durée de séjour, dates de validité, utilisations max, annonces, statut."}],
+    ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les réservations (nom, type, public, variable)."}],
+    ["livre","Livre d'or",{m:"voyageurs"}]]},
+  {k:"annonces",label:"Annonces",icon:"⌂",subs:[
+    ["liste","Liste",{m:"biens"}],
+    ["cp","Champs personnalisés",{ph:"Champs sur mesure par annonce : code de porte, guide voyageur, IBAN, instructions, contact d'urgence…"}]]},
+  {k:"taches",label:"Tâches",icon:"✓",subs:[
+    ["gerer","Gérer les tâches",{m:"taches"}],
+    ["auto","Tâches automatiques",{ph:"Génération auto : catégorie, début d'événement (ex. 2 h après départ), échéance avant prochaine arrivée, récurrence, coût, affectation."}],
+    ["check","Modèles de checklist",{ph:"Listes de contrôle réutilisables : ménage, panier de bienvenue, inspection chambre."}],
+    ["arch","Archivé",{ph:"Tâches archivées (titre, catégories, affecté, superviseur, dates)."}],
+    ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les tâches (temps de ménage, problèmes de départ…)."}]]},
+  {k:"avis",label:"Avis",icon:"★",subs:[
+    ["gerer","Gérer les avis",{ph:"Avis par réservation : note globale et par critère, canal, origine, statut, réponse, afficher dans le moteur de réservation."}],
+    ["auto","Avis automatiques",{ph:"Envoi automatique X jours après le séjour."}],
+    ["mod","Modèles d'avis",{ph:"Modèles : message, note privée, notes par critère (propreté, communication, règles de la maison)."}],
+    ["ia","Analyses IA",{ph:"Scores moyens (propreté, communication, emplacement, rapport qualité-prix), taux de 5 étoiles, avis à répondre."}]]},
+  {k:"rapports",label:"Rapports financiers",icon:"€",subs:[
+    ["ana","Analytique",{fi:1}],
+    ["activite","Activité de location",{ph:"Revenus par réservation / par annonce, annonces à 0 réservation, export du rapport."}],
+    ["occ","Taux d'occupation",{ph:"Nuits disponibles / réservées / propriétaire, taux d'occupation par annonce, totaux."}],
+    ["form","Formules",{ph:"Formules paramétrables par canal : versement propriétaire, commission de gestion, part gestionnaire, revenu locatif, frais de paiement."}],
+    ["tax","Taxes",{ph:"Configuration des taxes (séjour, nuitée, par personne)."}]]},
+  {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
+    ["dep","Dépenses",{ph:"Dépenses : date, catégorie, annonce, réservation, propriétaire, relevé, montant, pièces jointes."}],
+    ["sup","Suppléments",{ph:"Suppléments facturés aux réservations ou aux propriétaires."}],
+    ["cat","Catégories",{ph:"Catégories : ménage, maintenance, loyer, fournitures, réparation, taxe foncière, commission…"}],
+    ["auto","Automatisations",{ph:"Dépenses récurrentes (ex. loyer chaque mois) par annonce / propriétaire."}]]},
+  {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
+    ["frais","Frais",{ph:"Charges par réservation : canal, solde, statut (en attente, en retard), échéance."}],
+    ["auto","Paiements automatiques",{ph:"Échéanciers : acompte à la réservation, solde X jours avant l'arrivée, caution par pré-autorisation, cartes virtuelles Booking."}],
+    ["doc","Modèles de document",{ph:"Factures et reçus personnalisés : logo, couleurs, ID fiscal, statut et solde."}]]},
+  {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
+    ["prop","Propriétaires",{m:"proprietaires"}],
+    ["rel","Relevés",{ph:"Relevés par propriétaire : prix total, versement total, part propriétaire, part gestionnaire, activité ligne par ligne, dépenses rattachées."}],
+    ["auto","Relevés automatiques",{ph:"Génération mensuelle automatique + message d'envoi au propriétaire."}]]},
+  {k:"qualite",label:"Qualité d'hébergement",icon:"◈",subs:[
+    ["ann","Qualité des annonces",{ph:"Score par annonce, statut de qualité Airbnb, annulations, violations des conditions."}],
+    ["avis","Qualité des avis",{ph:"Scores moyens par critère, taux de 5 étoiles, avis à répondre."}]]},
+  {k:"tarif",label:"Tarification",icon:"$",subs:[
+    ["sais","Tarifs saisonniers",{m:"tarifs"}],
+    ["dyn","Tarification dynamique",{ph:"Moteur de règles maison ou connexion PriceLabs : taux de base, prix minimum / maximum, synchronisation du calendrier."}]]},
+  {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
+    ["liste","Canaux connectés",{m:"canaux"}],
+    ["carte","Carte des annonces",{ph:"Activation iCal bien par bien, export CSV, statut de synchronisation, mappage des annonces par canal."}]]},
+  {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
+    ["serr","Serrures intelligentes",{ph:"Nuki / igloohome / TTLock : appareils en ligne, mappage de l'annonce, envoi du code de porte."}],
+    ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
+    ["market","Marketplace",{ph:"~220 partenaires par catégorie (canaux, serrures, ménage, paiement, tarification, CRM) : configurer / connecté."}]]},
+  {k:"users",label:"Utilisateurs & groupes",icon:"☺",subs:[
+    ["u","Utilisateurs",{ph:"Membres de l'équipe : nom, e-mail, titre, groupes, biens attribués, dernière connexion, « voir comme »."}],
+    ["g","Groupes",{ph:"Groupes et droits créer / lire / modifier / supprimer par module et par bien."}],
+    ["inter","Intervenants",{m:"intervenants"}]]},
+  {k:"site",label:"Moteur de réservation",icon:"◫",subs:[
+    ["design","Design",{ph:"Image/vidéo de fond, couleurs de marque, polices, boutons arrondis du site de réservation directe."}],
+    ["ann","Annonces",{ph:"Annonces publiées sur le site, ajout auto des nouvelles, catégories, étiquettes."}],
+    ["pages","Pages",{ph:"Accueil, à propos, confidentialité, conditions, contact, confirmation, menus d'en-tête et de pied."}],
+    ["param","Paramètres",{ph:"Nom du site, SEO, logo, favicon, carte, avis, options de réservation, ~200 équipements."}],
+    ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs."}]]},
+  {k:"params",label:"Paramètres",icon:"⚙",subs:[
+    ["compte","Détails du compte",{ph:"Profil, logo, société, e-mail, téléphone, adresse, e-mail de facture, ID du compte."}],
+    ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc (remplace Stripe)."}],
+    ["lang","Langues",{ph:"Langues voyageurs proposées (FR, EN, ES, IT, PT, DE) + langue par défaut, traduction automatique."}],
+    ["integ","Intégrations",{ph:"WhatsApp Business, webhooks (réservation, message), IA, e-mail (Resend / Brevo)."}],
+    ["api","API",{ph:"Clé de compte et clé secrète : créer, révoquer ; identifiants partenaires."}],
+    ["notif","Notifications",{ph:"Préférences de notifications PWA et e-mail."}]]},
+];
+
+/* ---------- NAV ---------- */
+function buildNav(){
+  const html=RUBRIQUES.map(r=>`<button data-rk="${r.k}" class="${r.k===state.rub?'on':''}"><span class="ic">${r.icon}</span>${r.label}</button>`).join("");
+  $("#nav").innerHTML=html; $("#mobnav").innerHTML=html;
+  document.querySelectorAll("[data-rk]").forEach(b=>b.addEventListener("click",()=>goRub(b.dataset.rk)));
+}
+function renderSubtabs(rub){
+  const bar=$("#subtabs");
+  if(!rub.subs||rub.subs.length<2){bar.hidden=true;bar.innerHTML="";return;}
+  bar.hidden=false;
+  bar.innerHTML=rub.subs.map(s=>`<button data-sk="${s[0]}" class="${s[0]===state.sub?'on':''}">${esc(s[1])}</button>`).join("");
+  bar.querySelectorAll("[data-sk]").forEach(b=>b.onclick=()=>goRub(state.rub,b.dataset.sk));
+}
+function goRub(rk,sk){
+  const rub=RUBRIQUES.find(r=>r.k===rk)||RUBRIQUES[0];
+  state.rub=rub.k;
+  const sub=(sk&&rub.subs.find(s=>s[0]===sk))||rub.subs[0];
+  state.sub=sub[0];
+  document.querySelectorAll("[data-rk]").forEach(b=>b.classList.toggle("on",b.dataset.rk===rub.k));
+  $("#pageTitle").textContent=rub.label;
+  renderSubtabs(rub);
+  const t=sub[2];
+  $("#topAdd").hidden=true;
+  if(t.d)return renderDashboard();
+  if(t.c)return renderCalendar();
+  if(t.cm)return renderCalMultiple();
+  if(t.ca)return renderCalAnnuel();
+  if(t.fi)return renderFinances();
+  if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
+  if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
+}
+function renderPlaceholder(rubLabel,subLabel,desc){
+  $("#topAdd").hidden=true;
+  $("#content").innerHTML=`<div class="panel">
+    <div class="phead"><h3>${esc(subLabel)}</h3><span class="sp"></span><span class="pill gold">🔧 À construire</span></div>
+    <div style="padding:20px">
+      <p style="margin:0 0 6px"><b>${esc(rubLabel)} · ${esc(subLabel)}</b></p>
+      <p class="muted" style="margin:0 0 14px">Écran prévu — contenu à venir :</p>
+      <div class="phnote">${esc(desc)}</div>
+      <p class="muted" style="margin:14px 0 0;font-size:12.5px">La structure (menu + base de données) est prête. Cet écran sera construit lors d'une prochaine étape — chaque rubrique est vérifiée avant de passer à la suivante.</p>
+    </div></div>`;
+}
+
+/* ---------- REF OPTIONS ---------- */
+async function loadOpts(table){
+  if(state.opts[table])return state.opts[table];
+  const {data}=await sb.from(table).select("*").limit(500);
+  state.opts[table]=data||[]; return state.opts[table];
+}
+function refName(table,id){
+  if(!id)return "—";
+  const list=state.opts[table]||[];
+  const r=list.find(x=>x.id===id); if(!r)return "…";
+  if(table==="reservation")return esc((refName("bien",r.bien_id)||"")+" · "+fdate(r.arrivee));
+  return esc(r.nom||r.id.slice(0,6));
+}
+function invalidate(table){ delete state.opts[table]; }
+
+/* ---------- LIST ---------- */
+async function renderList(k){
+  const m=MODULES[k];
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const refs=new Set(["bien","voyageur","intervenant","reservation","proprietaire"]);
+  m.fields.forEach(f=>{if(f[2]&&f[2].ref)refs.add(f[2].ref);});
+  await Promise.all([...refs].map(loadOpts));
+  const {data,error}=await sb.from(m.table).select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  const rows=(data||[]).map(r=>{
+    const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
+    return `<tr>${tds}<td><div class="act">
+      <button class="btn o sm" data-ed="${r.id}">Modifier</button>
+      <button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;
+  }).join("");
+  $("#content").innerHTML=`<div class="panel">
+    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${(data||[]).length} élément(s)</span></div>
+    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr>${m.cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucun élément. Cliquez sur « ${m.add} ».</div>`}</div>
+  </div>`;
+  state.cache=state.cache||{}; state.cache[k]=data||[];
+  document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
+}
+
+/* ---------- FORM ---------- */
+async function openForm(k,row){
+  const m=MODULES[k];
+  await Promise.all([...new Set(m.fields.filter(f=>f[2]&&f[2].ref).map(f=>f[2].ref))].map(loadOpts));
+  row=row||{};
+  const body=m.fields.map(f=>{
+    const[key,label,o]=f; const v=row[key];
+    let inp;
+    if(o.ref){
+      const list=state.opts[o.ref]||[];
+      inp=`<select id="f_${key}"><option value="">—</option>`+list.map(x=>{
+        const lab=o.ref==="reservation"?(refName("bien",x.bien_id)+" · "+fdate(x.arrivee)):(x.nom||x.id.slice(0,8));
+        return `<option value="${x.id}" ${v===x.id?"selected":""}>${esc(lab)}</option>`;}).join("")+`</select>`;
+    }else if(o.opts){
+      inp=`<select id="f_${key}">`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
+    }else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
+    else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
+    return `<div class="field"><label>${label}${o.req?" *":""}</label>${inp}</div>`;
+  });
+  ouvrir(`<div class="h"><h3>${row.id?"Modifier":m.add}</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">${body.join("")}<div class="err" id="fErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="fSave">Enregistrer</button></div>`);
+  $("#fSave").onclick=async()=>{
+    const d={};
+    for(const f of m.fields){const[key,,o]=f;let val=$("#f_"+key).value;
+      if(val==="")val=null;
+      if(val!=null&&o.type==="number")val=Number(val);
+      d[key]=val;}
+    if(m.fields.some(f=>f[2]&&f[2].req)&&m.fields.filter(f=>f[2]&&f[2].req).some(f=>!d[f[0]])){$("#fErr").textContent="Remplissez les champs obligatoires (*).";return;}
+    d.tenant_id=state.tenant.id;
+    $("#fSave").disabled=true;
+    let res;
+    if(row.id) res=await sb.from(m.table).update(d).eq("id",row.id);
+    else res=await sb.from(m.table).insert(d);
+    $("#fSave").disabled=false;
+    if(res.error){$("#fErr").textContent=res.error.message;return;}
+    invalidate(m.table); fermer(); toast("Enregistré"); renderList(k);
+  };
+}
+async function delRow(k,id){
+  const m=MODULES[k];
+  ouvrir(`<div class="h"><h3>Supprimer ?</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><p class="muted">Cet élément sera supprimé définitivement.</p><div class="err" id="dErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="dOk">Supprimer</button></div>`);
+  $("#dOk").onclick=async()=>{
+    const {error}=await sb.from(m.table).delete().eq("id",id);
+    if(error){$("#dErr").textContent=error.message;return;}
+    invalidate(m.table);fermer();toast("Supprimé");renderList(k);
+  };
+}
+
+/* ---------- DASHBOARD ---------- */
+async function renderDashboard(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const today=new Date().toISOString().slice(0,10);
+  const first=new Date();first.setDate(1);const monthStart=first.toISOString().slice(0,10);
+  const [biens,resaFut,resaMonth,pay]=await Promise.all([
+    sb.from("bien").select("id",{count:"exact",head:true}),
+    sb.from("reservation").select("id,arrivee,depart,statut",{count:"exact"}).gte("depart",today).neq("statut","annulee"),
+    sb.from("reservation").select("prix_total,arrivee").gte("arrivee",monthStart),
+    sb.from("paiement").select("montant,paye_le,statut").eq("statut","reussi").gte("paye_le",monthStart),
+  ]);
+  const nbBiens=biens.count||0;
+  const nbFut=resaFut.count||0;
+  const caMonth=(resaMonth.data||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
+  const encMonth=(pay.data||[]).reduce((s,r)=>s+Number(r.montant||0),0);
+  const in30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+  const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
+  let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
+  const capacity=nbBiens*30; const taux=capacity?Math.round(nights/capacity*100):0;
+  $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Biens gérés</div><div class="v">${nbBiens}</div><div class="s">propriétés actives</div></div>
+      <div class="kpi"><div class="l">Réservations à venir</div><div class="v">${nbFut}</div><div class="s">séjours en cours/futurs</div></div>
+      <div class="kpi"><div class="l">CA du mois</div><div class="v" style="font-size:24px">${money(caMonth)}</div><div class="s">réservations arrivées ce mois</div></div>
+      <div class="kpi"><div class="l">Encaissé (mois)</div><div class="v" style="font-size:24px">${money(encMonth)}</div><div class="s">paiements réussis</div></div>
+      <div class="kpi"><div class="l">Occupation 30j</div><div class="v">${taux}%</div><div class="s">nuits réservées / capacité</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Prochaines arrivées</h3></div><div id="dashNext" style="overflow:auto"><div class="center"><span class="spin"></span></div></div></div>`;
+  await loadOpts("bien");await loadOpts("voyageur");
+  const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).neq("statut","annulee").order("arrivee").limit(8);
+  $("#dashNext").innerHTML=(next&&next.length)?`<table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>Paiement</th></tr></thead><tbody>${next.map(r=>`<tr><td>${refName("bien",r.bien_id)}</td><td>${refName("voyageur",r.voyageur_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.statut_paiement)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucune arrivée programmée.</div>`;
+}
+
+/* ---------- CALENDAR (mensuel) ---------- */
+let calMonth=new Date();calMonth.setDate(1);
+async function renderCalendar(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const y=calMonth.getFullYear(),mo=calMonth.getMonth();
+  const start=new Date(y,mo,1),end=new Date(y,mo+1,0);
+  const sISO=start.toISOString().slice(0,10),eISO=new Date(y,mo+1,0).toISOString().slice(0,10);
+  const [{data:resa},{data:blos}]=await Promise.all([
+    sb.from("reservation").select("*").neq("statut","annulee").lte("arrivee",eISO).gte("depart",sISO),
+    sb.from("blocage").select("*").lte("debut",eISO).gte("fin",sISO),
+  ]);
+  const firstDow=(start.getDay()+6)%7;
+  const days=end.getDate();
+  let cells="";const dows=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+  cells+=dows.map(d=>`<div class="hd">${d}</div>`).join("");
+  for(let i=0;i<firstDow;i++)cells+=`<div></div>`;
+  for(let d=1;d<=days;d++){
+    const date=new Date(y,mo,d),iso=date.toISOString().slice(0,10);
+    const evs=(resa||[]).filter(r=>iso>=r.arrivee&&iso<r.depart).map(r=>`<div class="ev">${esc(refName("bien",r.bien_id))}</div>`).join("");
+    const bl=(blos||[]).filter(b=>iso>=b.debut&&iso<b.fin).map(b=>`<div class="ev b">Bloqué</div>`).join("");
+    cells+=`<div class="d"><div class="n">${d}</div>${evs}${bl}</div>`;
+  }
+  const label=calMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  $("#content").innerHTML=`<div class="panel"><div class="phead">
+      <button class="btn o sm" id="calPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
+      <button class="btn o sm" id="calNext">›</button><span class="sp"></span><span class="muted">Réservations & blocages</span></div>
+      <div style="padding:14px"><div class="cal">${cells}</div></div></div>`;
+  $("#calPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalendar();};
+  $("#calNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalendar();};
+}
+
+/* ---------- CALENDAR (multiple : biens x jours) ---------- */
+async function renderCalMultiple(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const biens=await loadOpts("bien");
+  const y=calMonth.getFullYear(),mo=calMonth.getMonth();
+  const end=new Date(y,mo+1,0);const days=end.getDate();
+  const sISO=new Date(y,mo,1).toISOString().slice(0,10),eISO=end.toISOString().slice(0,10);
+  const [{data:resa},{data:blos}]=await Promise.all([
+    sb.from("reservation").select("*").neq("statut","annulee").lte("arrivee",eISO).gte("depart",sISO),
+    sb.from("blocage").select("*").lte("debut",eISO).gte("fin",sISO),
+  ]);
+  let head=`<th>Bien</th>`;for(let d=1;d<=days;d++)head+=`<th>${d}</th>`;
+  let body=(biens||[]).map(b=>{
+    let tds=`<td>${esc(b.nom)}</td>`;
+    for(let d=1;d<=days;d++){
+      const iso=new Date(y,mo,d).toISOString().slice(0,10);
+      const r=(resa||[]).find(x=>x.bien_id===b.id&&iso>=x.arrivee&&iso<x.depart);
+      const bl=(blos||[]).find(x=>x.bien_id===b.id&&iso>=x.debut&&iso<x.fin);
+      if(r)tds+=`<td class="bk" title="${esc(refName("voyageur",r.voyageur_id))}">•</td>`;
+      else if(bl)tds+=`<td class="bl">×</td>`;
+      else tds+=`<td></td>`;
+    }
+    return `<tr>${tds}</tr>`;
+  }).join("");
+  const label=calMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  await loadOpts("voyageur");
+  $("#content").innerHTML=`<div class="panel"><div class="phead">
+    <button class="btn o sm" id="cmPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
+    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">Tous les biens — ● réservé · × bloqué</span></div>
+    <div class="gridscroll" style="padding:12px">${(biens&&biens.length)?`<table class="mtable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:`<div class="empty">Ajoutez des biens pour voir le calendrier multiple.</div>`}</div></div>`;
+  $("#cmPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalMultiple();};
+  $("#cmNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalMultiple();};
+}
+
+/* ---------- CALENDAR (annuel) ---------- */
+let calYear=new Date().getFullYear();
+async function renderCalAnnuel(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const sISO=calYear+"-01-01",eISO=calYear+"-12-31";
+  const {data:resa}=await sb.from("reservation").select("arrivee,depart,statut").neq("statut","annulee").lte("arrivee",eISO).gte("depart",sISO);
+  const booked=new Set();
+  (resa||[]).forEach(r=>{let d=new Date(r.arrivee);const end=new Date(r.depart);while(d<end){if(d.getFullYear()===calYear)booked.add(d.toISOString().slice(0,10));d=new Date(d.getTime()+864e5);}});
+  const moNames=["janv.","févr.","mars","avril","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+  let months="";
+  for(let mo=0;mo<12;mo++){
+    const first=new Date(calYear,mo,1);const days=new Date(calYear,mo+1,0).getDate();const fdow=(first.getDay()+6)%7;
+    let cells="";for(let i=0;i<fdow;i++)cells+=`<span></span>`;
+    for(let d=1;d<=days;d++){const iso=new Date(calYear,mo,d).toISOString().slice(0,10);cells+=`<span class="${booked.has(iso)?'bk':''}">${d}</span>`;}
+    months+=`<div class="mo"><h4>${moNames[mo]}</h4><div class="mini">${cells}</div></div>`;
+  }
+  $("#content").innerHTML=`<div class="panel"><div class="phead">
+    <button class="btn o sm" id="ayPrev">‹</button><h3>${calYear}</h3><button class="btn o sm" id="ayNext">›</button>
+    <span class="sp"></span><span class="muted">Jours réservés (tous biens)</span></div>
+    <div style="padding:14px"><div class="calm">${months}</div></div></div>`;
+  $("#ayPrev").onclick=()=>{calYear--;renderCalAnnuel();};
+  $("#ayNext").onclick=()=>{calYear++;renderCalAnnuel();};
+}
+
+/* ---------- FINANCES ---------- */
+async function renderFinances(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur"),loadOpts("proprietaire")]);
+  const [{data:resa},{data:pay}]=await Promise.all([
+    sb.from("reservation").select("*").neq("statut","annulee").order("arrivee",{ascending:false}).limit(100),
+    sb.from("paiement").select("*").order("paye_le",{ascending:false}).limit(100),
+  ]);
+  const totDu=(resa||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
+  const totEnc=(resa||[]).reduce((s,r)=>s+Number(r.montant_paye||0),0);
+  const reste=totDu-totEnc;
+  $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Facturé</div><div class="v" style="font-size:24px">${money(totDu)}</div></div>
+      <div class="kpi"><div class="l">Encaissé</div><div class="v" style="font-size:24px">${money(totEnc)}</div></div>
+      <div class="kpi"><div class="l">Reste à encaisser</div><div class="v" style="font-size:24px">${money(reste)}</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Réservations & encaissement</h3></div><div style="overflow:auto">
+      ${(resa&&resa.length)?`<table><thead><tr><th>Bien</th><th>Arrivée</th><th>Total</th><th>Payé</th><th>Reste</th><th>Statut</th><th></th></tr></thead><tbody>
+      ${resa.map(r=>`<tr><td>${refName("bien",r.bien_id)}</td><td>${fdate(r.arrivee)}</td><td>${money(r.prix_total)}</td><td>${money(r.montant_paye)}</td><td>${money((r.prix_total||0)-(r.montant_paye||0))}</td><td>${pill(r.statut_paiement)}</td>
+      <td><button class="btn g sm" data-pay="${r.id}">+ Paiement</button></td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucune réservation.</div>`}
+    </div></div>
+    <div class="panel"><div class="phead"><h3>Derniers paiements</h3></div><div style="overflow:auto">
+      ${(pay&&pay.length)?`<table><thead><tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Statut</th></tr></thead><tbody>
+      ${pay.map(p=>`<tr><td>${fdate(p.paye_le)}</td><td>${money(p.montant)}</td><td>${pill(p.moyen)}</td><td>${pill(p.statut)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucun paiement.</div>`}
+    </div></div>`;
+  state.cache=state.cache||{};state.cache.resaFin=resa||[];
+  document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>payForm(b.dataset.pay));
+}
+function payForm(resaId){
+  const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);
+  const reste=(r.prix_total||0)-(r.montant_paye||0);
+  ouvrir(`<div class="h"><h3>Encaisser un paiement</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <p class="muted">Reste à encaisser : <b>${money(reste)}</b></p>
+      <div class="field"><label>Montant *</label><input id="pM" type="number" value="${reste>0?reste:""}"></div>
+      <div class="field"><label>Moyen</label><select id="pMoy"><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="autre">Autre</option></select></div>
+      <div class="field"><label>Référence</label><input id="pRef" placeholder="N° de transaction"></div>
+      <div class="err" id="pErr"></div>
+    </div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pSave">Enregistrer</button></div>`);
+  $("#pSave").onclick=async()=>{
+    const montant=Number($("#pM").value);
+    if(!montant||montant<=0){$("#pErr").textContent="Montant invalide.";return;}
+    $("#pSave").disabled=true;
+    const {error}=await sb.from("paiement").insert({tenant_id:state.tenant.id,reservation_id:resaId,montant,moyen:$("#pMoy").value,reference:$("#pRef").value||null,statut:"reussi"});
+    $("#pSave").disabled=false;
+    if(error){$("#pErr").textContent=error.message;return;}
+    fermer();toast("Paiement enregistré");renderFinances();
+  };
+}
+
+init();
+</script>
+</body>
+</html>
