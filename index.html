@@ -457,7 +457,8 @@ const RUBRIQUES=[
     ["dyn","Tarification dynamique",{tarifdyn:1}]]},
   {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
     ["liste","Canaux connectés",{m:"canaux"}],
-    ["carte","Carte des annonces",{canauxcarte:1}]]},
+    ["carte","Carte des annonces",{canauxcarte:1}],
+    ["ical","Synchronisation iCal",{icalsync:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{ph:"Nuki / igloohome / TTLock : appareils en ligne, mappage de l'annonce, envoi du code de porte."}],
     ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
@@ -521,6 +522,7 @@ function goRub(rk,sk){
   if(t.qualann)return renderQualAnn();
   if(t.tarifdyn)return renderTarifDyn();
   if(t.canauxcarte)return renderCanauxCarte();
+  if(t.icalsync)return renderIcalSync();
   if(t.sitedesign)return renderSiteDesign();
   if(t.siteparams)return renderSiteParams();
   if(t.paramcompte)return renderParamCompte();
@@ -885,6 +887,56 @@ async function renderCanauxCarte(){
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Carte des annonces — canaux</h3></div>
     <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th>Canaux liés</th><th style="text-align:center">Nb</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="muted">Aucun bien</td></tr>'}</tbody></table></div>
     <div style="padding:16px"><div class="phnote">Chaque bien peut être relié à plusieurs canaux (onglet « Canaux connectés »). La synchronisation automatique des calendriers (flux iCal Airbnb / Booking) est l'extension iCal — gratuite, à activer quand tu veux.</div></div></div>`;
+}
+
+/* ---------- SYNCHRO ICAL ---------- */
+const ICAL_EXPORT_BASE = SUPABASE_URL + "/functions/v1/ical-export?token=";
+const ICAL_CANAUX = ["airbnb","booking","vrbo","expedia","abritel","autre"];
+async function renderIcalSync(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [{data:biens},{data:sources}]=await Promise.all([
+    sb.from("bien").select("id,nom,ical_token").order("nom"),
+    sb.from("ical_source").select("*").order("cree_le")
+  ]);
+  const byBien={}; (sources||[]).forEach(s=>{(byBien[s.bien_id]=byBien[s.bien_id]||[]).push(s);});
+  const fmt=(d)=> d? new Date(d).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}) : "jamais";
+  const cards=(biens||[]).map(b=>{
+    const srcs=byBien[b.id]||[];
+    const exportUrl=ICAL_EXPORT_BASE+(b.ical_token||"");
+    const srcRows=srcs.map(s=>`<tr>
+      <td>${pill(s.canal)}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.url)}">${esc(s.url)}</td>
+      <td style="text-align:center">${s.nb_importes||0}</td>
+      <td>${fmt(s.derniere_synchro)}${s.derniere_erreur?` <span class="pill red" title="${esc(s.derniere_erreur)}">erreur</span>`:""}</td>
+      <td style="text-align:right"><button class="btn d sm" data-delsrc="${s.id}">Suppr.</button></td>
+    </tr>`).join("");
+    return `<div class="panel" style="margin-bottom:14px">
+      <div class="phead"><h3>${esc(b.nom)}</h3>
+        <button class="btn g sm" data-sync="${b.id}">↻ Synchroniser</button></div>
+      <div style="padding:14px">
+        <div class="field"><label>Lien d'export iCal — à coller dans Airbnb / Booking</label>
+          <div style="display:flex;gap:8px">
+            <input readonly value="${esc(exportUrl)}" style="flex:1">
+            <button class="btn o sm" data-copy="${esc(exportUrl)}">Copier</button>
+          </div>
+        </div>
+        <div style="overflow:auto;margin-top:10px"><table><thead><tr><th>Canal</th><th>Flux importé (URL)</th><th style="text-align:center">Blocages</th><th>Dernière synchro</th><th></th></tr></thead>
+          <tbody>${srcRows||'<tr><td colspan="5" class="muted">Aucun flux importé</td></tr>'}</tbody></table></div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="field" style="margin:0"><label>Canal</label>
+            <select data-addcanal="${b.id}">${ICAL_CANAUX.map(c=>`<option value="${c}">${c}</option>`).join("")}</select></div>
+          <div class="field" style="margin:0;flex:1;min-width:220px"><label>URL du flux iCal (Airbnb / Booking…)</label>
+            <input data-addurl="${b.id}" placeholder="https://www.airbnb.fr/calendar/ical/....ics"></div>
+          <button class="btn sm" data-addsrc="${b.id}">+ Ajouter le flux</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px"><b>Synchronisation des calendriers</b> avec Airbnb, Booking et les autres plateformes.<br><b>Import</b> : collez l'URL du flux iCal de chaque plateforme — leurs réservations bloqueront automatiquement votre calendrier (toutes les 3 h, ou via « Synchroniser »). <b>Export</b> : copiez le lien d'export du bien et collez-le dans Airbnb / Booking pour leur transmettre vos réservations. Gratuit.</div>${cards||'<div class="panel"><div style="padding:16px" class="muted">Aucun bien.</div></div>'}`;
+  $("#content").querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>{navigator.clipboard.writeText(btn.dataset.copy).then(()=>toast("Lien copié")).catch(()=>toast("Copie impossible — sélectionnez le champ"));});
+  $("#content").querySelectorAll("[data-sync]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.sync;btn.disabled=true;const old=btn.textContent;btn.textContent="…";const {data,error}=await sb.rpc("ical_sync_bien",{p_bien:id});if(error){btn.disabled=false;btn.textContent=old;toast("Erreur de synchro");}else{toast(`Synchro OK — ${(data&&data.blocages)||0} blocage(s) importé(s)`);renderIcalSync();}});
+  $("#content").querySelectorAll("[data-addsrc]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.addsrc;const canal=$("#content").querySelector('[data-addcanal="'+id+'"]').value;const url=($("#content").querySelector('[data-addurl="'+id+'"]').value||"").trim();if(!url){toast("URL manquante");return;}const {error}=await sb.from("ical_source").insert({tenant_id:state.tenant.id,bien_id:id,canal,url});if(error){toast("Erreur à l'ajout");}else{toast("Flux ajouté");renderIcalSync();}});
+  $("#content").querySelectorAll("[data-delsrc]").forEach(btn=>btn.onclick=async()=>{const {error}=await sb.from("ical_source").delete().eq("id",btn.dataset.delsrc);if(error){toast("Erreur suppression");}else{toast("Flux supprimé");renderIcalSync();}});
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
