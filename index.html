@@ -477,7 +477,7 @@ const RUBRIQUES=[
     ["compte","Détails du compte",{paramcompte:1}],
     ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
     ["lang","Langues",{paramlangues:1}],
-    ["integ","Intégrations",{ph:"WhatsApp Business, webhooks (réservation, message), IA, e-mail (Resend / Brevo)."}],
+    ["integ","Intégrations",{emailcfg:1}],
     ["api","API",{ph:"Clé de compte et clé secrète : créer, révoquer ; identifiants partenaires."}],
     ["notif","Notifications",{ph:"Préférences de notifications PWA et e-mail."}]]},
 ];
@@ -523,6 +523,7 @@ function goRub(rk,sk){
   if(t.tarifdyn)return renderTarifDyn();
   if(t.canauxcarte)return renderCanauxCarte();
   if(t.icalsync)return renderIcalSync();
+  if(t.emailcfg)return renderEmailConfig();
   if(t.sitedesign)return renderSiteDesign();
   if(t.siteparams)return renderSiteParams();
   if(t.paramcompte)return renderParamCompte();
@@ -937,6 +938,34 @@ async function renderIcalSync(){
   $("#content").querySelectorAll("[data-sync]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.sync;btn.disabled=true;const old=btn.textContent;btn.textContent="…";const {data,error}=await sb.rpc("ical_sync_bien",{p_bien:id});if(error){btn.disabled=false;btn.textContent=old;toast("Erreur de synchro");}else{toast(`Synchro OK — ${(data&&data.blocages)||0} blocage(s) importé(s)`);renderIcalSync();}});
   $("#content").querySelectorAll("[data-addsrc]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.addsrc;const canal=$("#content").querySelector('[data-addcanal="'+id+'"]').value;const url=($("#content").querySelector('[data-addurl="'+id+'"]').value||"").trim();if(!url){toast("URL manquante");return;}const {error}=await sb.from("ical_source").insert({tenant_id:state.tenant.id,bien_id:id,canal,url});if(error){toast("Erreur à l'ajout");}else{toast("Flux ajouté");renderIcalSync();}});
   $("#content").querySelectorAll("[data-delsrc]").forEach(btn=>btn.onclick=async()=>{const {error}=await sb.from("ical_source").delete().eq("id",btn.dataset.delsrc);if(error){toast("Erreur suppression");}else{toast("Flux supprimé");renderIcalSync();}});
+}
+
+/* ---------- CONFIG E-MAIL ---------- */
+async function renderEmailConfig(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("email");
+  const prov=v.provider||'resend';
+  const opt=(val,lab)=>`<option value="${val}" ${prov===val?'selected':''}>${lab}</option>`;
+  const etat=(v.api_key&&v.sender_email)?'<span class="pill green">configuré</span>':'<span class="pill gold">à compléter</span>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Configuration e-mail ${etat}</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Envoi automatique des e-mails voyageurs (confirmations, instructions d'arrivée, relances) à partir des modèles de la Messagerie. Choisissez un fournisseur, collez sa clé API (offre gratuite suffisante pour démarrer) et renseignez l'expéditeur. L'envoi s'active dès que la clé est saisie et l'extension déployée.</div>
+      <div class="row2">
+        <div class="field"><label>Fournisseur</label><select id="emProv">${opt('resend','Resend')}${opt('brevo','Brevo (Sendinblue)')}</select></div>
+        <div class="field"><label>Clé API</label><input id="emKey" type="password" value="${esc(v.api_key||'')}" placeholder="Collez la clé API du fournisseur"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Nom de l'expéditeur</label><input id="emName" value="${esc(v.sender_name||'DPM Conciergerie')}"></div>
+        <div class="field"><label>E-mail de l'expéditeur</label><input id="emFrom" value="${esc(v.sender_email||'')}" placeholder="reservation@dpmconciergerie.com"></div>
+      </div>
+      <div class="field"><label>Répondre à (reply-to, optionnel)</label><input id="emReply" value="${esc(v.reply_to||'')}" placeholder="contact@dpmconciergerie.com"></div>
+      <div style="margin-top:10px"><button class="btn g" id="emSave">Enregistrer</button>
+        <button class="btn o" id="emTest" style="margin-left:8px">Envoyer un e-mail de test</button>
+        <span class="ok" id="emOk" style="margin-left:8px"></span></div>
+      <div class="phnote" style="margin-top:12px">Pour envoyer depuis votre domaine (ex. reservation@dpmconciergerie.com), il faut le vérifier chez le fournisseur (enregistrements DNS). En test, Resend n'autorise l'envoi que vers votre propre adresse tant que le domaine n'est pas vérifié.</div>
+    </div></div>`;
+  $("#emSave").onclick=async()=>{const valeur={provider:$("#emProv").value,api_key:$("#emKey").value.trim(),sender_name:$("#emName").value.trim(),sender_email:$("#emFrom").value.trim(),reply_to:$("#emReply").value.trim()};const e=await reglSet("email",valeur);if(e){$("#emOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#emOk").textContent="Enregistré ✓";toast("Configuration e-mail enregistrée");renderEmailConfig();};
+  $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";try{const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"Test DPM Conciergerie",html:"<p>Ceci est un e-mail de test depuis votre application DPM.</p>"}});if(error){$("#emOk").innerHTML='<span class="err">'+esc(error.message||'echec')+'</span>';toast("Echec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}}catch(e){$("#emOk").innerHTML='<span class="err">'+esc(''+e)+'</span>';}};
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
