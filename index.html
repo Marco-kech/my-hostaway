@@ -886,16 +886,32 @@ async function renderDashboard(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const today=new Date().toISOString().slice(0,10);
   const first=new Date();first.setDate(1);const monthStart=first.toISOString().slice(0,10);
-  const [biens,resaFut,resaMonth,pay]=await Promise.all([
-    sb.from("bien").select("id",{count:"exact",head:true}),
+  const [biensAll,resaFut,resaMonth,pay,activeResas,msgs]=await Promise.all([
+    sb.from("bien").select("id,statut,prix_nuit_base,capacite"),
     sb.from("reservation").select("id,arrivee,depart,statut",{count:"exact"}).gte("depart",today).neq("statut","annulee"),
-    sb.from("reservation").select("prix_total,arrivee").gte("arrivee",monthStart),
+    sb.from("reservation").select("prix_total,arrivee,statut").gte("arrivee",monthStart),
     sb.from("paiement").select("montant,paye_le,statut").eq("statut","reussi").gte("paye_le",monthStart),
+    sb.from("reservation").select("arrivee,depart,statut,nb_personnes").gte("depart",today).neq("statut","annulee"),
+    sb.from("message").select("sens,statut"),
   ]);
-  const nbBiens=biens.count||0;
+  const bAll=biensAll.data||[];
+  const nbBiens=bAll.length;
   const nbFut=resaFut.count||0;
   const caMonth=(resaMonth.data||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
   const encMonth=(pay.data||[]).reduce((s,r)=>s+Number(r.montant||0),0);
+  const act=activeResas.data||[];
+  const departsJour=act.filter(r=>r.depart===today).length;
+  const arriveesJour=act.filter(r=>r.arrivee===today).length;
+  const aApprouver=act.filter(r=>r.statut==='en_attente').length;
+  const demandes=act.filter(r=>r.statut==='demande').length;
+  const sejournant=act.filter(r=>r.arrivee<=today&&today<r.depart).reduce((s,r)=>s+(Number(r.nb_personnes)||1),0);
+  const bInactives=bAll.filter(b=>b.statut==='inactif').length;
+  const bIncompletes=bAll.filter(b=>!b.prix_nuit_base||!b.capacite).length;
+  const ms=msgs.data||[];
+  const msgEnvoyes=ms.filter(m=>m.sens==='sortant').length;
+  const msgRecus=ms.filter(m=>m.sens==='entrant').length;
+  const msgNonLus=ms.filter(m=>m.sens==='entrant'&&m.statut!=='lu').length;
+  const revConfirmes=(resaMonth.data||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee').reduce((s,r)=>s+Number(r.prix_total||0),0);
   const in30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
   const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
   let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
@@ -908,6 +924,26 @@ async function renderDashboard(){
       <div class="kpi"><div class="l">Encaissé (mois)</div><div class="v" style="font-size:24px">${money(encMonth)}</div><div class="s">paiements réussis</div></div>
       <div class="kpi"><div class="l">Occupation 30j</div><div class="v">${taux}%</div><div class="s">nuits réservées / capacité</div></div>
     </div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Départs du jour</div><div class="v">${departsJour}</div><div class="s">aujourd'hui</div></div>
+      <div class="kpi"><div class="l">Arrivées du jour</div><div class="v">${arriveesJour}</div><div class="s">aujourd'hui</div></div>
+      <div class="kpi"><div class="l">Voyageurs séjournant</div><div class="v">${sejournant}</div><div class="s">actuellement sur place</div></div>
+      <div class="kpi"><div class="l">À approuver</div><div class="v">${aApprouver}</div><div class="s">réservations en attente</div></div>
+      <div class="kpi"><div class="l">Demandes en attente</div><div class="v">${demandes}</div><div class="s">à traiter</div></div>
+    </div>
+    <div class="row2">
+      <div class="panel"><div class="phead"><h3>Messages</h3></div><div style="padding:14px">
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Envoyés</span><strong>${msgEnvoyes}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Reçus</span><strong>${msgRecus}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Non lus</span><strong>${msgNonLus}</strong></div>
+      </div></div>
+      <div class="panel"><div class="phead"><h3>Annonces</h3></div><div style="padding:14px">
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Total</span><strong>${nbBiens}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Inactives</span><strong>${bInactives}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Incomplètes</span><strong>${bIncompletes}</strong></div>
+      </div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Revenus confirmés (ce mois)</h3><span class="sp"></span><span class="muted">${money(revConfirmes)}</span></div></div>
     <div class="panel"><div class="phead"><h3>Prochaines arrivées</h3></div><div id="dashNext" style="overflow:auto"><div class="center"><span class="spin"></span></div></div></div>`;
   await loadOpts("bien");await loadOpts("voyageur");
   const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).neq("statut","annulee").order("arrivee").limit(8);
