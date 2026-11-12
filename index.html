@@ -433,7 +433,7 @@ const RUBRIQUES=[
   {k:"calendrier",label:"Calendrier",icon:"▤",subs:[
     ["mult","Multiple",{cm:1}],["mois","Mensuel",{c:1}],["an","Annuel",{ca:1}]]},
   {k:"inbox",label:"Boîte de réception",icon:"✉",subs:[
-    ["conv","Conversations",{m:"messagerie"}],
+    ["conv","Conversations",{inbox:1}],
     ["ia","Réponses IA",{iaconfig:1}],
     ["kb","Base de connaissances",{m:"connaissances"}],
     ["mod","Modèles de message",{m:"modeles"}],
@@ -577,6 +577,60 @@ function champPersoDel(objet,id){
     fermer(); toast("Supprimé"); renderChampsPerso(objet);
   };
 }
+async function renderInbox(){
+  $("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau message";$("#topAdd").onclick=()=>openForm('messagerie');
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all(["bien","voyageur","reservation"].map(loadOpts));
+  const {data:msgs,error}=await sb.from('message').select('*').order('cree_le',{ascending:true});
+  if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
+  const resas=state.opts.reservation||[], voys=state.opts.voyageur||[];
+  const findResa=id=>resas.find(x=>x.id===id), findVoy=id=>voys.find(x=>x.id===id);
+  const nights=(a,d)=>(a&&d)?Math.max(0,Math.round((new Date(d)-new Date(a))/86400000)):0;
+  const groups={};
+  (msgs||[]).forEach(m=>{const key=m.reservation_id?('r:'+m.reservation_id):(m.voyageur_id?('v:'+m.voyageur_id):'autre');(groups[key]=groups[key]||[]).push(m);});
+  const keys=Object.keys(groups).sort((a,b)=>{const la=groups[a][groups[a].length-1].cree_le||'',lb=groups[b][groups[b].length-1].cree_le||'';return lb.localeCompare(la);});
+  if(!state.inboxSel||!groups[state.inboxSel]) state.inboxSel=keys[0]||null;
+  const titleFor=key=>{if(key==='autre')return 'Sans réservation';if(key.startsWith('r:'))return refName('reservation',key.slice(2));if(key.startsWith('v:')){const v=findVoy(key.slice(2));return v?v.nom:'Voyageur';}return key;};
+  const list=keys.map(key=>{const arr=groups[key],last=arr[arr.length-1],on=key===state.inboxSel;
+    return `<div class="ibx-item" data-key="${esc(key)}" style="padding:10px 12px;border-bottom:1px solid var(--line,#eee);cursor:pointer;${on?'background:rgba(201,162,74,.12)':''}">
+      <div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">${esc(titleFor(key))}</strong><span class="muted" style="font-size:11px">${fdate(last.cree_le)}</span></div>
+      <div class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((last.corps||'').slice(0,50))}</div></div>`;}).join("")||'<div class="empty" style="padding:16px">Aucune conversation.</div>';
+  const sel=state.inboxSel, arr=sel?groups[sel]:[];
+  const thread=(arr||[]).map(m=>{const out=m.sens==='sortant';
+    return `<div style="display:flex;justify-content:${out?'flex-end':'flex-start'};margin:6px 0">
+      <div style="max-width:72%;padding:8px 11px;border-radius:10px;background:${out?'rgba(201,162,74,.18)':'rgba(0,0,0,.05)'};font-size:13px">
+        <div>${esc(m.corps||'')}</div><div class="muted" style="font-size:10px;margin-top:3px">${pill(m.canal)} · ${pill(m.statut)} · ${fdate(m.cree_le)}</div></div></div>`;}).join("")||'<div class="muted" style="padding:20px;text-align:center">Sélectionnez une conversation</div>';
+  let resume='<div class="muted" style="padding:16px">—</div>';
+  if(sel&&sel.startsWith('r:')){const r=findResa(sel.slice(2));
+    if(r){const v=findVoy(r.voyageur_id),reste=(Number(r.prix_total||0)-Number(r.montant_paye||0));
+      resume=`<div style="padding:14px;font-size:13px">
+        <div class="fsec">Réservation</div>
+        <div><span class="muted">Annonce</span><br><strong>${esc(refName('bien',r.bien_id))}</strong></div>
+        <div style="margin-top:8px"><span class="muted">Voyageur</span><br>${esc(v?v.nom:'—')}${v&&v.email?'<br><span class="muted">'+esc(v.email)+'</span>':''}${v&&v.tel?'<br><span class="muted">'+esc(v.tel)+'</span>':''}</div>
+        <div style="margin-top:8px"><span class="muted">Séjour</span><br>${fdate(r.arrivee)} → ${fdate(r.depart)} · ${nights(r.arrivee,r.depart)} nuits</div>
+        <div style="margin-top:8px"><span class="muted">Canal</span> ${pill(r.canal)}</div>
+        <div class="fsec" style="margin-top:12px">Paiement</div>
+        <div>Total : <strong>${money(r.prix_total)}</strong></div><div>Payé : ${money(r.montant_paye)}</div>
+        <div>Reste : <strong>${money(reste)}</strong></div><div style="margin-top:4px">${pill(r.statut_paiement)}</div></div>`;}
+  } else if(sel&&sel.startsWith('v:')){const v=findVoy(sel.slice(2));
+    if(v) resume=`<div style="padding:14px;font-size:13px"><div class="fsec">Voyageur</div><strong>${esc(v.nom)}</strong>${v.email?'<br><span class="muted">'+esc(v.email)+'</span>':''}${v.tel?'<br><span class="muted">'+esc(v.tel)+'</span>':''}${v.ville?'<br>'+esc(v.ville):''}${v.pays?' · '+esc(v.pays):''}</div>`;}
+  const composer=sel?`<div style="border-top:1px solid var(--line,#eee);padding:10px;display:flex;gap:8px">
+    <textarea id="ibxMsg" rows="2" placeholder="Écrivez un message…" style="flex:1;resize:none"></textarea>
+    <button class="btn g" id="ibxSend" style="align-self:stretch">Envoyer</button></div>`:'';
+  $("#content").innerHTML=`<div class="panel" style="padding:0;overflow:hidden">
+    <div style="display:grid;grid-template-columns:280px 1fr 300px;min-height:480px">
+      <div style="border-right:1px solid var(--line,#eee);overflow:auto;max-height:70vh">${list}</div>
+      <div style="display:flex;flex-direction:column;max-height:70vh"><div style="flex:1;overflow:auto;padding:12px">${thread}</div>${composer}</div>
+      <div style="border-left:1px solid var(--line,#eee);overflow:auto;max-height:70vh">${resume}</div></div></div>`;
+  document.querySelectorAll('.ibx-item').forEach(el=>el.onclick=()=>{state.inboxSel=el.dataset.key;renderInbox();});
+  const sb2=document.getElementById('ibxSend');
+  if(sb2) sb2.onclick=async()=>{const corps=document.getElementById('ibxMsg').value.trim();if(!corps)return;sb2.disabled=true;
+    const rec={tenant_id:state.tenant.id,corps,sens:'sortant',statut:'envoye',canal:'whatsapp'};
+    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r){rec.voyageur_id=r.voyageur_id;if(r.canal)rec.canal=r.canal;}}
+    else if(sel.startsWith('v:'))rec.voyageur_id=sel.slice(2);
+    const {error}=await sb.from('message').insert(rec);sb2.disabled=false;
+    if(error){toast(error.message);return;}toast('Message ajouté');renderInbox();};
+}
 async function renderDocModeles(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const c=await reglGet("doc_modeles")||{};
@@ -672,6 +726,7 @@ function goRub(rk,sk){
   if(t.paramcompte)return renderParamCompte();
   if(t.paramlangues)return renderParamLangues();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
+  if(t.inbox)return renderInbox();
   if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.champperso)return renderChampsPerso(t.champperso);
