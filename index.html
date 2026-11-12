@@ -454,10 +454,10 @@ const RUBRIQUES=[
     ["avis","Qualité des avis",{qualavis:1}]]},
   {k:"tarif",label:"Tarification",icon:"$",subs:[
     ["sais","Tarifs saisonniers",{m:"tarifs"}],
-    ["dyn","Tarification dynamique",{ph:"Moteur de règles maison ou connexion PriceLabs : taux de base, prix minimum / maximum, synchronisation du calendrier."}]]},
+    ["dyn","Tarification dynamique",{tarifdyn:1}]]},
   {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
     ["liste","Canaux connectés",{m:"canaux"}],
-    ["carte","Carte des annonces",{ph:"Activation iCal bien par bien, export CSV, statut de synchronisation, mappage des annonces par canal."}]]},
+    ["carte","Carte des annonces",{canauxcarte:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{ph:"Nuki / igloohome / TTLock : appareils en ligne, mappage de l'annonce, envoi du code de porte."}],
     ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
@@ -467,15 +467,15 @@ const RUBRIQUES=[
     ["g","Groupes & droits",{groupes:1}],
     ["inter","Intervenants",{m:"intervenants"}]]},
   {k:"site",label:"Moteur de réservation",icon:"◫",subs:[
-    ["design","Design",{ph:"Image/vidéo de fond, couleurs de marque, polices, boutons arrondis du site de réservation directe."}],
-    ["ann","Annonces",{ph:"Annonces publiées sur le site, ajout auto des nouvelles, catégories, étiquettes."}],
-    ["pages","Pages",{ph:"Accueil, à propos, confidentialité, conditions, contact, confirmation, menus d'en-tête et de pied."}],
-    ["param","Paramètres",{ph:"Nom du site, SEO, logo, favicon, carte, avis, options de réservation, ~200 équipements."}],
-    ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs."}]]},
+    ["design","Design",{sitedesign:1}],
+    ["ann","Annonces",{ph:"Annonces publiées sur le site, ajout auto des nouvelles, catégories, étiquettes — à venir."}],
+    ["pages","Pages",{ph:"Accueil, à propos, confidentialité, conditions, contact, confirmation, menus — à venir."}],
+    ["param","Paramètres",{siteparams:1}],
+    ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs — à venir."}]]},
   {k:"params",label:"Paramètres",icon:"⚙",subs:[
-    ["compte","Détails du compte",{ph:"Profil, logo, société, e-mail, téléphone, adresse, e-mail de facture, ID du compte."}],
-    ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc (remplace Stripe)."}],
-    ["lang","Langues",{ph:"Langues voyageurs proposées (FR, EN, ES, IT, PT, DE) + langue par défaut, traduction automatique."}],
+    ["compte","Détails du compte",{paramcompte:1}],
+    ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
+    ["lang","Langues",{paramlangues:1}],
     ["integ","Intégrations",{ph:"WhatsApp Business, webhooks (réservation, message), IA, e-mail (Resend / Brevo)."}],
     ["api","API",{ph:"Clé de compte et clé secrète : créer, révoquer ; identifiants partenaires."}],
     ["notif","Notifications",{ph:"Préférences de notifications PWA et e-mail."}]]},
@@ -519,6 +519,12 @@ function goRub(rk,sk){
   if(t.formules)return renderFormules();
   if(t.qualavis)return renderQualAvis();
   if(t.qualann)return renderQualAnn();
+  if(t.tarifdyn)return renderTarifDyn();
+  if(t.canauxcarte)return renderCanauxCarte();
+  if(t.sitedesign)return renderSiteDesign();
+  if(t.siteparams)return renderSiteParams();
+  if(t.paramcompte)return renderParamCompte();
+  if(t.paramlangues)return renderParamLangues();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -838,6 +844,118 @@ async function renderTaches(){
   document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+}
+
+/* ---------- REGLAGES (helper) ---------- */
+async function reglGet(cle){ const {data}=await sb.from("reglage").select("valeur").eq("cle",cle).maybeSingle(); return (data&&data.valeur)||{}; }
+async function reglSet(cle,valeur){ const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle,valeur},{onConflict:"tenant_id,cle"}); return error; }
+
+/* ---------- TARIFICATION DYNAMIQUE ---------- */
+async function renderTarifDyn(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const cfg=await reglGet("tarif_dyn");
+  const biens=state.opts.bien||[];
+  const rows=biens.map(b=>{const c=cfg[b.id]||{};return `<tr><td>${esc(b.nom)}</td><td style="text-align:right">${money(b.prix_nuit_base)}</td>
+    <td><input id="tdmin_${b.id}" type="number" value="${c.min!=null?c.min:''}" style="width:110px"></td>
+    <td><input id="tdmax_${b.id}" type="number" value="${c.max!=null?c.max:''}" style="width:110px"></td>
+    <td style="text-align:center"><input id="tdact_${b.id}" type="checkbox" ${c.actif?'checked':''} style="width:auto"></td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Tarification dynamique</h3></div>
+    <div style="overflow:auto"><table><thead><tr><th>Bien</th><th style="text-align:right">Prix de base</th><th>Prix min</th><th>Prix max</th><th style="text-align:center">Actif</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="muted">Aucun bien</td></tr>'}</tbody></table></div>
+    <div style="padding:16px"><div class="phnote">Définis une fourchette de prix (min / max) par bien. La synchronisation des prix de marché en temps réel (PriceLabs) est une extension payante — à brancher sur ton accord. En attendant, ces bornes servent de garde-fous.</div>
+      <div style="margin-top:12px"><button class="btn g" id="tdSave">Enregistrer</button> <span class="ok" id="tdOk"></span></div></div></div>`;
+  $("#tdSave").onclick=async()=>{
+    const out={};
+    biens.forEach(b=>{const mn=document.getElementById('tdmin_'+b.id).value,mx=document.getElementById('tdmax_'+b.id).value,ac=document.getElementById('tdact_'+b.id).checked;
+      if(mn||mx||ac) out[b.id]={min:mn?Number(mn):null,max:mx?Number(mx):null,actif:ac};});
+    const e=await reglSet("tarif_dyn",out);
+    if(e){$("#tdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#tdOk").textContent="Enregistré ✓"; toast("Tarification enregistrée");
+  };
+}
+
+/* ---------- CARTE DES CANAUX ---------- */
+async function renderCanauxCarte(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const {data:canaux}=await sb.from("canal_connexion").select("*");
+  const biens=state.opts.bien||[];
+  const byBien={}; (canaux||[]).forEach(c=>{(byBien[c.bien_id]=byBien[c.bien_id]||[]).push(c);});
+  const rows=biens.map(b=>{const cs=byBien[b.id]||[];const chips=cs.length?cs.map(c=>pill(c.canal)).join(' '):'<span class="muted">aucun</span>';return `<tr><td>${esc(b.nom)}</td><td>${chips}</td><td style="text-align:center">${cs.length}</td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Carte des annonces — canaux</h3></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th>Canaux liés</th><th style="text-align:center">Nb</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="muted">Aucun bien</td></tr>'}</tbody></table></div>
+    <div style="padding:16px"><div class="phnote">Chaque bien peut être relié à plusieurs canaux (onglet « Canaux connectés »). La synchronisation automatique des calendriers (flux iCal Airbnb / Booking) est l'extension iCal — gratuite, à activer quand tu veux.</div></div></div>`;
+}
+
+/* ---------- SITE : DESIGN & PARAMETRES ---------- */
+async function renderSiteDesign(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("site_design");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Design du site de réservation</h3></div>
+    <div style="padding:16px">
+      <div class="row2">
+        <div class="field"><label>Couleur de marque</label><input id="sdBrand" value="${esc(v.brand||'#14352A')}"></div>
+        <div class="field"><label>Couleur d'accent</label><input id="sdGold" value="${esc(v.gold||'#C9A227')}"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Police des titres</label><select id="sdTitre">${['Cormorant Garamond','Playfair Display','Manrope','Georgia'].map(o=>`<option ${o===(v.titre||'Cormorant Garamond')?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div class="field"><label>Police du texte</label><select id="sdTexte">${['Manrope','Inter','System','Georgia'].map(o=>`<option ${o===(v.texte||'Manrope')?'selected':''}>${o}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>URL du logo</label><input id="sdLogo" value="${esc(v.logo||'')}" placeholder="https://..."></div>
+      <div class="field"><label>Image de fond (URL)</label><input id="sdBg" value="${esc(v.bg||'')}" placeholder="https://..."></div>
+      <div style="margin-top:8px"><button class="btn g" id="sdSave">Enregistrer</button> <span class="ok" id="sdOk"></span></div>
+    </div></div>`;
+  $("#sdSave").onclick=async()=>{const valeur={brand:$("#sdBrand").value,gold:$("#sdGold").value,titre:$("#sdTitre").value,texte:$("#sdTexte").value,logo:$("#sdLogo").value,bg:$("#sdBg").value};const e=await reglSet("site_design",valeur);if(e){$("#sdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#sdOk").textContent="Enregistré ✓";toast("Design enregistré");};
+}
+async function renderSiteParams(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("site_params");
+  const chk=(id,lab,val)=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto"> ${lab}</label>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Paramètres du site</h3></div>
+    <div style="padding:16px">
+      <div class="field"><label>Nom du site (SEO)</label><input id="spNom" value="${esc(v.nom||'')}" placeholder="DPM Conciergerie — Locations à Marrakech"></div>
+      <div class="field"><label>URL / domaine</label><input id="spDom" value="${esc(v.domaine||'')}" placeholder="reservation.dpmconciergerie.com"></div>
+      <div style="margin:10px 0">
+        ${chk('spMap','Afficher la carte',v.carte!==false)}
+        ${chk('spRev','Afficher les avis',v.avis!==false)}
+        ${chk('spInst','Autoriser la réservation instantanée',v.instant)}
+        ${chk('spReq','Autoriser les demandes de réservation',v.demandes!==false)}
+      </div>
+      <button class="btn g" id="spSave">Enregistrer</button> <span class="ok" id="spOk"></span>
+    </div></div>`;
+  $("#spSave").onclick=async()=>{const valeur={nom:$("#spNom").value,domaine:$("#spDom").value,carte:$("#spMap").checked,avis:$("#spRev").checked,instant:$("#spInst").checked,demandes:$("#spReq").checked};const e=await reglSet("site_params",valeur);if(e){$("#spOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#spOk").textContent="Enregistré ✓";toast("Paramètres enregistrés");};
+}
+
+/* ---------- PARAMETRES : COMPTE & LANGUES ---------- */
+async function renderParamCompte(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("compte");
+  const f=(id,lab,val)=>`<div class="field"><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Détails du compte</h3></div>
+    <div style="padding:16px">
+      <div class="row2">${f('cpSoc','Société',v.societe||'DPM Conciergerie')}${f('cpEmail','E-mail',v.email)}</div>
+      <div class="row2">${f('cpTel','Téléphone',v.tel)}${f('cpTelU',"Téléphone d'urgence",v.tel_urgence)}</div>
+      ${f('cpAdr','Adresse',v.adresse)}
+      <div class="row3">${f('cpVille','Ville',v.ville||'Marrakech')}${f('cpCP','Code postal',v.cp)}${f('cpPays','Pays',v.pays||'Maroc')}</div>
+      <div class="row2">${f('cpWeb','Site web',v.web)}${f('cpFact',"E-mail de facturation",v.email_facture)}</div>
+      <div style="margin-top:8px"><button class="btn g" id="cpSave">Enregistrer</button> <span class="ok" id="cpOk"></span></div>
+    </div></div>`;
+  $("#cpSave").onclick=async()=>{const valeur={societe:$("#cpSoc").value,email:$("#cpEmail").value,tel:$("#cpTel").value,tel_urgence:$("#cpTelU").value,adresse:$("#cpAdr").value,ville:$("#cpVille").value,cp:$("#cpCP").value,pays:$("#cpPays").value,web:$("#cpWeb").value,email_facture:$("#cpFact").value};const e=await reglSet("compte",valeur);if(e){$("#cpOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#cpOk").textContent="Enregistré ✓";toast("Compte enregistré");};
+}
+async function renderParamLangues(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("langues");
+  const langs=[['fr','Français'],['en','Anglais'],['es','Espagnol'],['it','Italien'],['pt','Portugais'],['de','Allemand']];
+  const chosen=v.actives||['fr','en'];
+  const chk=langs.map(l=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="lg_${l[0]}" ${chosen.includes(l[0])?'checked':''} style="width:auto"> ${l[1]}</label>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Langues voyageurs</h3></div>
+    <div style="padding:16px">
+      <p class="muted" style="margin-top:0">Langues proposées aux voyageurs :</p>
+      ${chk}
+      <div class="field" style="margin-top:10px"><label>Langue par défaut</label><select id="lgDef">${langs.map(l=>`<option value="${l[0]}" ${l[0]===(v.defaut||'fr')?'selected':''}>${l[1]}</option>`).join('')}</select></div>
+      <button class="btn g" id="lgSave">Enregistrer</button> <span class="ok" id="lgOk"></span>
+    </div></div>`;
+  $("#lgSave").onclick=async()=>{const actives=langs.map(l=>l[0]).filter(c=>document.getElementById('lg_'+c).checked);const valeur={actives,defaut:$("#lgDef").value};const e=await reglSet("langues",valeur);if(e){$("#lgOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#lgOk").textContent="Enregistré ✓";toast("Langues enregistrées");};
 }
 
 /* ---------- QUALITE DES AVIS ---------- */
