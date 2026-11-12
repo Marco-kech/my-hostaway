@@ -345,6 +345,11 @@ const MODULES = {
       ["utilisations_max","Utilisations maximum",{type:"number",p:1}],
       ["utilisations","Utilisations actuelles",{type:"number",def:0,p:1}],
       ["statut","Statut",{opts:["actif","inactif","expire"],def:"actif"}]]},
+  modeles_avis:{title:"Modèles d'avis",add:"Ajouter un modèle",table:"modele_avis",
+    cols:[["nom","Nom"],["recommande","Recommandé",v=>pill(v)],["note_proprete","Propreté"],["note_communication","Communication"],["note_regles","Règles"]],
+    fields:[["nom","Nom du modèle",{req:1}],["recommande","Recommandé",{opts:["Oui","Non"],def:"Oui"}],
+      ["message","Message public",{long:1}],["note_privee","Note privée (interne)",{long:1}],
+      ["note_proprete","Propreté (1-5)",{type:"number",p:1}],["note_communication","Communication (1-5)",{type:"number",p:1}],["note_regles","Règles de la maison (1-5)",{type:"number",p:1}]]},
   voyageurs:{title:"Voyageurs",add:"Ajouter un voyageur",table:"voyageur",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["langue","Langue"],["pays","Pays"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["whatsapp","WhatsApp",{}],
@@ -448,7 +453,7 @@ const RUBRIQUES=[
   {k:"avis",label:"Avis",icon:"★",subs:[
     ["gerer","Gérer les avis",{m:"avis"}],
     ["auto","Avis automatiques",{avisauto:1}],
-    ["mod","Modèles d'avis",{ph:"Modèles de réponse aux avis (message, note privée) — à venir."}],
+    ["mod","Modèles d'avis",{m:"modeles_avis"}],
     ["ia","Analyses IA",{qualavis:1}]]},
   {k:"rapports",label:"Rapports financiers",icon:"€",subs:[
     ["ana","Analytique",{fi:1}],
