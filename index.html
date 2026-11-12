@@ -395,6 +395,13 @@ const MODULES = {
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
       ["bien_id","Bien",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["reservation_id","Réservation",{ref:"reservation"}],
       ["montant","Montant",{type:"number",req:1}],["notes","Notes",{long:1}]]},
+  depenses_auto:{title:"Automatisations de dépenses",add:"Ajouter une automatisation",table:"depense_auto",
+    cols:[["nom","Nom"],["nature","Nature",v=>pill(v)],["categorie","Catégorie"],["repetition","Répétition",v=>pill(v)],["bien_id","Bien",v=>v?refName("bien",v):'Tous les biens'],["montant","Montant",v=>money(v)],["actif","Actif",v=>v?pill('actif'):pill('inactif')]],
+    fields:[["nom","Nom",{req:1}],["nature","Nature",{opts:["depense","supplement"],def:"depense"}],
+      ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
+      ["repetition","Répétition",{opts:["mensuel","hebdomadaire","annuel"],def:"mensuel"}],["jour_mois","Jour du mois (1-31)",{type:"number",p:1}],
+      ["bien_id","Bien (vide = tous)",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
+      ["montant","Montant",{type:"number",req:1}]]},
   avis:{title:"Avis",add:"Ajouter un avis",table:"avis",
     cols:[["bien_id","Bien",v=>v?refName("bien",v):'—'],["voyageur_id","Voyageur",v=>v?refName("voyageur",v):'—'],["canal","Canal",v=>v?pill(v):'—'],["note_globale","Note",v=>v!=null?('★ '+v):'—'],["statut","Statut",v=>pill(v)]],
     fields:[["reservation_id","Réservation",{ref:"reservation"}],["bien_id","Bien",{ref:"bien"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
@@ -450,10 +457,10 @@ const RUBRIQUES=[
     ["form","Formules",{formules:1}],
     ["tax","Taxes",{ph:"La taxe de séjour se règle par bien (fiche bien → « Taxe de séjour / nuit »)."}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
-    ["dep","Dépenses",{m:"depense"}],
-    ["sup","Suppléments",{ph:"Les suppléments se saisissent dans « Dépenses » en choisissant le type « supplement »."}],
+    ["dep","Dépenses",{depfiltre:"depense"}],
+    ["sup","Suppléments",{depfiltre:"supplement"}],
     ["cat","Catégories",{catdep:1}],
-    ["auto","Automatisations",{ph:"Dépenses récurrentes (ex. loyer chaque mois) par annonce / propriétaire — à venir."}]]},
+    ["auto","Automatisations",{m:"depenses_auto"}]]},
   {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
     ["frais","Frais",{ph:"Charges par réservation : canal, solde, statut (en attente, en retard), échéance."}],
     ["auto","Paiements automatiques",{ph:"Échéanciers : acompte à la réservation, solde X jours avant l'arrivée, caution par pré-autorisation, cartes virtuelles Booking."}],
@@ -562,6 +569,24 @@ function champPersoDel(objet,id){
     fermer(); toast("Supprimé"); renderChampsPerso(objet);
   };
 }
+async function renderDepenses(type){
+  const m=MODULES['depense']; const isSup=type==='supplement';
+  $("#topAdd").hidden=false;$("#topAdd").textContent=isSup?"+ Ajouter un supplément":"+ Ajouter une dépense";
+  $("#topAdd").onclick=()=>openForm('depense',{type});
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all(["bien","proprietaire","reservation"].map(loadOpts));
+  const {data,error}=await sb.from('depense').select('*').eq('type',type).order('date_op',{ascending:false});
+  if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
+  const cols=m.cols.filter(c=>c[0]!=='type');
+  const rows=(data||[]).map(r=>{const tds=cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
+    return `<tr>${tds}<td><div class="act"><button class="btn o sm" data-ed="${r.id}">Modifier</button><button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;}).join("");
+  const total=(data||[]).reduce((s,r)=>s+Number(r.montant||0),0);
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>${isSup?'Suppléments':'Dépenses'}</h3><span class="sp"></span><span class="muted">${(data||[]).length} · total ${money(total)}</span></div>
+    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucun${isSup?' supplément':'e dépense'}. Cliquez sur « ${isSup?'+ Ajouter un supplément':'+ Ajouter une dépense'} ».</div>`}</div></div>`;
+  state.cache=state.cache||{}; state.cache['depense']=data||[];
+  document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm('depense',(state.cache['depense']||[]).find(x=>x.id===b.dataset.ed)));
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow('depense',b.dataset.del));
+}
 function goRub(rk,sk){
   const rub=RUBRIQUES.find(r=>r.k===rk)||RUBRIQUES[0];
   state.rub=rub.k;
@@ -601,6 +626,7 @@ function goRub(rk,sk){
   if(t.paramcompte)return renderParamCompte();
   if(t.paramlangues)return renderParamLangues();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
+  if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
