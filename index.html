@@ -382,6 +382,13 @@ const MODULES = {
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
       ["bien_id","Bien",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["reservation_id","Réservation",{ref:"reservation"}],
       ["montant","Montant",{type:"number",req:1}],["notes","Notes",{long:1}]]},
+  avis:{title:"Avis",add:"Ajouter un avis",table:"avis",
+    cols:[["bien_id","Bien",v=>v?refName("bien",v):'—'],["voyageur_id","Voyageur",v=>v?refName("voyageur",v):'—'],["canal","Canal",v=>v?pill(v):'—'],["note_globale","Note",v=>v!=null?('★ '+v):'—'],["statut","Statut",v=>pill(v)]],
+    fields:[["reservation_id","Réservation",{ref:"reservation"}],["bien_id","Bien",{ref:"bien"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
+      ["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"]}],
+      ["note_globale","Note globale /5",{type:"number"}],["note_proprete","Propreté /5",{type:"number"}],["note_communication","Communication /5",{type:"number"}],
+      ["note_emplacement","Emplacement /5",{type:"number"}],["note_qualite_prix","Rapport qualité-prix /5",{type:"number"}],
+      ["commentaire","Commentaire",{long:1}],["statut","Statut",{opts:["publie","en_attente","masque"],def:"publie"}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
 const PILLMAP={actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
@@ -419,10 +426,10 @@ const RUBRIQUES=[
     ["arch","Archivé",{ph:"Tâches archivées (titre, catégories, affecté, superviseur, dates)."}],
     ["cp","Champs personnalisés",{ph:"Champs sur mesure pour les tâches (temps de ménage, problèmes de départ…)."}]]},
   {k:"avis",label:"Avis",icon:"★",subs:[
-    ["gerer","Gérer les avis",{ph:"Avis par réservation : note globale et par critère, canal, origine, statut, réponse, afficher dans le moteur de réservation."}],
-    ["auto","Avis automatiques",{ph:"Envoi automatique X jours après le séjour."}],
-    ["mod","Modèles d'avis",{ph:"Modèles : message, note privée, notes par critère (propreté, communication, règles de la maison)."}],
-    ["ia","Analyses IA",{ph:"Scores moyens (propreté, communication, emplacement, rapport qualité-prix), taux de 5 étoiles, avis à répondre."}]]},
+    ["gerer","Gérer les avis",{m:"avis"}],
+    ["auto","Avis automatiques",{ph:"Demande d'avis envoyée automatiquement X jours après le départ — à venir."}],
+    ["mod","Modèles d'avis",{ph:"Modèles de réponse aux avis (message, note privée) — à venir."}],
+    ["ia","Analyses IA",{qualavis:1}]]},
   {k:"rapports",label:"Rapports financiers",icon:"€",subs:[
     ["ana","Analytique",{fi:1}],
     ["activite","Activité de location",{ph:"Revenus par réservation / par annonce, annonces à 0 réservation, export du rapport."}],
@@ -443,8 +450,8 @@ const RUBRIQUES=[
     ["rel","Relevés",{releves:1}],
     ["auto","Relevés automatiques",{ph:"Génération mensuelle automatique + message d'envoi au propriétaire — à venir."}]]},
   {k:"qualite",label:"Qualité d'hébergement",icon:"◈",subs:[
-    ["ann","Qualité des annonces",{ph:"Score par annonce, statut de qualité Airbnb, annulations, violations des conditions."}],
-    ["avis","Qualité des avis",{ph:"Scores moyens par critère, taux de 5 étoiles, avis à répondre."}]]},
+    ["ann","Qualité des annonces",{qualann:1}],
+    ["avis","Qualité des avis",{qualavis:1}]]},
   {k:"tarif",label:"Tarification",icon:"$",subs:[
     ["sais","Tarifs saisonniers",{m:"tarifs"}],
     ["dyn","Tarification dynamique",{ph:"Moteur de règles maison ou connexion PriceLabs : taux de base, prix minimum / maximum, synchronisation du calendrier."}]]},
@@ -510,6 +517,8 @@ function goRub(rk,sk){
   if(t.catdep)return renderCatDep();
   if(t.releves)return renderReleves();
   if(t.formules)return renderFormules();
+  if(t.qualavis)return renderQualAvis();
+  if(t.qualann)return renderQualAnn();
   if(t.checklists){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouveau modèle";$("#topAdd").onclick=()=>checklistForm(null);return renderChecklists();}
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -828,6 +837,40 @@ async function renderTaches(){
   document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+}
+
+/* ---------- QUALITE DES AVIS ---------- */
+async function renderQualAvis(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data}=await sb.from("avis").select("*");
+  const total=(data||[]).length;
+  const nums=f=>(data||[]).map(a=>a[f]).filter(v=>v!=null).map(Number);
+  const avg=a=>a.length?(a.reduce((s,x)=>s+x,0)/a.length):null;
+  const fmt=v=>v==null?'—':v.toFixed(2);
+  const g=avg(nums("note_globale"));
+  const five=(data||[]).filter(a=>Number(a.note_globale)>=4.5).length;
+  const crit=[["note_proprete","Propreté"],["note_communication","Communication"],["note_emplacement","Emplacement"],["note_qualite_prix","Rapport qualité-prix"]];
+  const bars=crit.map(c=>{const m=avg(nums(c[0]));const pct=m!=null?(m/5*100):0;return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${c[1]}</span><span><b>${fmt(m)}</b> /5</span></div><div style="background:var(--line);border-radius:6px;height:8px;margin-top:4px"><div style="width:${pct}%;background:var(--gold);height:8px;border-radius:6px"></div></div></div>`;}).join("");
+  $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Note moyenne</div><div class="v">${g!=null?('★ '+fmt(g)):'—'}</div><div class="s">sur ${total} avis</div></div>
+      <div class="kpi"><div class="l">Avis 4,5★ et +</div><div class="v">${total?Math.round(five/total*100):0}%</div><div class="s">${five} / ${total}</div></div>
+      <div class="kpi"><div class="l">Total avis</div><div class="v">${total}</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Scores moyens par critère</h3></div><div style="padding:16px">${total?bars:'<div class="empty">Aucun avis. Ajoutez-en dans « Gérer les avis ».</div>'}</div></div>`;
+}
+
+/* ---------- QUALITE DES ANNONCES ---------- */
+async function renderQualAnn(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const {data}=await sb.from("avis").select("bien_id,note_globale");
+  const map={};
+  (data||[]).forEach(a=>{if(!a.bien_id)return;map[a.bien_id]=map[a.bien_id]||{sum:0,n:0};if(a.note_globale!=null){map[a.bien_id].sum+=Number(a.note_globale);map[a.bien_id].n++;}});
+  const biens=state.opts.bien||[];
+  const rows=biens.map(b=>{const m=map[b.id];const a=m&&m.n?(m.sum/m.n):null;const n=m?m.n:0;const st=a==null?'<span class="muted">—</span>':(a>=4.5?'<span class="pill green">Excellent</span>':a>=4?'<span class="pill gold">Bien</span>':'<span class="pill red">À surveiller</span>');return `<tr><td>${esc(b.nom)}</td><td style="text-align:center">${a!=null?('★ '+a.toFixed(2)):'—'}</td><td style="text-align:center">${n}</td><td style="text-align:center">${st}</td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Qualité par annonce</h3></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Note moyenne</th><th style="text-align:center">Avis</th><th style="text-align:center">Statut</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>`;
 }
 
 /* ---------- CATEGORIES DE DEPENSES ---------- */
