@@ -571,7 +571,7 @@ async function renderList(k){
   const rows=(data||[]).map(r=>{
     const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
     return `<tr>${tds}<td><div class="act">
-      ${(k==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
+      ${(m.table==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
       <button class="btn o sm" data-ed="${r.id}">Modifier</button>
       <button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;
   }).join("");
