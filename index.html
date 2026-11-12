@@ -769,18 +769,46 @@ async function renderList(k){
   await Promise.all([...refs].map(loadOpts));
   const {data,error}=await sb.from(m.table).select("*").order("cree_le",{ascending:false});
   if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
-  const rows=(data||[]).map(r=>{
+  state.cache=state.cache||{}; state.cache[k]=data||[];
+  state.listState=state.listState||{};
+  if(!state.listState[k]) state.listState[k]={q:"",page:1,size:20};
+  paintList(k);
+}
+function paintList(k){
+  const m=MODULES[k];
+  const all=(state.cache&&state.cache[k])||[];
+  const st=state.listState[k]||(state.listState[k]={q:"",page:1,size:20});
+  const q=(st.q||"").toLowerCase().trim();
+  const textOf=r=>{let s=Object.keys(r).map(key=>{const v=r[key];return (v==null||typeof v==='object')?'':v;}).join(' ');
+    m.cols.forEach(c=>{if(c[2]){try{s+=' '+(''+c[2](r[c[0]],r)).replace(/<[^>]+>/g,'');}catch(e){}}});return s.toLowerCase();};
+  const filtered=q?all.filter(r=>textOf(r).includes(q)):all;
+  const total=filtered.length, size=st.size||20, pages=Math.max(1,Math.ceil(total/size));
+  if(st.page>pages)st.page=pages; if(st.page<1)st.page=1;
+  const start=(st.page-1)*size, pageRows=filtered.slice(start,start+size);
+  const rows=pageRows.map(r=>{
     const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
     return `<tr>${tds}<td><div class="act">
       ${(m.table==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
       <button class="btn o sm" data-ed="${r.id}">Modifier</button>
       <button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;
   }).join("");
+  const showing=total?`${start+1}–${Math.min(start+size,total)} sur ${total}`:'0';
   $("#content").innerHTML=`<div class="panel">
-    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${(data||[]).length} élément(s)</span></div>
-    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr>${m.cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucun élément.${m.add?' Cliquez sur « '+m.add+' ».':''}</div>`}</div>
+    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${q?' (filtré)':''}</span></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;flex-wrap:wrap">
+      <input id="lsQ" placeholder="Rechercher…" value="${esc(st.q||'')}" style="flex:1;min-width:160px">
+      <label class="muted" style="font-size:12px">Par page <select id="lsSize">${[20,50,100].map(n=>`<option value="${n}" ${size===n?'selected':''}>${n}</option>`).join("")}</select></label>
+      <button class="btn o sm" id="lsPrev" ${st.page<=1?'disabled':''}>←</button>
+      <span class="muted" style="font-size:12px">${st.page}/${pages}</span>
+      <button class="btn o sm" id="lsNext" ${st.page>=pages?'disabled':''}>→</button>
+    </div>
+    <div style="overflow:auto">${total?`<table><thead><tr>${m.cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${q?'Aucun résultat pour « '+esc(st.q)+' ».':'Aucun élément.'+(m.add?' Cliquez sur « '+m.add+' ».':'')}</div>`}</div>
   </div>`;
-  state.cache=state.cache||{}; state.cache[k]=data||[];
+  const qEl=document.getElementById('lsQ');
+  if(qEl)qEl.oninput=()=>{st.q=qEl.value;st.page=1;const pos=qEl.selectionStart;paintList(k);const n=document.getElementById('lsQ');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
+  const sizeEl=document.getElementById('lsSize'); if(sizeEl)sizeEl.onchange=()=>{st.size=Number(sizeEl.value);st.page=1;paintList(k);};
+  const prev=document.getElementById('lsPrev'); if(prev)prev.onclick=()=>{if(st.page>1){st.page--;paintList(k);}};
+  const next=document.getElementById('lsNext'); if(next)next.onclick=()=>{if(st.page<pages){st.page++;paintList(k);}};
   document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
   document.querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>sendMessageEmail(k,b.dataset.send));
