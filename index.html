@@ -626,7 +626,7 @@ async function renderInbox(){
   const sb2=document.getElementById('ibxSend');
   if(sb2) sb2.onclick=async()=>{const corps=document.getElementById('ibxMsg').value.trim();if(!corps)return;sb2.disabled=true;
     const rec={tenant_id:state.tenant.id,corps,sens:'sortant',statut:'envoye',canal:'whatsapp'};
-    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r){rec.voyageur_id=r.voyageur_id;if(r.canal)rec.canal=r.canal;}}
+    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r)rec.voyageur_id=r.voyageur_id;}
     else if(sel.startsWith('v:'))rec.voyageur_id=sel.slice(2);
     const {error}=await sb.from('message').insert(rec);sb2.disabled=false;
     if(error){toast(error.message);return;}toast('Message ajouté');renderInbox();};
