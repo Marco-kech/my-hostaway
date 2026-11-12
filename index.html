@@ -668,7 +668,8 @@ async function renderDashboard(){
     <div class="panel"><div class="phead"><h3>Prochaines arrivées</h3></div><div id="dashNext" style="overflow:auto"><div class="center"><span class="spin"></span></div></div></div>`;
   await loadOpts("bien");await loadOpts("voyageur");
   const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).neq("statut","annulee").order("arrivee").limit(8);
-  $("#dashNext").innerHTML=(next&&next.length)?`<table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>Paiement</th></tr></thead><tbody>${next.map(r=>`<tr><td>${refName("bien",r.bien_id)}</td><td>${refName("voyageur",r.voyageur_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.statut_paiement)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucune arrivée programmée.</div>`;
+  const _dn=$("#dashNext"); if(!_dn) return;
+  _dn.innerHTML=(next&&next.length)?`<table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>Paiement</th></tr></thead><tbody>${next.map(r=>`<tr><td>${refName("bien",r.bien_id)}</td><td>${refName("voyageur",r.voyageur_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.statut_paiement)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucune arrivée programmée.</div>`;
 }
 
 /* ---------- CALENDAR (mensuel) ---------- */
