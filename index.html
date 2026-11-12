@@ -107,6 +107,11 @@ td .act{display:flex;gap:6px}
 .phnote{background:var(--gold-soft);border:1px solid #e8dcae;border-radius:10px;padding:12px 14px;font-size:13px;color:#6b5a1f;margin-top:4px}
 .phlist{margin:0 0 14px;padding-left:18px;color:var(--muted);font-size:13.5px}
 .phlist li{margin:3px 0}
+.fsec{font-weight:700;color:var(--brand);font-size:12px;letter-spacing:.05em;text-transform:uppercase;margin:18px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.fsec:first-child{margin-top:0}
+.chk{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px}
+.chk label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink);text-transform:none;font-size:13.5px;margin:0}
+.chk input{width:auto;margin:0}
 /* modal */
 .ov{position:fixed;inset:0;background:rgba(10,22,18,.5);display:grid;place-items:start center;padding:5vh 14px;overflow:auto;z-index:40}
 .dlg{background:var(--surface);border-radius:14px;width:min(560px,100%);box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -269,11 +274,44 @@ async function boot(){
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
     cols:[["nom","Nom"],["type","Type"],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
-    fields:[["nom","Nom",{req:1}],["type","Type",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
-      ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["adresse","Adresse",{}],
-      ["capacite","Capacité (pers.)",{type:"number"}],["nb_chambres","Chambres",{type:"number"}],["nb_sdb","Salles de bain",{type:"number"}],
-      ["prix_nuit_base","Prix de base / nuit",{type:"number"}],["frais_menage","Frais de ménage",{type:"number"}],
-      ["nuits_min","Nuits minimum",{type:"number"}],["statut","Statut",{opts:["actif","inactif"],def:"actif"}]]},
+    fields:[
+      ["__s1","Informations générales",{section:1}],
+      ["nom","Nom de l'annonce",{req:1}],
+      ["type","Type de bien",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
+      ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
+      ["statut","Statut",{opts:["actif","inactif"],def:"actif"}],
+      ["__s2","Localisation",{section:1}],
+      ["adresse","Adresse",{}],
+      ["ville","Ville",{p:1}],
+      ["pays","Pays",{p:1,def:"Maroc"}],
+      ["code_postal","Code postal",{p:1}],
+      ["__s3","Capacité",{section:1}],
+      ["capacite","Voyageurs max",{type:"number"}],
+      ["nb_chambres","Chambres",{type:"number"}],
+      ["nb_lits","Lits",{type:"number",p:1}],
+      ["nb_sdb","Salles de bain",{type:"number"}],
+      ["__s4","Tarifs & conditions financières",{section:1}],
+      ["prix_nuit_base","Prix de base / nuit",{type:"number"}],
+      ["devise","Devise",{opts:["MAD","EUR","USD"],def:"MAD"}],
+      ["nuits_min","Nuits minimum",{type:"number"}],
+      ["nuits_max","Nuits maximum",{type:"number",p:1}],
+      ["frais_menage","Frais de ménage",{type:"number"}],
+      ["taxe_sejour_nuit","Taxe de séjour / nuit",{type:"number"}],
+      ["caution","Caution demandée",{type:"number",p:1}],
+      ["__s5","Arrivée & accès",{section:1}],
+      ["heure_arrivee","Heure d'arrivée",{type:"time",p:1}],
+      ["heure_depart","Heure de départ",{type:"time",p:1}],
+      ["code_porte","Code de porte / boîte à clés",{p:1}],
+      ["wifi_nom","Wifi — nom du réseau",{p:1}],
+      ["wifi_mdp","Wifi — mot de passe",{p:1}],
+      ["instructions_arrivee","Instructions d'arrivée",{long:1,p:1}],
+      ["contact_urgence","Contact d'urgence sur place",{p:1}],
+      ["__s6","Équipements",{section:1}],
+      ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Lave-linge","Sèche-linge","TV","Jacuzzi","Balcon / Terrasse","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue"]}],
+      ["__s7","Conditions",{section:1}],
+      ["politique_annulation","Politique d'annulation",{opts:["Flexible","Modérée","Stricte","Non remboursable"],p:1}],
+      ["reglement_interieur","Règlement intérieur",{long:1,p:1}],
+      ["licence_numero","N° de licence / autorisation",{p:1}]]},
   reservations:{title:"Réservations",add:"Nouvelle réservation",table:"reservation",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["voyageur_id","Voyageur",v=>refName("voyageur",v)],
       ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
@@ -495,30 +533,43 @@ async function openForm(k,row){
   const m=MODULES[k];
   await Promise.all([...new Set(m.fields.filter(f=>f[2]&&f[2].ref).map(f=>f[2].ref))].map(loadOpts));
   row=row||{};
+  const P=row.parametres||{};
+  const gv=(key,o)=> o.p ? P[key] : row[key];
   const body=m.fields.map(f=>{
-    const[key,label,o]=f; const v=row[key];
+    const[key,label,o]=f;
+    if(o.section) return `<div class="fsec">${esc(label)}</div>`;
+    const v=gv(key,o);
     let inp;
     if(o.ref){
       const list=state.opts[o.ref]||[];
       inp=`<select id="f_${key}"><option value="">—</option>`+list.map(x=>{
         const lab=o.ref==="reservation"?(refName("bien",x.bien_id)+" · "+fdate(x.arrivee)):(x.nom||x.id.slice(0,8));
         return `<option value="${x.id}" ${v===x.id?"selected":""}>${esc(lab)}</option>`;}).join("")+`</select>`;
+    }else if(o.multi){
+      const arr=Array.isArray(v)?v:[];
+      inp=`<div class="chk">`+o.opts.map((op,i)=>`<label><input type="checkbox" id="f_${key}__${i}" ${arr.includes(op)?"checked":""}>${esc(op)}</label>`).join("")+`</div>`;
     }else if(o.opts){
-      inp=`<select id="f_${key}">`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
+      const blank=(!o.req&&o.def==null)?'<option value="">—</option>':'';
+      inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
     }else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
-    return `<div class="field"><label>${label}${o.req?" *":""}</label>${inp}</div>`;
+    return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
   });
   ouvrir(`<div class="h"><h3>${row.id?"Modifier":m.add}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">${body.join("")}<div class="err" id="fErr"></div></div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="fSave">Enregistrer</button></div>`);
   $("#fSave").onclick=async()=>{
-    const d={};
-    for(const f of m.fields){const[key,,o]=f;let val=$("#f_"+key).value;
-      if(val==="")val=null;
-      if(val!=null&&o.type==="number")val=Number(val);
-      d[key]=val;}
-    if(m.fields.some(f=>f[2]&&f[2].req)&&m.fields.filter(f=>f[2]&&f[2].req).some(f=>!d[f[0]])){$("#fErr").textContent="Remplissez les champs obligatoires (*).";return;}
+    const d={}; const params={...(row.parametres||{})};
+    for(const f of m.fields){const[key,,o]=f;
+      if(o.section)continue;
+      let val;
+      if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
+      else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); }
+      if(o.p) params[key]=val; else d[key]=val;
+    }
+    const missing=m.fields.filter(f=>f[2]&&f[2].req).some(f=>{const o=f[2];const val=o.p?params[f[0]]:d[f[0]];return val==null||val==="";});
+    if(missing){$("#fErr").textContent="Remplissez les champs obligatoires (*).";return;}
+    if(Object.keys(params).length) d.parametres=params;
     d.tenant_id=state.tenant.id;
     $("#fSave").disabled=true;
     let res;
