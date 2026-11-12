@@ -1242,7 +1242,7 @@ async function renderEmailConfig(){
 async function renderActivite(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const [{data:resas},{data:biens}]=await Promise.all([
-    sb.from("reservation").select("bien_id,statut,prix_total,arrivee,depart"),
+    sb.from("reservation").select("bien_id,statut,prix_total,arrivee,depart,canal"),
     sb.from("bien").select("id,nom").order("nom")
   ]);
   const real=new Set(["confirmee","terminee"]);
@@ -1254,11 +1254,19 @@ async function renderActivite(){
   const tot={nb:0,rev:0,nu:0}; arr.forEach(a=>{tot.nb+=a.nb;tot.rev+=a.rev;tot.nu+=a.nu;});
   const rows=arr.map(a=>`<tr><td>${esc(a.nom)}</td><td style="text-align:center">${a.nb||'<span class="muted">0</span>'}</td><td style="text-align:center">${a.nu}</td><td style="text-align:right">${a.nb?fmtMad(a.rev):'<span class="muted">—</span>'}</td><td style="text-align:right">${a.nb?fmtMad(a.rev/a.nb):'—'}</td></tr>`).join("");
   const zero=arr.filter(a=>a.nb===0).length;
+  const CANAUX={direct:"Direct",airbnb:"Airbnb",booking:"Booking.com",vrbo:"Vrbo",expedia:"Expedia",abritel:"Abritel",autre:"Autre"};
+  const cagg={};
+  (resas||[]).forEach(r=>{ if(real.has(r.statut)){ const k=r.canal||'autre'; (cagg[k]=cagg[k]||{nb:0,rev:0,nu:0}); cagg[k].nb++; cagg[k].rev+=(+r.prix_total||0); cagg[k].nu+=nights(r.arrivee,r.depart);} });
+  const carr=Object.keys(cagg).sort((a,b)=>cagg[b].rev-cagg[a].rev);
+  const crows=carr.map(k=>`<tr><td>${esc(CANAUX[k]||k)}</td><td style="text-align:center">${cagg[k].nb}</td><td style="text-align:center">${cagg[k].nu}</td><td style="text-align:right">${fmtMad(cagg[k].rev)}</td><td style="text-align:right">${tot.rev?Math.round(cagg[k].rev/tot.rev*100):0}%</td></tr>`).join("");
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Activité de location</h3><span class="sp"></span><span class="muted">Réservations confirmées et terminées</span></div>
     <div style="padding:14px"><div class="phnote">Revenus et nuitées par annonce. ${zero} annonce(s) sans réservation.</div></div>
     <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Réserv.</th><th style="text-align:center">Nuits</th><th style="text-align:right">Revenu</th><th style="text-align:right">Panier moyen</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="5" class="muted">Aucune annonce</td></tr>'}</tbody>
-    <tfoot><tr style="font-weight:700;border-top:2px solid rgba(128,128,128,.4)"><td>Total</td><td style="text-align:center">${tot.nb}</td><td style="text-align:center">${tot.nu}</td><td style="text-align:right">${fmtMad(tot.rev)}</td><td></td></tr></tfoot></table></div></div>`;
+    <tfoot><tr style="font-weight:700;border-top:2px solid rgba(128,128,128,.4)"><td>Total</td><td style="text-align:center">${tot.nb}</td><td style="text-align:center">${tot.nu}</td><td style="text-align:right">${fmtMad(tot.rev)}</td><td></td></tr></tfoot></table></div></div>
+    <div class="panel"><div class="phead"><h3>Répartition par canal</h3><span class="sp"></span><span class="muted">revenus par source de réservation</span></div>
+    <div style="overflow:auto"><table><thead><tr><th>Canal</th><th style="text-align:center">Réserv.</th><th style="text-align:center">Nuits</th><th style="text-align:right">Revenu</th><th style="text-align:right">Part</th></tr></thead>
+    <tbody>${crows||'<tr><td colspan="5" class="muted">Aucune donnée</td></tr>'}</tbody></table></div></div>`;
 }
 async function renderOccupation(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
