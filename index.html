@@ -373,9 +373,18 @@ const MODULES = {
     cols:[["titre","Titre"],["type","Type",v=>pill(v)],["bien_id","Bien",v=>refName("bien",v)],["intervenant_id","Intervenant",v=>refName("intervenant",v)],
       ["date_prevue","Prévue",v=>fdate(v)],["statut","Statut",v=>pill(v)]],
     fields:[["titre","Titre",{req:1}],["type","Type",{opts:["menage","checkin","checkout","petit_dejeuner","transport","maintenance","inspection","autre"],def:"menage"}],
-      ["bien_id","Bien",{ref:"bien"}],["reservation_id","Réservation",{ref:"reservation"}],["intervenant_id","Intervenant",{ref:"intervenant"}],
-      ["date_prevue","Date prévue",{type:"date"}],["heure_prevue","Heure",{type:"time"}],["cout","Coût",{type:"number"}],
-      ["statut","Statut",{opts:["a_faire","en_cours","fait","annulee"],def:"a_faire"}],["description","Description",{long:1}]]},
+      ["bien_id","Bien",{ref:"bien"}],["reservation_id","Réservation",{ref:"reservation"}],["intervenant_id","Affecté à",{ref:"intervenant"}],["superviseur_id","Superviseur",{ref:"intervenant"}],
+      ["date_prevue","Commence le",{type:"date"}],["heure_prevue","Heure",{type:"time"}],["date_echeance","Doit se terminer avant le",{type:"date"}],["cout","Coût",{type:"number"}],
+      ["statut","Statut",{opts:["a_faire","accepte","en_cours","fait","annulee"],def:"a_faire"}],["description","Description",{long:1}]]},
+  taches_auto:{title:"Tâches automatiques",add:"Ajouter une tâche automatique",table:"tache_auto",
+    cols:[["nom","Nom"]],
+    fields:[["nom","Nom de la tâche créée",{req:1}],["type","Catégorie",{opts:["menage","checkin","checkout","petit_dejeuner","transport","maintenance","inspection","autre"],def:"menage"}],
+      ["evenement","Événement déclencheur",{opts:["depart","arrivee"],def:"depart"}],
+      ["decalage_heures","Décalage en heures (0 = à l'heure, 2 = 2 h après, -2 = 2 h avant)",{type:"number",req:1,def:0}],
+      ["echeance","Échéance",{opts:["meme_jour","prochaine_arrivee"],def:"meme_jour"}],
+      ["canal","Canal relié (vide = tous)",{opts:["direct","airbnb","booking","vrbo"]}],["bien_id","Annonce liée (vide = toutes)",{ref:"bien"}],
+      ["intervenant_id","Affecté à",{ref:"intervenant"}],["superviseur_id","Superviseur",{ref:"intervenant"}],
+      ["cout","Coût",{type:"number"}],["description","Description",{long:1}]]},
   messagerie:{title:"Conversations",add:"Nouveau message",table:"message",
     cols:[["reservation_id","Réservation",v=>refName("reservation",v)],["canal","Canal",v=>pill(v)],["sens","Sens",v=>pill(v)],["corps","Message",v=>esc((v||"").slice(0,60))],["statut","Statut",v=>pill(v)]],
     fields:[["reservation_id","Réservation",{ref:"reservation"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
@@ -428,7 +437,7 @@ const MODULES = {
       ["commentaire","Commentaire",{long:1}],["statut","Statut",{opts:["publie","en_attente","masque"],def:"publie"}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
-const PILLMAP={en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
+const PILLMAP={accepte:"blue",en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
   acompte:"gold",en_attente:"gold",a_faire:"gold",demande:"gold",brouillon:"gray",
   non_paye:"red",annulee:"red",echoue:"red",no_show:"red",inactif:"gray",en_cours:"blue",
   direct:"blue",airbnb:"red",booking:"blue",vrbo:"gold",whatsapp:"green",email:"blue",sms:"gold",interne:"gray",sortant:"blue",entrant:"gold",
@@ -460,7 +469,7 @@ const RUBRIQUES=[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["auto","Tâches automatiques",{autotaches:1}],
     ["check","Modèles de checklist",{checklists:1}],
-    ["arch","Archivé",{ph:"Tâches archivées (titre, catégories, affecté, superviseur, dates)."}],
+    ["arch","Archivé",{tachesarch:1}],
     ["cp","Champs personnalisés",{champperso:"tache"}]]},
   {k:"avis",label:"Avis",icon:"★",subs:[
     ["gerer","Gérer les avis",{m:"avis"}],
@@ -845,6 +854,7 @@ function goRub(rk,sk){
   if(t.groupes)return renderGroupes();
   if(t.kanban){$("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle tâche";$("#topAdd").onclick=()=>openForm('taches');return renderTaches();}
   if(t.autotaches)return renderTachesAuto();
+  if(t.tachesarch)return renderTachesArch();
   if(t.iaconfig)return renderIaConfig();
   if(t.autosmsg)return renderAutoMsg();
   if(t.catdep)return renderCatDep();
@@ -1382,28 +1392,81 @@ function payForm(resaId){
 }
 
 /* ---------- TACHES (Kanban) ---------- */
+const TACHE_COLS=[["a_faire","À faire","gold"],["accepte","Accepté","blue"],["en_cours","En cours","blue"],["fait","Terminé","green"],["annulee","Annulée","red"]];
 async function renderTaches(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await Promise.all([loadOpts("bien"),loadOpts("intervenant")]);
-  const {data}=await sb.from("tache").select("*").order("date_prevue");
-  const cols=[["a_faire","À faire","gold"],["en_cours","En cours","blue"],["fait","Fait","green"],["annulee","Annulée","red"]];
+  await Promise.all([loadOpts("bien"),loadOpts("intervenant"),loadOpts("reservation")]);
+  const {data,error}=await sb.from("tache").select("*").eq("archive",false).order("date_prevue");
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
   state.cache=state.cache||{}; state.cache.taches=data||[];
+  const F=state.tacheF=state.tacheF||{bien:"",canal:"",aff:"",sup:"",tri:"date_asc",type:"",du:"",au:"",plus:false};
+  const canalDe=t=>{const r=(state.opts.reservation||[]).find(x=>x.id===t.reservation_id);return r?r.canal:"";};
+  let list=(data||[]).filter(t=>(!F.bien||t.bien_id===F.bien)&&(!F.canal||canalDe(t)===F.canal)&&(!F.aff||t.intervenant_id===F.aff)&&(!F.sup||t.superviseur_id===F.sup)&&(!F.type||t.type===F.type)&&(!F.du||(t.date_prevue||"")>=F.du)&&(!F.au||(t.date_prevue||"9999")<=F.au));
+  const k=t=>(t.date_prevue||"9999")+(t.heure_prevue||"");
+  if(F.tri==="date_desc")list.sort((a,b)=>k(b).localeCompare(k(a)));
+  else if(F.tri==="creation")list.sort((a,b)=>(b.cree_le||"").localeCompare(a.cree_le||""));
+  else list.sort((a,b)=>k(a).localeCompare(k(b)));
+  const cols=TACHE_COLS.filter(c=>c[0]!=="annulee"||list.some(t=>t.statut==="annulee"));
   const card=t=>{
-    const moves=cols.filter(c=>c[0]!==t.statut).map(c=>`<button class="btn o sm" data-mv="${t.id}" data-to="${c[0]}">→ ${c[1]}</button>`).join("");
+    const moves=TACHE_COLS.filter(c=>c[0]!==t.statut).map(c=>`<button class="btn o sm" data-mv="${t.id}" data-to="${c[0]}">→ ${c[1]}</button>`).join("");
     return `<div class="kc">
       <div class="kc-t">${esc(t.titre)}</div>
-      <div class="kc-m">${pill(t.type)}${t.bien_id?(' · '+esc(refName("bien",t.bien_id))):''}</div>
-      <div class="kc-s">${t.date_prevue?fdate(t.date_prevue):'—'}${t.heure_prevue?(' '+String(t.heure_prevue).slice(0,5)):''}${t.intervenant_id?(' · '+esc(refName("intervenant",t.intervenant_id))):''}${t.cout?(' · '+money(t.cout)):''}</div>
-      <div class="kc-a">${moves}<button class="btn o sm" data-edt="${t.id}">Modifier</button><button class="btn d sm" data-delt="${t.id}">×</button></div>
+      <div class="kc-m">${pill(t.type)}${t.bien_id?(' · '+refName("bien",t.bien_id)):''}${canalDe(t)?(' · '+pill(canalDe(t))):''}</div>
+      <div class="kc-s">${t.date_prevue?fdate(t.date_prevue):'—'}${t.heure_prevue?(' '+String(t.heure_prevue).slice(0,5)):''}${t.date_echeance?(' → avant le '+fdate(t.date_echeance)):''}</div>
+      <div class="kc-s">${t.intervenant_id?('Affecté : '+refName("intervenant",t.intervenant_id)):'Non affecté'}${t.superviseur_id?(' · Superviseur : '+refName("intervenant",t.superviseur_id)):''}${t.cout?(' · '+money(t.cout)):''}</div>
+      <div class="kc-a">${moves}<button class="btn o sm" data-edt="${t.id}">Modifier</button><button class="btn o sm" data-arc="${t.id}">Archiver</button><button class="btn d sm" data-delt="${t.id}">×</button></div>
     </div>`;
   };
   const colHtml=cols.map(c=>{
-    const items=(data||[]).filter(t=>t.statut===c[0]);
+    const items=list.filter(t=>t.statut===c[0]);
     return `<div class="kcol"><div class="kcol-h"><span class="pill ${c[2]}">${c[1]}</span><span class="muted">${items.length}</span></div>${items.map(card).join("")||'<div class="muted" style="padding:8px;font-size:12px">Vide</div>'}</div>`;
   }).join("");
-  $("#content").innerHTML=`<div class="kboard">${colHtml}</div>`;
-  document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=async()=>{await sb.from("tache").update({statut:b.dataset.to}).eq("id",b.dataset.mv);toast("Tâche déplacée");renderTaches();});
+  const opt=(v,l,sel)=>`<option value="${esc(v)}" ${sel===v?"selected":""}>${esc(l)}</option>`;
+  const inter=state.opts.intervenant||[];
+  const types=MODULES.taches.fields.find(f=>f[0]==="type")[2].opts;
+  $("#content").innerHTML=`<div class="panel" style="margin-bottom:12px"><div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="tfBien" style="max-width:170px"><option value="">Annonce : toutes</option>${(state.opts.bien||[]).map(b=>opt(b.id,b.nom,F.bien)).join("")}</select>
+      <select id="tfCanal" style="max-width:140px"><option value="">Canal : tous</option>${["direct","airbnb","booking","vrbo"].map(c=>opt(c,c,F.canal)).join("")}</select>
+      <select id="tfAff" style="max-width:160px"><option value="">Affecté : tous</option>${inter.map(i=>opt(i.id,i.nom,F.aff)).join("")}</select>
+      <select id="tfSup" style="max-width:170px"><option value="">Superviseur : tous</option>${inter.map(i=>opt(i.id,i.nom,F.sup)).join("")}</select>
+      <select id="tfTri" style="max-width:190px">${opt("date_asc","Tri : date croissante",F.tri)}${opt("date_desc","Tri : date décroissante",F.tri)}${opt("creation","Tri : création récente",F.tri)}</select>
+      <button class="btn o sm" id="tfPlus">${F.plus?"Moins de filtres":"Plus de filtres"}</button>
+      <button class="btn o sm" id="tfR">Réinitialiser</button>
+      <span class="sp"></span><span class="muted">${list.length} sur ${(data||[]).length}</span>
+      ${F.plus?`<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="tfType" style="max-width:170px"><option value="">Catégorie : toutes</option>${types.map(t=>opt(t,t.replace(/_/g," "),F.type)).join("")}</select>
+        <span class="muted">Du</span><input id="tfDu" type="date" value="${F.du}" style="max-width:150px"><span class="muted">au</span><input id="tfAu" type="date" value="${F.au}" style="max-width:150px"></div>`:''}
+    </div></div><div class="kboard">${colHtml}</div>`;
+  const bind=(id,key)=>{const el=$("#"+id);if(el)el.onchange=e=>{F[key]=e.target.value;renderTaches();};};
+  bind("tfBien","bien");bind("tfCanal","canal");bind("tfAff","aff");bind("tfSup","sup");bind("tfTri","tri");bind("tfType","type");bind("tfDu","du");bind("tfAu","au");
+  $("#tfPlus").onclick=()=>{F.plus=!F.plus;renderTaches();};
+  $("#tfR").onclick=()=>{state.tacheF=null;renderTaches();};
+  const maj=async(id,patch,msg)=>{const {data:d,error:e}=await sb.from("tache").update(patch).eq("id",id).select();if(e||!d||!d.length){toast("Erreur : "+(e?e.message:"modification refusée"));return;}toast(msg);renderTaches();};
+  document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>maj(b.dataset.mv,{statut:b.dataset.to},"Tâche déplacée"));
+  document.querySelectorAll("[data-arc]").forEach(b=>b.onclick=()=>maj(b.dataset.arc,{archive:true},"Tâche archivée"));
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
+  document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+}
+async function renderTachesArch(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("intervenant")]);
+  const [{data,error},{data:finies}]=await Promise.all([sb.from("tache").select("*").eq("archive",true).order("date_prevue",{ascending:false}),sb.from("tache").select("id").eq("archive",false).in("statut",["fait","annulee"])]);
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  const nb=(finies||[]).length;
+  const rows=(data||[]).map(t=>`<tr><td><b>${esc(t.titre)}</b>${t.bien_id?'<div class="muted" style="font-size:11px">'+refName("bien",t.bien_id)+'</div>':''}</td><td>${pill(t.type)}</td>
+    <td>${t.intervenant_id?refName("intervenant",t.intervenant_id):'—'}</td><td>${t.superviseur_id?refName("intervenant",t.superviseur_id):'—'}</td>
+    <td>${t.date_prevue?fdate(t.date_prevue):'—'}${t.heure_prevue?(' '+String(t.heure_prevue).slice(0,5)):''}</td><td>${t.date_echeance?fdate(t.date_echeance):'—'}</td><td>${pill(t.statut==="fait"?"terminee":t.statut)}</td>
+    <td><div class="act"><button class="btn o sm" data-res="${t.id}">Restaurer</button><button class="btn d sm" data-delt="${t.id}">×</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Tâches archivées</h3><span class="sp"></span><span class="muted">${(data||[]).length}</span>
+      <button class="btn o sm" id="arcAll" ${nb?'':'disabled'}>Archiver les ${nb} tâche(s) terminée(s) ou annulée(s)</button></div>
+    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr><th>Titre</th><th>Catégories</th><th>Affecté</th><th>Superviseur</th><th>Commence à</th><th>Doit se terminer avant le</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucune tâche archivée. Le bouton « Archiver » d\'une tâche la range ici sans la supprimer.</div>'}</div></div>`;
+  $("#arcAll").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Archiver ${nb} tâche(s) ?</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted">Les tâches terminées ou annulées quittent le tableau et sont rangées ici. Rien n'est supprimé, chaque tâche peut être restaurée.</p><div class="err" id="aaErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="aaOk">Archiver</button></div>`);
+    $("#aaOk").onclick=async()=>{const {error:e}=await sb.from("tache").update({archive:true}).in("id",(finies||[]).map(x=>x.id));if(e){$("#aaErr").textContent=e.message;return;}fermer();toast(nb+" tâche(s) archivée(s)");renderTachesArch();};
+  };
+  document.querySelectorAll("[data-res]").forEach(b=>b.onclick=async()=>{const {data:d,error:e}=await sb.from("tache").update({archive:false}).eq("id",b.dataset.res).select();if(e||!d||!d.length){toast("Erreur : "+(e?e.message:"modification refusée"));return;}toast("Tâche restaurée");renderTachesArch();});
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
 }
 
@@ -2051,50 +2114,67 @@ async function renderAutoMsg(){
 }
 
 /* ---------- TACHES AUTOMATIQUES ---------- */
+/* Tâches à créer pour une règle : réservations confirmées/terminées (30 j passés → 60 j à venir), sans doublon */
+function tachesPourRegle(rule,resa,taches,today){
+  const has=(rid,type)=>(taches||[]).some(t=>t.reservation_id===rid&&(t.type===type));
+  const out=[];
+  (resa||[]).forEach(r=>{
+    if(rule.bien_id&&r.bien_id!==rule.bien_id)return;
+    if(rule.canal&&r.canal!==rule.canal)return;
+    if(has(r.id,rule.type))return;
+    const base=rule.evenement==="arrivee"?r.arrivee:r.depart; if(!base)return;
+    const d=new Date(base+"T"+(rule.evenement==="arrivee"?"15":"11")+":00:00"); d.setHours(d.getHours()+Number(rule.decalage_heures||0));
+    const date=isoD(d), heure=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    let ech=date;
+    if(rule.echeance==="prochaine_arrivee"){const nx=(resa||[]).filter(x=>x.bien_id===r.bien_id&&x.id!==r.id&&x.arrivee>=r.depart).map(x=>x.arrivee).sort()[0];ech=nx||null;}
+    out.push({tenant_id:state.tenant.id,bien_id:r.bien_id,reservation_id:r.id,intervenant_id:rule.intervenant_id||null,superviseur_id:rule.superviseur_id||null,type:rule.type,titre:rule.nom,date_prevue:date,heure_prevue:heure,date_echeance:ech,statut:(date<today?"fait":"a_faire"),priorite:1,cout:rule.cout,tache_auto_id:rule.id});
+  });
+  return out;
+}
+function libEvenementAuto(r){const n=Number(r.decalage_heures||0), ev=r.evenement==="arrivee"?"Arrivée":"Départ";return n===0?("À l'heure — "+ev):(Math.abs(n)+" h "+(n>0?"après":"avant")+" "+ev);}
 async function renderTachesAuto(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await Promise.all([loadOpts("bien"),loadOpts("intervenant")]);
-  const today=new Date().toISOString().slice(0,10);
+  const today=isoD(new Date());
   const back=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   const horizon=new Date(Date.now()+60*864e5).toISOString().slice(0,10);
-  const [{data:resa},{data:taches}]=await Promise.all([
+  const [{data:rules,error},{data:resa},{data:taches}]=await Promise.all([
+    sb.from("tache_auto").select("*").order("cree_le"),
     sb.from("reservation").select("*").in("statut",["confirmee","terminee"]).gte("depart",back).lte("arrivee",horizon),
     sb.from("tache").select("reservation_id,type"),
   ]);
-  const has=(rid,type)=>(taches||[]).some(t=>t.reservation_id===rid&&t.type===type);
-  const menageTodo=(resa||[]).filter(r=>!has(r.id,"menage"));
-  const checkinTodo=(resa||[]).filter(r=>!has(r.id,"checkin"));
-  const inter=state.opts.intervenant||[];
-  const menagers=inter.filter(i=>i.type==="menage");
-  const accueil=inter.filter(i=>i.type==="chauffeur"||i.type==="accueil");
-  const sel=(id,list)=>`<select id="${id}"><option value="">—</option>`+list.map(i=>`<option value="${i.id}">${esc(i.nom)}</option>`).join("")+`</select>`;
-  const total=menageTodo.length+checkinTodo.length;
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.taches_auto=rules||[];
+  const todo={}; let total=0; const vus=[...(taches||[])];
+  (rules||[]).forEach(r=>{ if(!r.actif){todo[r.id]=[];return;} const l=tachesPourRegle(r,resa,vus,today); todo[r.id]=l; l.forEach(x=>vus.push({reservation_id:x.reservation_id,type:x.type})); total+=l.length; });
+  const rows=(rules||[]).map(r=>`<tr><td><b>${esc(r.nom)}</b>${r.description?'<div class="muted" style="font-size:11px">'+esc(r.description)+'</div>':''}</td><td>${pill(r.type)}</td>
+    <td>${libEvenementAuto(r)}</td><td>${r.echeance==="prochaine_arrivee"?"Prochaine arrivée":"Même jour"}</td>
+    <td>${r.canal?pill(r.canal):"Tous"}</td><td>${r.bien_id?refName("bien",r.bien_id):"Toutes"}</td>
+    <td>${r.intervenant_id?refName("intervenant",r.intervenant_id):"—"}</td><td>${r.cout?money(r.cout):"—"}</td>
+    <td><button class="btn o sm" data-tat="${r.id}">${r.actif?'<span class="pill green">actif</span>':'<span class="pill gray">inactif</span>'}</button></td>
+    <td>${!r.actif?'—':(todo[r.id].length?pill(todo[r.id].length+' tâche(s)'):'<span class="pill green">à jour</span>')}</td>
+    <td><div class="act"><button class="btn o sm" data-tam="${r.id}">Modifier</button><button class="btn d sm" data-tad="${r.id}">×</button></div></td></tr>`).join("");
   $("#content").innerHTML=`
-    <div class="panel"><div class="phead"><h3>Règles d'automatisation</h3></div>
-      <div style="overflow:auto"><table><thead><tr><th>Règle</th><th>Déclencheur</th><th>Heure</th><th>Coût</th><th>À créer</th></tr></thead><tbody>
-        <tr><td><b>Ménage après départ</b></td><td>Jour du départ</td><td>11:00</td><td>${money(300)}</td><td>${menageTodo.length?pill(menageTodo.length+' tâche(s)'):'<span class="pill green">à jour</span>'}</td></tr>
-        <tr><td><b>Accueil / check-in</b></td><td>Jour de l'arrivée</td><td>15:00</td><td>—</td><td>${checkinTodo.length?pill(checkinTodo.length+' tâche(s)'):'<span class="pill green">à jour</span>'}</td></tr>
-      </tbody></table></div></div>
+    <div class="panel"><div class="phead"><h3>Tâches automatiques</h3><span class="sp"></span><button class="btn g sm" id="taAdd">+ Ajouter une tâche automatique</button></div>
+      <div style="overflow:auto">${(rules&&rules.length)?`<table><thead><tr><th>Nom</th><th>Catégorie</th><th>Début de l'événement</th><th>Échéance avant</th><th>Canal relié</th><th>Annonce liée</th><th>Affecté</th><th>Coût</th><th>État</th><th>À créer</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucune tâche automatique. Cliquez sur « Ajouter une tâche automatique ».</div>'}</div></div>
     <div class="panel"><div class="phead"><h3>Générer les tâches manquantes</h3></div>
       <div style="padding:16px">
-        <div class="row2">
-          <div class="field"><label>Intervenant ménage par défaut</label>${sel("iaMenage",menagers)}</div>
-          <div class="field"><label>Intervenant accueil par défaut</label>${sel("iaAccueil",accueil)}</div>
-        </div>
-        <div class="phnote">Crée les tâches manquantes pour les réservations confirmées/terminées (30 j passés → 60 j à venir), <b>sans doublon</b> : une tâche déjà créée n'est jamais recréée.</div>
+        <div class="phnote">Crée les tâches des règles actives pour les réservations confirmées ou terminées (30 jours passés → 60 jours à venir), <b>sans doublon</b> : une réservation ne reçoit jamais deux tâches de la même catégorie. Heures de référence : départ 11:00, arrivée 15:00.</div>
         <div style="margin-top:12px"><button class="btn g" id="genBtn" ${total?'':'disabled'}>${total?('Générer '+total+' tâche(s) maintenant'):'Aucune tâche à générer'}</button></div>
         <div class="ok" id="genOk" style="margin-top:8px"></div>
       </div></div>`;
+  const byId=id=>state.cache.taches_auto.find(x=>x.id===id);
+  $("#taAdd").onclick=()=>openForm("taches_auto");
+  document.querySelectorAll("[data-tam]").forEach(b=>b.onclick=()=>openForm("taches_auto",byId(b.dataset.tam)));
+  document.querySelectorAll("[data-tad]").forEach(b=>b.onclick=()=>delRow("taches_auto",b.dataset.tad));
+  document.querySelectorAll("[data-tat]").forEach(b=>b.onclick=async()=>{const r=byId(b.dataset.tat);const {data:d,error:e}=await sb.from("tache_auto").update({actif:!r.actif}).eq("id",r.id).select();if(e||!d||!d.length){toast("Erreur : "+(e?e.message:"modification refusée"));return;}renderTachesAuto();});
   const gb=$("#genBtn"); if(gb&&total) gb.onclick=async()=>{
-    const im=$("#iaMenage").value||null, ia=$("#iaAccueil").value||null;
-    const rows=[];
-    menageTodo.forEach(r=>rows.push({tenant_id:state.tenant.id,bien_id:r.bien_id,reservation_id:r.id,intervenant_id:im,type:"menage",titre:"Ménage après départ",date_prevue:r.depart,heure_prevue:"11:00",statut:(r.depart<today?"fait":"a_faire"),priorite:1,cout:300}));
-    checkinTodo.forEach(r=>rows.push({tenant_id:state.tenant.id,bien_id:r.bien_id,reservation_id:r.id,intervenant_id:ia,type:"checkin",titre:"Accueil / check-in voyageur",date_prevue:r.arrivee,heure_prevue:"15:00",statut:(r.arrivee<today?"fait":"a_faire"),priorite:2}));
+    const all=[].concat(...Object.values(todo));
     gb.disabled=true;
-    const {error}=await sb.from("tache").insert(rows);
+    const {error:e}=await sb.from("tache").insert(all);
     gb.disabled=false;
-    if(error){$("#genOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}
-    toast(rows.length+" tâche(s) générée(s)"); renderTachesAuto();
+    if(e){$("#genOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    toast(all.length+" tâche(s) générée(s)"); renderTachesAuto();
   };
 }
 
