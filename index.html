@@ -850,7 +850,7 @@ function paintList(k){
   }).join("");
   const showing=total?`${start+1}–${Math.min(start+size,total)} sur ${total}`:'0';
   $("#content").innerHTML=`<div class="panel">
-    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${(q||extra)?' sur '+all.length+' (filtré)':''}</span></div>
+    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${(q||extra)?' (filtré, '+all.length+' au total)':''}</span></div>
     ${isResa?`<div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap;font-size:12px">
       <span class="muted">Arrivée ou départ du</span><input type="date" id="lsFrom" value="${st.from||''}">
       <span class="muted">au</span><input type="date" id="lsTo" value="${st.to||''}">
