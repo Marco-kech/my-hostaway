@@ -924,13 +924,16 @@ async function renderDashboard(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const today=new Date().toISOString().slice(0,10);
   const first=new Date();first.setDate(1);const monthStart=first.toISOString().slice(0,10);
-  const [biensAll,resaFut,resaMonth,pay,activeResas,msgs]=await Promise.all([
+  const d30ago=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  await loadOpts("bien");await loadOpts("voyageur");
+  const [biensAll,resaFut,resaMonth,pay,activeResas,msgs,checkins]=await Promise.all([
     sb.from("bien").select("id,statut,prix_nuit_base,capacite"),
     sb.from("reservation").select("id,arrivee,depart,statut",{count:"exact"}).gte("depart",today).neq("statut","annulee"),
     sb.from("reservation").select("prix_total,arrivee,statut").gte("arrivee",monthStart),
     sb.from("paiement").select("montant,paye_le,statut").eq("statut","reussi").gte("paye_le",monthStart),
-    sb.from("reservation").select("arrivee,depart,statut,nb_personnes").gte("depart",today).neq("statut","annulee"),
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,nb_personnes").gte("depart",today).neq("statut","annulee"),
     sb.from("message").select("sens,statut"),
+    sb.from("reservation").select("id",{count:"exact",head:true}).gte("arrivee",d30ago).lte("arrivee",today).neq("statut","annulee"),
   ]);
   const bAll=biensAll.data||[];
   const nbBiens=bAll.length;
@@ -938,18 +941,25 @@ async function renderDashboard(){
   const caMonth=(resaMonth.data||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
   const encMonth=(pay.data||[]).reduce((s,r)=>s+Number(r.montant||0),0);
   const act=activeResas.data||[];
-  const departsJour=act.filter(r=>r.depart===today).length;
-  const arriveesJour=act.filter(r=>r.arrivee===today).length;
+  const departsList=act.filter(r=>r.depart===today);
+  const arriveesList=act.filter(r=>r.arrivee===today);
+  const sejournList=act.filter(r=>r.arrivee<=today&&today<r.depart);
+  const departsJour=departsList.length, arriveesJour=arriveesList.length;
+  const sejournant=sejournList.reduce((s,r)=>s+(Number(r.nb_personnes)||1),0);
   const aApprouver=act.filter(r=>r.statut==='en_attente').length;
   const demandes=act.filter(r=>r.statut==='demande').length;
-  const sejournant=act.filter(r=>r.arrivee<=today&&today<r.depart).reduce((s,r)=>s+(Number(r.nb_personnes)||1),0);
+  const enregistrement=checkins.count||0;
+  const liste=(arr,emptyTxt)=>arr.length?arr.slice(0,6).map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line,#f0f0f0);font-size:12.5px"><span>${esc(refName('voyageur',r.voyageur_id))} · <span class="muted">${esc(refName('bien',r.bien_id))}</span></span><span class="muted" style="white-space:nowrap">${fdate(r.arrivee)}→${fdate(r.depart)}</span></div>`).join(""):`<div class="muted" style="padding:10px 0;font-size:12.5px">${emptyTxt}</div>`;
   const bInactives=bAll.filter(b=>b.statut==='inactif').length;
   const bIncompletes=bAll.filter(b=>!b.prix_nuit_base||!b.capacite).length;
   const ms=msgs.data||[];
   const msgEnvoyes=ms.filter(m=>m.sens==='sortant').length;
   const msgRecus=ms.filter(m=>m.sens==='entrant').length;
   const msgNonLus=ms.filter(m=>m.sens==='entrant'&&m.statut!=='lu').length;
-  const revConfirmes=(resaMonth.data||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee').reduce((s,r)=>s+Number(r.prix_total||0),0);
+  const moyEnv=(msgEnvoyes/30).toFixed(1), moyRec=(msgRecus/30).toFixed(1);
+  const confRows=(resaMonth.data||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
+  const revConfirmes=confRows.reduce((s,r)=>s+Number(r.prix_total||0),0);
+  const revMoyen=confRows.length?revConfirmes/confRows.length:0;
   const in30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
   const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
   let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
@@ -958,21 +968,28 @@ async function renderDashboard(){
     <div class="kpis">
       <div class="kpi"><div class="l">Biens gérés</div><div class="v">${nbBiens}</div><div class="s">propriétés actives</div></div>
       <div class="kpi"><div class="l">Réservations à venir</div><div class="v">${nbFut}</div><div class="s">séjours en cours/futurs</div></div>
+      <div class="kpi"><div class="l">Enregistrement (30j)</div><div class="v">${enregistrement}</div><div class="s">arrivées de voyageurs</div></div>
+      <div class="kpi"><div class="l">Revenu moyen / voyageur</div><div class="v" style="font-size:22px">${money(revMoyen)}</div><div class="s">réservations confirmées</div></div>
       <div class="kpi"><div class="l">CA du mois</div><div class="v" style="font-size:24px">${money(caMonth)}</div><div class="s">réservations arrivées ce mois</div></div>
       <div class="kpi"><div class="l">Encaissé (mois)</div><div class="v" style="font-size:24px">${money(encMonth)}</div><div class="s">paiements réussis</div></div>
       <div class="kpi"><div class="l">Occupation 30j</div><div class="v">${taux}%</div><div class="s">nuits réservées / capacité</div></div>
     </div>
     <div class="kpis">
-      <div class="kpi"><div class="l">Départs du jour</div><div class="v">${departsJour}</div><div class="s">aujourd'hui</div></div>
-      <div class="kpi"><div class="l">Arrivées du jour</div><div class="v">${arriveesJour}</div><div class="s">aujourd'hui</div></div>
       <div class="kpi"><div class="l">Voyageurs séjournant</div><div class="v">${sejournant}</div><div class="s">actuellement sur place</div></div>
       <div class="kpi"><div class="l">À approuver</div><div class="v">${aApprouver}</div><div class="s">réservations en attente</div></div>
       <div class="kpi"><div class="l">Demandes en attente</div><div class="v">${demandes}</div><div class="s">à traiter</div></div>
     </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px">
+      <div class="panel"><div class="phead"><h3>Départs du jour</h3><span class="sp"></span><span class="muted">${departsJour}</span></div><div style="padding:4px 14px 10px">${liste(departsList,'Aucun départ')}</div></div>
+      <div class="panel"><div class="phead"><h3>Arrivées du jour</h3><span class="sp"></span><span class="muted">${arriveesJour}</span></div><div style="padding:4px 14px 10px">${liste(arriveesList,'Aucune arrivée')}</div></div>
+      <div class="panel"><div class="phead"><h3>Voyageurs séjournant</h3><span class="sp"></span><span class="muted">${sejournList.length}</span></div><div style="padding:4px 14px 10px">${liste(sejournList,'Personne sur place')}</div></div>
+    </div>
     <div class="row2">
-      <div class="panel"><div class="phead"><h3>Messages</h3></div><div style="padding:14px">
+      <div class="panel"><div class="phead"><h3>Messages</h3><span class="sp"></span><span class="muted">30 derniers jours</span></div><div style="padding:14px">
         <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Envoyés</span><strong>${msgEnvoyes}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Moyenne envoyée / jour</span><strong>${moyEnv}</strong></div>
         <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Reçus</span><strong>${msgRecus}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Moyenne reçue / jour</span><strong>${moyRec}</strong></div>
         <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Non lus</span><strong>${msgNonLus}</strong></div>
       </div></div>
       <div class="panel"><div class="phead"><h3>Annonces</h3></div><div style="padding:14px">
