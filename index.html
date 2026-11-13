@@ -1049,6 +1049,7 @@ async function renderCalendar(){
 
 /* ---------- CALENDAR (multiple : biens x jours) ---------- */
 async function renderCalMultiple(){
+  $("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle réservation";$("#topAdd").onclick=()=>openForm('reservations');
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const biens=await loadOpts("bien");
   const y=calMonth.getFullYear(),mo=calMonth.getMonth();
@@ -1080,7 +1081,7 @@ async function renderCalMultiple(){
         tds+=`<td class="bk" colspan="${span}" title="${voy}"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:0 4px">${voy}${nb}</div></td>`;d+=span;}
       else if(bl){let span=0,dd=d;while(dd<=days){const i2=dayISO(dd);const b2=(blos||[]).find(x=>x.bien_id===b.id&&i2>=x.debut&&i2<x.fin);if(b2&&b2===bl){span++;dd++;}else break;}
         tds+=`<td class="bl" colspan="${span}" style="font-size:11px">× bloqué</td>`;d+=span;}
-      else {tds+=`<td></td>`;d++;}
+      else {tds+=`<td style="font-size:9px;color:#c4c4c4;text-align:center;font-weight:400">${(!row.parent&&b.prix_nuit_base)?Math.round(b.prix_nuit_base):''}</td>`;d++;}
     }
     return `<tr>${tds}</tr>`;
   }).join("");
