@@ -284,13 +284,14 @@ async function boot(){
 /* ---------- MODULES (data screens) ---------- */
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
-    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
+    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)],["proprete","Propreté",v=>pill(v)]],
     fields:[
       ["__s1","Informations générales",{section:1}],
       ["nom","Nom de l'annonce",{req:1}],
       ["type","Type de bien",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
       ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
       ["statut","Statut",{opts:["en_ligne","masque","brouillon"],def:"en_ligne"}],
+      ["proprete","État de propreté",{opts:["propre","en_nettoyage","a_nettoyer"],def:"propre"}],
       ["type_unite","Type d'unité",{opts:["simple","parent","enfant"],def:"simple"}],
       ["parent_id","Annonce parente (si unité enfant)",{ref:"bien"}],
       ["__s2","Localisation",{section:1}],
@@ -413,6 +414,20 @@ const MODULES = {
       ["telephone","Téléphone",{}],
       ["role","Rôle / groupe",{opts:["proprietaire_compte","administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner","proprietaire_bien","partenaire"],def:"gestionnaire"}],
       ["statut","Statut",{opts:["actif","invite","suspendu"],def:"actif"}]]},
+  depots_garantie:{title:"Dépôts de garantie",add:"Ajouter un dépôt",table:"depot_garantie",
+    cols:[["reservation_id","Réservation",v=>v?esc(String(v).slice(0,8)):'—']],
+    fields:[["reservation_id","Réservation",{ref:"reservation"}],["bien_id","Bien",{ref:"bien"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
+      ["type","Type",{opts:["pre_autorisation","depot_classique"],def:"pre_autorisation"}],
+      ["montant","Montant",{type:"number",req:1}],
+      ["statut","Statut",{opts:["en_attente","capture","libere","rembourse","annule"],def:"en_attente"}],
+      ["date_creation","Date de création",{type:"date"}],["notes","Notes",{long:1}]]},
+  factures:{title:"Factures voyageurs",add:"Nouvelle facture",table:"facture",
+    cols:[["numero","N°"]],
+    fields:[["numero","Numéro de facture",{req:1}],["reservation_id","Réservation",{ref:"reservation"}],["voyageur_id","Voyageur",{ref:"voyageur"}],["bien_id","Bien",{ref:"bien"}],
+      ["date_facture","Date de facture",{type:"date",req:1}],["date_echeance","Date d'échéance",{type:"date"}],
+      ["montant_ht","Montant HT",{type:"number",req:1}],["tva_pct","TVA %",{type:"number",def:10}],
+      ["montant_tva","Montant TVA",{type:"number"}],["montant_ttc","Montant TTC",{type:"number",req:1}],
+      ["statut","Statut",{opts:["brouillon","emise","payee","annulee"],def:"brouillon"}],["notes","Notes / lignes",{long:1}]]},
   connaissances:{title:"Base de connaissances",add:"Ajouter un fait",table:"fait_connaissance",
     cols:[["bien_id","Bien",v=>v?refName("bien",v):'<span class="pill gray">Général</span>'],["categorie","Catégorie"],["texte","Information",v=>esc((v||"").slice(0,90))]],
     fields:[["bien_id","Bien concerné (vide = tous)",{ref:"bien"}],
@@ -452,7 +467,7 @@ const MODULES = {
       ["statut","Statut",{opts:["publie","en_attente","masque","programme"],def:"publie"}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
-const PILLMAP={accepte:"blue",en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
+const PILLMAP={propre:"green",en_nettoyage:"gold",a_nettoyer:"red",pre_autorisation:"blue",depot_classique:"gold",capture:"green",libere:"blue",rembourse:"gray",emise:"blue",payee:"green",accepte:"blue",en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
   acompte:"gold",en_attente:"gold",a_faire:"gold",demande:"gold",brouillon:"gray",
   non_paye:"red",annulee:"red",echoue:"red",no_show:"red",inactif:"gray",en_cours:"blue",
   direct:"blue",airbnb:"red",booking:"blue",vrbo:"gold",whatsapp:"green",email:"blue",sms:"gold",interne:"gray",sortant:"blue",entrant:"gold",
@@ -476,6 +491,7 @@ const RUBRIQUES=[
     ["liste","Liste",{m:"reservations"}],
     ["coup","Coupons",{m:"coupons"}],
     ["cp","Champs personnalisés",{champperso:"reservation"}],
+    ["import","Importer",{importresa:1}],
     ["livre","Livre d'or",{m:"voyageurs"}]]},
   {k:"annonces",label:"Annonces",icon:"⌂",subs:[
     ["liste","Liste",{m:"biens"}],
@@ -503,9 +519,10 @@ const RUBRIQUES=[
     ["cat","Catégories",{catdep:1}],
     ["auto","Automatisations",{m:"depenses_auto"}]]},
   {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
-    ["frais","Frais",{ph:"Charges par réservation : canal, solde, statut (en attente, en retard), échéance."}],
-    ["auto","Paiements automatiques",{ph:"Échéanciers : acompte à la réservation, solde X jours avant l'arrivée, caution par pré-autorisation, cartes virtuelles Booking."}],
-    ["doc","Modèles de document",{docmodeles:1}]]},
+    ["frais","Factures voyageurs",{factures:1}],
+    ["auto","Dépôts de garantie",{depotgar:1}],
+    ["doc","Modèles de document",{docmodeles:1}],
+    ["fparam","Paramètres de facturation",{factparams:1}]]},
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
@@ -884,6 +901,10 @@ function goRub(rk,sk){
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
   if(t.apikeys)return renderApiKeys();
+  if(t.factures)return renderFactures();
+  if(t.depotgar)return renderDepotGarantie();
+  if(t.factparams)return renderFactureParams();
+  if(t.importresa)return renderImportResa();
   if(t.notifcfg)return renderNotifCfg();
   if(t.userslist)return renderUsersList();
   if(t.avislist)return renderAvisList();
@@ -1822,6 +1843,148 @@ async function lancerRelevesAuto(){
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
+/* ---------- DÉPÔT DE GARANTIE ---------- */
+async function renderDepotGarantie(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("reservation"),loadOpts("voyageur"),loadOpts("bien")]);
+  const {data,error}=await sb.from("depot_garantie").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.depots=data||[];
+  const stP=s=>{const m={en_attente:["gold","En attente"],capture:["green","Capturé"],libere:["blue","Libéré"],rembourse:["gray","Remboursé"],annule:["red","Annulé"]};const[c,l]=m[s]||["gray",s];return '<span class="pill '+c+'">'+esc(l)+'</span>';};
+  const rows=(data||[]).map(d=>`<tr>
+    <td>${d.reservation_id?esc(String(d.reservation_id).slice(0,8)):'—'}</td>
+    <td>${d.voyageur_id?refName("voyageur",d.voyageur_id):'—'}</td>
+    <td>${d.bien_id?refName("bien",d.bien_id):'—'}</td>
+    <td>${pill(d.type)}</td><td style="text-align:right">${money(d.montant)}</td>
+    <td>${stP(d.statut)}</td><td>${fdate(d.date_creation)}</td>
+    <td>${d.date_capture?fdate(d.date_capture):'—'}</td><td>${d.date_liberation?fdate(d.date_liberation):'—'}</td>
+    <td><div class="act">
+      ${d.statut==='en_attente'?'<button class="btn g sm" data-dgc="'+d.id+'">Capturer</button>':''}
+      ${d.statut==='capture'?'<button class="btn o sm" data-dgr="'+d.id+'">Rembourser</button>':''}
+      <button class="btn o sm" data-dge="'+d.id+'">Modifier</button><button class="btn d sm" data-dgd="'+d.id+'">×</button></div></td></tr>`).join("");
+  const total=(data||[]).reduce((s,d)=>s+Number(d.montant||0),0);
+  const enCours=(data||[]).filter(d=>d.statut==='en_attente'||d.statut==='capture');
+  $("#content").innerHTML=`
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+      <div class="kpi"><div class="l">Total des dépôts</div><div class="v">${(data||[]).length}</div></div>
+      <div class="kpi"><div class="l">En cours</div><div class="v">${enCours.length}</div></div>
+      <div class="kpi"><div class="l">Montant total</div><div class="v">${money(total)}</div></div>
+      <div class="kpi"><div class="l">Montant en cours</div><div class="v">${money(enCours.reduce((s,d)=>s+Number(d.montant||0),0))}</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Dépôts de garantie</h3><span class="sp"></span>
+        <button class="btn g sm" id="dgAdd">+ Ajouter un dépôt</button></div>
+      <div class="phnote" style="margin:10px 16px">Pré-autorisations et dépôts de garantie par réservation. Le montant est bloqué (pré-autorisation) ou débité (dépôt classique), puis libéré ou remboursé après le départ si aucun dommage n'est constaté.</div>
+      <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr><th>Réservation</th><th>Voyageur</th><th>Bien</th><th>Type</th><th style="text-align:right">Montant</th><th>Statut</th><th>Créé</th><th>Capturé</th><th>Libéré</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun dépôt de garantie.</div>'}</div></div>`;
+  document.querySelector("#dgAdd").onclick=()=>openForm("depots_garantie");
+  const maj=async(id,patch,msg)=>{const {error:e}=await sb.from("depot_garantie").update(patch).eq("id",id);if(e){toast("Erreur : "+e.message);return;}toast(msg);renderDepotGarantie();};
+  document.querySelectorAll("[data-dgc]").forEach(b=>b.onclick=()=>maj(b.dataset.dgc,{statut:"capture",date_capture:new Date().toISOString().slice(0,10)},"Dépôt capturé"));
+  document.querySelectorAll("[data-dgr]").forEach(b=>b.onclick=()=>maj(b.dataset.dgr,{statut:"rembourse",date_liberation:new Date().toISOString().slice(0,10)},"Dépôt remboursé"));
+  document.querySelectorAll("[data-dge]").forEach(b=>b.onclick=()=>openForm("depots_garantie",(state.cache.depots||[]).find(x=>x.id===b.dataset.dge)));
+  document.querySelectorAll("[data-dgd]").forEach(b=>b.onclick=()=>delRow("depots_garantie",b.dataset.dgd));
+}
+/* ---------- FACTURATION VOYAGEURS ---------- */
+async function prochainNumero(){
+  const {data}=await sb.from("facture").select("numero").order("cree_le",{ascending:false}).limit(1);
+  if(!data||!data.length)return "DPM-F-0001";
+  const n=data[0].numero; const m=n.match(/(\d+)$/); if(!m)return n+"-1";
+  return n.replace(/\d+$/,String(Number(m[1])+1).padStart(m[1].length,"0"));
+}
+async function renderFactures(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("reservation"),loadOpts("voyageur"),loadOpts("bien")]);
+  const {data,error}=await sb.from("facture").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.factures=data||[];
+  const stF=s=>{const m={brouillon:["gray","Brouillon"],emise:["blue","Émise"],payee:["green","Payée"],annulee:["red","Annulée"]};const[c,l]=m[s]||["gray",s];return '<span class="pill '+c+'">'+esc(l)+'</span>';};
+  const rows=(data||[]).map(f=>`<tr>
+    <td><b>${esc(f.numero)}</b></td><td>${fdate(f.date_facture)}</td>
+    <td>${f.voyageur_id?refName("voyageur",f.voyageur_id):'—'}</td>
+    <td>${f.bien_id?refName("bien",f.bien_id):'—'}</td>
+    <td style="text-align:right">${money(f.montant_ht)}</td><td style="text-align:right">${f.tva_pct}%</td>
+    <td style="text-align:right"><b>${money(f.montant_ttc)}</b></td>
+    <td>${stF(f.statut)}</td><td>${f.envoyee?'✓':'—'}</td><td>${f.soumise_dgfip?'✓':'—'}</td>
+    <td><div class="act"><button class="btn o sm" data-fe="${f.id}">Modifier</button><button class="btn d sm" data-fd="${f.id}">×</button></div></td></tr>`).join("");
+  const totalTTC=(data||[]).reduce((s,f)=>s+Number(f.montant_ttc||0),0);
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Factures voyageurs</h3><span class="sp"></span>
+      <button class="btn o sm" id="faCsv">⬇ CSV</button>
+      <button class="btn g sm" id="faAdd">+ Nouvelle facture</button></div>
+    <div class="phnote" style="margin:10px 16px">Factures émises aux voyageurs. La numérotation est séquentielle (DPM-F-0001…). Les factures peuvent être soumises au portail DGFiP via un partenaire e-facturation.</div>
+    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr><th>N°</th><th>Date</th><th>Voyageur</th><th>Bien</th><th style="text-align:right">HT</th><th>TVA</th><th style="text-align:right">TTC</th><th>Statut</th><th>Envoyée</th><th>DGFiP</th><th>Actions</th></tr></thead><tbody>${rows}
+      <tr style="font-weight:700;background:rgba(0,0,0,.03)"><td colspan="6">TOTAL</td><td style="text-align:right">${money(totalTTC)}</td><td colspan="4"></td></tr></tbody></table>`:'<div class="empty">Aucune facture. Cliquez sur « Nouvelle facture ».</div>'}</div></div>`;
+  document.querySelector("#faAdd").onclick=async()=>{const num=await prochainNumero();openForm("factures",{numero:num});};
+  document.querySelector("#faCsv").onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const txt=h=>(''+h).replace(/<[^>]+>/g,'');
+    const lines=(data||[]).map(f=>[f.numero,f.date_facture,txt(refName("voyageur",f.voyageur_id)),txt(refName("bien",f.bien_id)),f.montant_ht,f.tva_pct,f.montant_ttc,f.statut,f.envoyee?"Oui":"Non",f.soumise_dgfip?"Oui":"Non"].map(q).join(';'));
+    const csv='﻿'+["N°;Date;Voyageur;Bien;HT;TVA%;TTC;Statut;Envoyée;DGFiP",...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download='Factures.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
+  document.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>openForm("factures",(state.cache.factures||[]).find(x=>x.id===b.dataset.fe)));
+  document.querySelectorAll("[data-fd]").forEach(b=>b.onclick=()=>delRow("factures",b.dataset.fd));
+}
+async function renderFactureParams(){
+  const v=await reglGet("facturation");
+  const f=(id,lab,val)=>`<div class="field"><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Paramètres de facturation</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Ces paramètres apparaissent sur les factures émises aux voyageurs.</div>
+      <div class="row2">${f('fpSoc','Raison sociale',v.societe||'DPM Conciergerie')}${f('fpSiret','SIRET / ICE',v.siret)}</div>
+      <div class="row2">${f('fpAdr','Adresse',v.adresse)}${f('fpVille','Ville',v.ville||'Marrakech')}</div>
+      <div class="row2">${f('fpTva','N° TVA / IF',v.tva_id)}${f('fpDev','Devise par défaut',v.devise||'MAD')}</div>
+      <div class="row2">${f('fpPref','Préfixe de numérotation',v.prefixe||'DPM-F-')}${f('fpTaux','Taux de TVA par défaut (%)',v.taux_tva||'10')}</div>
+      <div class="field"><label>Mentions légales (bas de facture)</label><textarea id="fpMentions" rows="3">${esc(v.mentions||"")}</textarea></div>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="fpDgfip" ${v.dgfip?'checked':''} style="width:auto"> Activer la soumission DGFiP (e-facturation France via Invopop)</label>
+      <button class="btn g" id="fpSave">Enregistrer</button> <span class="ok" id="fpOk"></span>
+    </div></div>`;
+  document.querySelector("#fpSave").onclick=async()=>{const val={societe:$("#fpSoc").value,siret:$("#fpSiret").value,adresse:$("#fpAdr").value,ville:$("#fpVille").value,tva_id:$("#fpTva").value,devise:$("#fpDev").value,prefixe:$("#fpPref").value,taux_tva:+$("#fpTaux").value||10,mentions:$("#fpMentions").value,dgfip:document.querySelector("#fpDgfip").checked};const e=await reglSet("facturation",val);if(e){$("#fpOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#fpOk").textContent="Enregistré ✓";toast("Paramètres de facturation enregistrés");};
+}
+/* ---------- IMPORT RÉSERVATIONS CSV ---------- */
+async function renderImportResa(){
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Importer des réservations</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Fichier CSV (séparateur « ; » ou « , ») avec en-têtes. Colonnes reconnues : <b>Bien</b> (nom exact), <b>Arrivée</b> (AAAA-MM-JJ ou JJ/MM/AAAA), <b>Départ</b>, <b>Voyageur</b> (nom exact), <b>Canal</b>, <b>Prix</b>, <b>Statut</b>.</div>
+      <div class="field"><input type="file" id="irFile" accept=".csv,text/csv"></div>
+      <div id="irPrev" class="muted"></div><div class="err" id="irErr"></div>
+      <button class="btn g" id="irOk" disabled>Importer</button> <span class="ok" id="irOkS"></span>
+    </div></div>`;
+  let prets=[];
+  document.querySelector("#irFile").onchange=async e=>{
+    const f=e.target.files[0]; if(!f)return;
+    const res=lireCsvResa(await f.text()); prets=res.lignes;
+    document.querySelector("#irErr").textContent=res.erreurs.slice(0,5).join(" · ");
+    document.querySelector("#irPrev").textContent=prets.length+" réservation(s) prête(s)"+(res.erreurs.length?", "+res.erreurs.length+" ignorée(s)":"");
+    document.querySelector("#irOk").disabled=!prets.length;
+  };
+  document.querySelector("#irOk").onclick=async()=>{document.querySelector("#irOk").disabled=true;const {error}=await sb.from("reservation").insert(prets);
+    if(error){document.querySelector("#irErr").textContent=error.message;document.querySelector("#irOk").disabled=false;return;}
+    toast(prets.length+" réservation(s) importée(s)");invalidate("reservation");renderImportResa();};
+}
+function lireCsvResa(texte){
+  const lignes=[], erreurs=[];
+  const rows=texte.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());
+  if(rows.length<2)return {lignes,erreurs:["Fichier vide."]};
+  const sep=(rows[0].split(';').length>=rows[0].split(',').length)?';':',';
+  const cut=l=>{const out=[];let cur='',q=false;for(let i=0;i<l.length;i++){const c=l[i];if(q){if(c==='"'&&l[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=false;else cur+=c;}else if(c==='"')q=true;else if(c===sep){out.push(cur);cur='';}else cur+=c;}out.push(cur);return out.map(x=>x.trim());};
+  const norm=s=>s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,'');
+  const H=cut(rows[0]).map(norm); const ix=n=>H.findIndex(h=>h.startsWith(n));
+  const iB=ix("bien")>=0?ix("bien"):ix("annonce"), iA=ix("arriv"), iD=ix("depart")>=0?ix("depart"):ix("dep"), iV=ix("voyageur")>=0?ix("voyageur"):ix("nom"), iC=ix("canal"), iP=ix("prix")>=0?ix("prix"):ix("montant"), iS=ix("statut");
+  if(iB<0||iA<0||iD<0)return {lignes,erreurs:["En-têtes Bien, Arrivée et Départ obligatoires."]};
+  rows.slice(1).forEach((l,k)=>{
+    const c=cut(l);
+    let arr=c[iA]||'', dep=c[iD]||'';
+    const m1=arr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m1)arr=m1[3]+"-"+m1[2].padStart(2,"0")+"-"+m1[1].padStart(2,"0");
+    const m2=dep.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m2)dep=m2[3]+"-"+m2[2].padStart(2,"0")+"-"+m2[1].padStart(2,"0");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(arr)||!/^\d{4}-\d{2}-\d{2}$/.test(dep)){erreurs.push("Ligne "+(k+2)+" : dates illisibles");return;}
+    const bien=(state.opts.bien||[]).find(b=>norm(b.nom)===norm(c[iB]));
+    if(!bien){erreurs.push("Ligne "+(k+2)+" : bien « "+c[iB]+" » inconnu");return;}
+    const voy=iV>=0&&c[iV]?(state.opts.voyageur||[]).find(v=>norm(v.nom)===norm(c[iV])):null;
+    const prix=iP>=0?Number((c[iP]||'').replace(/\s/g,'').replace(',','.')):null;
+    lignes.push({tenant_id:state.tenant.id,bien_id:bien.id,voyageur_id:voy?voy.id:null,arrivee:arr,depart:dep,canal:iC>=0&&c[iC]?c[iC].toLowerCase():'direct',prix_total:prix,statut:iS>=0&&c[iS]?c[iS].toLowerCase():'confirmee'});
+  });
+  return {lignes,erreurs};
+}
+
 /* ---------- USERS LIST (custom, with CSV + invite) ---------- */
 async function renderUsersList(){
   const m=MODULES.membres;
