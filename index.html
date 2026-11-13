@@ -284,13 +284,15 @@ async function boot(){
 /* ---------- MODULES (data screens) ---------- */
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
-    cols:[["nom","Nom"],["type","Type"],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
+    cols:[["nom","Nom"],["type","Type"],["type_unite","Unité",v=>pill(v)],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
     fields:[
       ["__s1","Informations générales",{section:1}],
       ["nom","Nom de l'annonce",{req:1}],
       ["type","Type de bien",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
       ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
       ["statut","Statut",{opts:["actif","inactif"],def:"actif"}],
+      ["type_unite","Type d'unité",{opts:["simple","parent","enfant"],def:"simple"}],
+      ["parent_id","Annonce parente (si unité enfant)",{ref:"bien"}],
       ["__s2","Localisation",{section:1}],
       ["adresse","Adresse",{}],
       ["ville","Ville",{p:1}],
