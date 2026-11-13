@@ -284,7 +284,7 @@ async function boot(){
 /* ---------- MODULES (data screens) ---------- */
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
-    cols:[["nom","Nom"],["type","Type"],["type_unite","Unité",v=>pill(v)],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
+    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["type","Type"],["type_unite","Unité",v=>pill(v)],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
     fields:[
       ["__s1","Informations générales",{section:1}],
       ["nom","Nom de l'annonce",{req:1}],
@@ -765,6 +765,13 @@ function refName(table,id){
 function invalidate(table){ delete state.opts[table]; }
 
 /* ---------- LIST ---------- */
+function orderBiensHierarchy(arr){
+  const enfByParent={}; arr.filter(b=>b.type_unite==='enfant'&&b.parent_id).forEach(b=>{(enfByParent[b.parent_id]=enfByParent[b.parent_id]||[]).push(b);});
+  const out=[];
+  arr.filter(b=>b.type_unite==='parent').forEach(p=>{out.push(p);(enfByParent[p.id]||[]).forEach(e=>out.push(e));});
+  arr.filter(b=>b.type_unite!=='parent'&&!(b.type_unite==='enfant'&&b.parent_id&&arr.some(x=>x.id===b.parent_id))).forEach(s=>out.push(s));
+  return out;
+}
 async function renderList(k){
   const m=MODULES[k];
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -773,7 +780,7 @@ async function renderList(k){
   await Promise.all([...refs].map(loadOpts));
   const {data,error}=await sb.from(m.table).select("*").order("cree_le",{ascending:false});
   if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
-  state.cache=state.cache||{}; state.cache[k]=data||[];
+  state.cache=state.cache||{}; state.cache[k]=(k==='biens'&&data)?orderBiensHierarchy(data):(data||[]);
   state.listState=state.listState||{};
   if(!state.listState[k]) state.listState[k]={q:"",page:1,size:20};
   paintList(k);
