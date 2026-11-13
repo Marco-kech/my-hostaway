@@ -834,7 +834,10 @@ function paintList(k){
   const q=(st.q||"").toLowerCase().trim();
   const textOf=r=>{let s=Object.keys(r).map(key=>{const v=r[key];return (v==null||typeof v==='object')?'':v;}).join(' ');
     m.cols.forEach(c=>{if(c[2]){try{s+=' '+(''+c[2](r[c[0]],r)).replace(/<[^>]+>/g,'');}catch(e){}}});return s.toLowerCase();};
-  const filtered=q?all.filter(r=>textOf(r).includes(q)):all;
+  const isResa=k==='reservations';
+  const inRange=d=>d&&(!st.from||d>=st.from)&&(!st.to||d<=st.to);
+  const extra=isResa&&!!(st.from||st.to||st.canal);
+  const filtered=all.filter(r=>(!q||textOf(r).includes(q))&&(!isResa||(((!st.from&&!st.to)||inRange(r.arrivee)||inRange(r.depart))&&(!st.canal||r.canal===st.canal))));
   const total=filtered.length, size=st.size||20, pages=Math.max(1,Math.ceil(total/size));
   if(st.page>pages)st.page=pages; if(st.page<1)st.page=1;
   const start=(st.page-1)*size, pageRows=filtered.slice(start,start+size);
@@ -847,7 +850,12 @@ function paintList(k){
   }).join("");
   const showing=total?`${start+1}–${Math.min(start+size,total)} sur ${total}`:'0';
   $("#content").innerHTML=`<div class="panel">
-    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${q?' (filtré)':''}</span></div>
+    <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${(q||extra)?' sur '+all.length+' (filtré)':''}</span></div>
+    ${isResa?`<div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap;font-size:12px">
+      <span class="muted">Arrivée ou départ du</span><input type="date" id="lsFrom" value="${st.from||''}">
+      <span class="muted">au</span><input type="date" id="lsTo" value="${st.to||''}">
+      <select id="lsCanal"><option value="">Canal : tous</option>${["direct","airbnb","booking","vrbo","expedia","abritel","autre"].map(c=>`<option value="${c}" ${st.canal===c?'selected':''}>${c}</option>`).join("")}</select>
+      ${extra?`<button class="btn o sm" id="lsReset">Réinitialiser les filtres</button>`:''}</div>`:''}
     <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;flex-wrap:wrap">
       <input id="lsQ" placeholder="Rechercher…" value="${esc(st.q||'')}" style="flex:1;min-width:160px">
       <label class="muted" style="font-size:12px">Par page <select id="lsSize">${[20,50,100].map(n=>`<option value="${n}" ${size===n?'selected':''}>${n}</option>`).join("")}</select></label>
@@ -864,6 +872,9 @@ function paintList(k){
   const prev=document.getElementById('lsPrev'); if(prev)prev.onclick=()=>{if(st.page>1){st.page--;paintList(k);}};
   const next=document.getElementById('lsNext'); if(next)next.onclick=()=>{if(st.page<pages){st.page++;paintList(k);}};
   const exp=document.getElementById('lsExport'); if(exp)exp.onclick=()=>exportCSV(k,filtered);
+  if(isResa){const f=document.getElementById('lsFrom'),t=document.getElementById('lsTo'),cn=document.getElementById('lsCanal'),rs=document.getElementById('lsReset');
+    f.onchange=()=>{st.from=f.value;st.page=1;paintList(k);}; t.onchange=()=>{st.to=t.value;st.page=1;paintList(k);};
+    cn.onchange=()=>{st.canal=cn.value;st.page=1;paintList(k);}; if(rs)rs.onclick=()=>{st.from="";st.to="";st.canal="";st.page=1;paintList(k);};}
   document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
   document.querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>sendMessageEmail(k,b.dataset.send));
@@ -1111,7 +1122,21 @@ async function renderCalMultiple(){
   allB.filter(b=>b.type_unite!=='parent'&&!(b.type_unite==='enfant'&&b.parent_id&&allB.some(x=>x.id===b.parent_id))).forEach(s=>ordered.push({b:s}));
   await loadOpts("voyageur");
   const dayISO=d=>new Date(y,mo,d).toISOString().slice(0,10);
-  let body=ordered.map(row=>{
+  const cf=state.calF||(state.calF={q:"",ville:"",pays:"",dispo:""});
+  const nuitsLibres=b=>{let n=0;for(let d=1;d<=days;d++){const iso=dayISO(d);
+    if(!(resa||[]).some(x=>x.bien_id===b.id&&iso>=x.arrivee&&iso<x.depart)&&!(blos||[]).some(x=>x.bien_id===b.id&&iso>=x.debut&&iso<x.fin))n++;}return n;};
+  const villes=[...new Set(allB.map(b=>(b.parametres||{}).ville).filter(Boolean))].sort();
+  const paysL=[...new Set(allB.map(b=>(b.parametres||{}).pays).filter(Boolean))].sort();
+  const okB=b=>{const pr=b.parametres||{};
+    if(cf.q&&!(b.nom||"").toLowerCase().includes(cf.q.toLowerCase()))return false;
+    if(cf.ville&&pr.ville!==cf.ville)return false;
+    if(cf.pays&&pr.pays!==cf.pays)return false;
+    if(cf.dispo==="libre"&&nuitsLibres(b)===0)return false;
+    if(cf.dispo==="complet"&&nuitsLibres(b)>0)return false;
+    return true;};
+  const actif=!!(cf.q||cf.ville||cf.pays||cf.dispo);
+  const shown=!actif?ordered:ordered.filter(row=>row.parent?(okB(row.b)||(enfByParent[row.b.id]||[]).some(okB)):okB(row.b));
+  let body=shown.map(row=>{
     const b=row.b;
     const nm=row.child?`<span class="muted" style="padding-left:16px">↳ ${esc(b.nom)}</span>`:(row.parent?`<strong>${esc(b.nom)}</strong>`:esc(b.nom));
     let tds=`<td>${nm}</td>`;
@@ -1133,8 +1158,20 @@ async function renderCalMultiple(){
   await loadOpts("voyageur");
   $("#content").innerHTML=`<div class="panel"><div class="phead">
     <button class="btn o sm" id="cmPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
-    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">Tous les biens — ● réservé · × bloqué</span></div>
-    <div class="gridscroll" style="padding:12px">${(biens&&biens.length)?`<table class="mtable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:`<div class="empty">Ajoutez des biens pour voir le calendrier multiple.</div>`}</div></div>`;
+    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">${shown.length} annonce(s)${actif?" (filtré)":""} — barre = réservé · × bloqué</span></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap">
+      <input id="cfQ" placeholder="Rechercher une annonce…" value="${esc(cf.q)}" style="flex:1;min-width:160px">
+      <select id="cfDispo"><option value="">Disponibilité : toutes</option><option value="libre" ${cf.dispo==="libre"?"selected":""}>Avec nuits libres ce mois</option><option value="complet" ${cf.dispo==="complet"?"selected":""}>Complet ce mois</option></select>
+      <select id="cfPays"><option value="">Pays : tous</option>${paysL.map(v=>`<option ${cf.pays===v?"selected":""}>${esc(v)}</option>`).join("")}</select>
+      <select id="cfVille"><option value="">Ville : toutes</option>${villes.map(v=>`<option ${cf.ville===v?"selected":""}>${esc(v)}</option>`).join("")}</select>
+      ${actif?`<button class="btn o sm" id="cfReset">Réinitialiser</button>`:""}
+    </div>
+    <div class="gridscroll" style="padding:12px">${(biens&&biens.length)?(shown.length?`<table class="mtable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`:`<div class="empty">Aucune annonce ne correspond aux filtres.</div>`):`<div class="empty">Ajoutez des biens pour voir le calendrier multiple.</div>`}</div></div>`;
+  const cq=$("#cfQ");cq.oninput=async()=>{cf.q=cq.value;const pos=cq.selectionStart;await renderCalMultiple();const n=$("#cfQ");if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
+  $("#cfDispo").onchange=e=>{cf.dispo=e.target.value;renderCalMultiple();};
+  $("#cfPays").onchange=e=>{cf.pays=e.target.value;renderCalMultiple();};
+  $("#cfVille").onchange=e=>{cf.ville=e.target.value;renderCalMultiple();};
+  if($("#cfReset"))$("#cfReset").onclick=()=>{state.calF={q:"",ville:"",pays:"",dispo:""};renderCalMultiple();};
   $("#cmPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalMultiple();};
   $("#cmNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalMultiple();};
 }
