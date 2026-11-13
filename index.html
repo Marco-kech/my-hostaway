@@ -284,7 +284,7 @@ async function boot(){
 /* ---------- MODULES (data screens) ---------- */
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
-    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["type","Type"],["type_unite","Unité",v=>pill(v)],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
+    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)]],
     fields:[
       ["__s1","Informations générales",{section:1}],
       ["nom","Nom de l'annonce",{req:1}],
