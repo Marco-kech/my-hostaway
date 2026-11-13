@@ -278,7 +278,7 @@ async function boot(){
   state.tenant=ten; state.role=membres[0].role;
   $("#tenantName").textContent=ten?ten.nom:"—";
   $("#userEmail").textContent=state.user.email;
-  show("app"); buildNav(); goRub(state.rub||"apercu");
+  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerRelevesAuto();
 }
 
 /* ---------- MODULES (data screens) ---------- */
@@ -407,6 +407,11 @@ const MODULES = {
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
       ["bien_id","Bien",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["reservation_id","Réservation",{ref:"reservation"}],
       ["montant","Montant",{type:"number",req:1}],["notes","Notes",{long:1}]]},
+  releves_auto:{title:"Relevés automatiques",add:"Ajouter un relevé automatique",table:"releve_auto",
+    cols:[["nom","Relevé automatique"]],
+    fields:[["nom","Nom du relevé automatique",{req:1}],["proprietaire_id","Propriétaire (vide = tous les propriétaires)",{ref:"proprietaire"}],
+      ["jour","Jour du mois de génération (1-28)",{type:"number",req:1,def:5}],
+      ["message","Message d'accompagnement au propriétaire",{long:1}],["description","Description",{long:1}]]},
   depenses_auto:{title:"Automatisations de dépenses",add:"Ajouter une automatisation",table:"depense_auto",
     cols:[["nom","Nom"],["nature","Nature",v=>pill(v)],["categorie","Catégorie"],["repetition","Répétition",v=>pill(v)],["bien_id","Bien",v=>v?refName("bien",v):'Tous les biens'],["montant","Montant",v=>money(v)],["actif","Actif",v=>v?pill('actif'):pill('inactif')]],
     fields:[["nom","Nom",{req:1}],["nature","Nature",{opts:["depense","supplement"],def:"depense"}],
@@ -1488,16 +1493,59 @@ async function renderAvisAuto(){
 }
 async function renderRelevesAuto(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const v=await reglGet("releves_auto");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Relevés automatiques</h3></div>
-    <div style="padding:16px">
-      <div class="phnote" style="margin-bottom:12px">Génère chaque mois le relevé de chaque propriétaire et prépare le message d'envoi.</div>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="raActif" ${v.actif?'checked':''} style="width:auto"> Activer la génération mensuelle automatique</label>
-      <div class="field"><label>Jour du mois pour la génération</label><input id="raJour" type="number" min="1" max="28" value="${v.jour!=null?v.jour:5}" style="max-width:160px"></div>
-      <div class="field"><label>Message d'accompagnement au propriétaire</label><textarea id="raMsg" rows="4">${esc(v.message||"Bonjour, veuillez trouver ci-joint votre relevé de gestion locative du mois. N'hésitez pas à nous contacter pour toute question.")}</textarea></div>
-      <button class="btn g" id="raSave">Enregistrer</button> <span class="ok" id="raOk"></span>
-    </div></div>`;
-  $("#raSave").onclick=async()=>{const e=await reglSet("releves_auto",{actif:$("#raActif").checked,jour:+$("#raJour").value||1,message:$("#raMsg").value});if(e){$("#raOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#raOk").textContent="Enregistré ✓";toast("Relevés automatiques enregistrés");};
+  await Promise.all([loadOpts("proprietaire"),loadOpts("bien")]);
+  const {data:rows,error}=await sb.from("releve_auto").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.releves_auto=rows||[];
+  const body=(rows||[]).map(r=>`<tr>
+    <td><b>${esc(r.nom)}</b></td>
+    <td>${r.proprietaire_id?refName("proprietaire",r.proprietaire_id):"Tous les propriétaires"}</td>
+    <td>Chaque mois le ${r.jour}</td>
+    <td><button class="btn o sm" data-rae="${r.id}">${r.envoi_auto?"Oui":"Non"}</button></td>
+    <td>${r.dernier_releve_le?fdate(r.dernier_releve_le.slice(0,10)):"—"}</td>
+    <td class="muted">${esc(r.description||"")}</td>
+    <td><button class="btn o sm" data-raa="${r.id}">${r.actif?'<span class="pill green">actif</span>':'<span class="pill gray">inactif</span>'}</button></td>
+    <td><div class="act"><button class="btn g sm" data-rag="${r.id}">Générer maintenant</button><button class="btn o sm" data-ram="${r.id}">Modifier</button><button class="btn d sm" data-rad="${r.id}">×</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Relevés automatiques</h3><span class="sp"></span><button class="btn g sm" id="raAdd">+ Ajouter un relevé automatique</button></div>
+    <div class="phnote" style="margin:12px 16px">Chaque règle génère, à partir du jour indiqué, le relevé du mois précédent pour le ou les propriétaires concernés (en brouillon, jamais deux fois pour la même période). La génération se déclenche à l'ouverture de l'application. Le message d'accompagnement est préparé ; son envoi par e-mail attend la validation du domaine d'envoi.</div>
+    <div style="overflow:auto">${(rows&&rows.length)?`<table><thead><tr><th>Relevé automatique</th><th>Propriétaires</th><th>Programmé</th><th>Message automatisé</th><th>Dernier relevé enregistré</th><th>Description</th><th>État</th><th>Actions</th></tr></thead><tbody>${body}</tbody></table>`:'<div class="empty">Aucun relevé automatique. Cliquez sur « Ajouter un relevé automatique ».</div>'}</div></div>`;
+  $("#raAdd").onclick=()=>openForm("releves_auto");
+  const byId=id=>state.cache.releves_auto.find(x=>x.id===id);
+  const tog=async(id,col)=>{const r=byId(id);const {data,error}=await sb.from("releve_auto").update({[col]:!r[col]}).eq("id",id).select();if(error||!data||!data.length){toast("Erreur : "+(error?error.message:"modification refusée"));return;}renderRelevesAuto();};
+  document.querySelectorAll("[data-rae]").forEach(b=>b.onclick=()=>tog(b.dataset.rae,"envoi_auto"));
+  document.querySelectorAll("[data-raa]").forEach(b=>b.onclick=()=>tog(b.dataset.raa,"actif"));
+  document.querySelectorAll("[data-ram]").forEach(b=>b.onclick=()=>openForm("releves_auto",byId(b.dataset.ram)));
+  document.querySelectorAll("[data-rad]").forEach(b=>b.onclick=()=>delRow("releves_auto",b.dataset.rad));
+  document.querySelectorAll("[data-rag]").forEach(b=>b.onclick=async()=>{b.disabled=true;const n=await executerReleveAuto(byId(b.dataset.rag));toast(n.crees?n.crees+" relevé(s) généré(s) pour "+n.label:"Rien à générer : relevés déjà présents pour "+n.label+(n.erreurs?" ("+n.erreurs+" sans bien)":""));renderRelevesAuto();});
+}
+/* Exécute une règle : relevé du mois précédent par propriétaire, sans doublon */
+async function executerReleveAuto(rule){
+  await Promise.all([loadOpts("proprietaire"),loadOpts("bien")]);
+  const p=moisPrecedent(); let crees=0, erreurs=0;
+  const avecBien=new Set((state.opts.bien||[]).map(b=>b.proprietaire_id).filter(Boolean));
+  const owners=rule.proprietaire_id?[rule.proprietaire_id]:(state.opts.proprietaire||[]).map(x=>x.id).filter(id=>avecBien.has(id));
+  for(const pid of owners){
+    const {data:ex}=await sb.from("releve_proprietaire").select("id").eq("proprietaire_id",pid).eq("periode_debut",p.deb).eq("periode_fin",p.fin).limit(1);
+    if(ex&&ex.length)continue;
+    const res=await genererReleve(pid,p.deb,p.fin,rule.nom+" — "+p.label);
+    if(res.error)erreurs++; else crees++;
+  }
+  await sb.from("releve_auto").update({dernier_releve_le:new Date().toISOString()}).eq("id",rule.id);
+  return {crees,erreurs,label:p.label};
+}
+async function lancerRelevesAuto(){
+  try{
+    const {data:rules}=await sb.from("releve_auto").select("*").eq("actif",true);
+    if(!rules||!rules.length)return;
+    const now=new Date(), debutMois=isoD(new Date(now.getFullYear(),now.getMonth(),1));
+    let total=0;
+    for(const r of rules){
+      if(now.getDate()<Number(r.jour||1))continue;
+      if(r.dernier_releve_le&&r.dernier_releve_le.slice(0,10)>=debutMois)continue;
+      const n=await executerReleveAuto(r); total+=n.crees;
+    }
+    if(total)toast(total+" relevé(s) automatique(s) généré(s)");
+  }catch(e){console.warn("relevés auto",e);}
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
@@ -1638,62 +1686,133 @@ async function renderFormules(){
 }
 
 /* ---------- RELEVES PROPRIETAIRES ---------- */
+const MOISFR=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+function isoD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function moisPrecedent(){const n=new Date();const d=new Date(n.getFullYear(),n.getMonth()-1,1);const f=new Date(n.getFullYear(),n.getMonth(),0);return {deb:isoD(d),fin:isoD(f),label:MOISFR[d.getMonth()]+" "+d.getFullYear()};}
+/* Calcule et enregistre un relevé : réservations (départ dans la période) − commission − dépenses du propriétaire */
+async function genererReleve(pid,deb,fin,nom){
+  await Promise.all([loadOpts("proprietaire"),loadOpts("bien")]);
+  const prop=(state.opts.proprietaire||[]).find(p=>p.id===pid);
+  if(!prop)return {error:"Propriétaire introuvable."};
+  const comm=Number(prop.commission_pct||0);
+  const biensProp=(state.opts.bien||[]).filter(b=>b.proprietaire_id===pid).map(b=>b.id);
+  if(!biensProp.length)return {error:"Ce propriétaire n’a aucun bien."};
+  const {data:resa,error:e1}=await sb.from("reservation").select("*").in("bien_id",biensProp).neq("statut","annulee").gte("depart",deb).lte("depart",fin);
+  if(e1)return {error:e1.message};
+  const {data:deps,error:e2}=await sb.from("depense").select("*").eq("proprietaire_id",pid).gte("date_op",deb).lte("date_op",fin);
+  if(e2)return {error:e2.message};
+  let brut=0, commission=0, frais=0; const lignes=[];
+  (resa||[]).forEach(r=>{const b=Number(r.prix_total||0);const c=b*comm/100;brut+=b;commission+=c;lignes.push({libelle:refName("bien",r.bien_id)+" · "+fdate(r.arrivee),montant_brut:b,commission:c,montant_net:b-c});});
+  (deps||[]).forEach(d=>{const m=Number(d.montant||0);const sup=d.type==="supplement";
+    if(sup){brut+=m;lignes.push({libelle:"Supplément : "+(d.libelle||d.categorie||''),montant_brut:m,commission:0,montant_net:m});}
+    else{frais+=m;lignes.push({libelle:"Dépense : "+(d.libelle||d.categorie||''),montant_brut:0,commission:0,montant_net:-m});}});
+  const net=brut-commission-frais;
+  const {data:rel,error}=await sb.from("releve_proprietaire").insert({tenant_id:state.tenant.id,proprietaire_id:pid,periode_debut:deb,periode_fin:fin,montant_brut:brut,commission,frais,montant_net:net,statut:"brouillon",nom:nom||("Relevé "+prop.nom),cree_par:state.user.email}).select().single();
+  if(error)return {error:error.message};
+  if(lignes.length){ const {error:e3}=await sb.from("ligne_releve").insert(lignes.map(l=>({tenant_id:state.tenant.id,releve_id:rel.id,libelle:l.libelle,montant_brut:l.montant_brut,commission:l.commission,montant_net:l.montant_net}))); if(e3)return {error:e3.message,rel}; }
+  if(deps&&deps.length){ await sb.from("depense").update({releve_id:rel.id}).in("id",deps.map(d=>d.id)); }
+  return {rel};
+}
 async function renderReleves(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await Promise.all([loadOpts("proprietaire"),loadOpts("bien")]);
-  const {data:releves}=await sb.from("releve_proprietaire").select("*").order("genere_le",{ascending:false});
-  const props=state.opts.proprietaire||[];
-  const first=new Date(); first.setDate(1); const defDebut=first.toISOString().slice(0,10);
-  const defFin=new Date().toISOString().slice(0,10);
-  const propOpts=props.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join("");
-  const relRows=(releves||[]).map(r=>`<tr>
-    <td>${esc(refName("proprietaire",r.proprietaire_id))}</td>
-    <td>${fdate(r.periode_debut)} → ${fdate(r.periode_fin)}</td>
-    <td style="text-align:right">${money(r.montant_brut)}</td>
-    <td style="text-align:right">${money(r.commission)}</td>
-    <td style="text-align:right"><b>${money(r.montant_net)}</b></td>
-    <td>${pill(r.statut)}</td>
-    <td><div class="act"><button class="btn o sm" data-vr="${r.id}">Voir</button><button class="btn d sm" data-dr="${r.id}">×</button></div></td></tr>`).join("");
-  $("#content").innerHTML=`
-    <div class="panel"><div class="phead"><h3>Générer un relevé propriétaire</h3></div>
-      <div style="padding:16px"><div class="row3">
-        <div class="field"><label>Propriétaire *</label><select id="rvProp"><option value="">—</option>${propOpts}</select></div>
-        <div class="field"><label>Début *</label><input id="rvDeb" type="date" value="${defDebut}"></div>
-        <div class="field"><label>Fin *</label><input id="rvFin" type="date" value="${defFin}"></div>
-      </div>
-      <button class="btn g" id="rvGen">Générer le relevé</button> <span class="ok" id="rvOk"></span></div></div>
-    <div class="panel"><div class="phead"><h3>Relevés existants</h3><span class="sp"></span><span class="muted">${(releves||[]).length}</span></div>
-      <div style="overflow:auto">${(releves&&releves.length)?`<table><thead><tr><th>Propriétaire</th><th>Période</th><th style="text-align:right">Brut</th><th style="text-align:right">Commission</th><th style="text-align:right">Net</th><th>Statut</th><th></th></tr></thead><tbody>${relRows}</tbody></table>`:'<div class="empty">Aucun relevé. Générez-en un ci-dessus.</div>'}</div></div>`;
+  const {data:releves,error}=await sb.from("releve_proprietaire").select("*").order("genere_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
   state.cache=state.cache||{}; state.cache.releves=releves||[];
-  $("#rvGen").onclick=async()=>{
-    const pid=$("#rvProp").value, deb=$("#rvDeb").value, fin=$("#rvFin").value;
-    if(!pid||!deb||!fin){$("#rvOk").innerHTML='<span class="err">Remplissez propriétaire et période.</span>';return;}
-    const prop=(state.opts.proprietaire||[]).find(p=>p.id===pid);
-    const comm=Number(prop.commission_pct||0);
-    const biensProp=(state.opts.bien||[]).filter(b=>b.proprietaire_id===pid).map(b=>b.id);
-    if(!biensProp.length){$("#rvOk").innerHTML='<span class="err">Ce propriétaire n’a aucun bien.</span>';return;}
-    $("#rvGen").disabled=true;
-    const {data:resa}=await sb.from("reservation").select("*").in("bien_id",biensProp).neq("statut","annulee").gte("depart",deb).lte("depart",fin);
-    const {data:deps}=await sb.from("depense").select("*").eq("proprietaire_id",pid).gte("date_op",deb).lte("date_op",fin);
-    let brut=0, commission=0, frais=0; const lignes=[];
-    (resa||[]).forEach(r=>{const b=Number(r.prix_total||0);const c=b*comm/100;brut+=b;commission+=c;lignes.push({libelle:refName("bien",r.bien_id)+" · "+fdate(r.arrivee),montant_brut:b,commission:c,montant_net:b-c});});
-    (deps||[]).forEach(d=>{const m=Number(d.montant||0);frais+=m;lignes.push({libelle:"Dépense : "+(d.libelle||d.categorie||''),montant_brut:0,commission:0,montant_net:-m});});
-    const net=brut-commission-frais;
-    const {data:rel,error}=await sb.from("releve_proprietaire").insert({tenant_id:state.tenant.id,proprietaire_id:pid,periode_debut:deb,periode_fin:fin,montant_brut:brut,commission,frais,montant_net:net,statut:"brouillon"}).select().single();
-    if(error){$("#rvGen").disabled=false;$("#rvOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}
-    if(lignes.length){ await sb.from("ligne_releve").insert(lignes.map(l=>({tenant_id:state.tenant.id,releve_id:rel.id,libelle:l.libelle,montant_brut:l.montant_brut,commission:l.commission,montant_net:l.montant_net}))); }
-    $("#rvGen").disabled=false; toast("Relevé généré"); renderReleves();
+  state.relF=state.relF||{statut:"",prop:""};
+  const F=state.relF;
+  const list=(releves||[]).filter(r=>(!F.statut||r.statut===F.statut)&&(!F.prop||r.proprietaire_id===F.prop));
+  const nomRel=r=>r.nom||("Relevé "+refName("proprietaire",r.proprietaire_id));
+  const stPill=s=>s==="publie"?'<span class="pill green">PUBLIÉ</span>':'<span class="pill gray">BROUILLON</span>';
+  const relRows=list.map(r=>`<tr>
+    <td><b>${esc(nomRel(r))}</b></td>
+    <td>${stPill(r.statut)}</td>
+    <td>${fdate(r.periode_debut)} → ${fdate(r.periode_fin)}</td>
+    <td>${refName("proprietaire",r.proprietaire_id)}</td>
+    <td class="muted">${esc(r.cree_par||"—")}</td>
+    <td>${fdate((r.genere_le||"").slice(0,10))}</td>
+    <td style="text-align:right"><b>${money(r.montant_net)}</b></td>
+    <td><div class="act"><button class="btn o sm" data-vr="${r.id}">Voir</button><button class="btn o sm" data-pr="${r.id}">${r.statut==="publie"?"Dépublier":"Publier"}</button><button class="btn d sm" data-dr="${r.id}">×</button></div></td></tr>`).join("");
+  const total=list.reduce((s,r)=>s+Number(r.montant_net||0),0);
+  const propOpts=(state.opts.proprietaire||[]).map(p=>`<option value="${p.id}" ${F.prop===p.id?"selected":""}>${esc(p.nom)}</option>`).join("");
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Relevés du propriétaire</h3><span class="sp"></span>
+        <button class="btn o sm" id="rvCsv">⬇ CSV</button>
+        <button class="btn o sm" id="rvMod">Ajouter à partir du modèle</button>
+        <button class="btn g sm" id="rvAdd">+ Ajouter un relevé</button></div>
+      <div style="padding:10px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line,#eee)">
+        <span class="muted">Filtres</span>
+        <select id="rvFS" style="max-width:170px"><option value="">Tous les statuts</option><option value="publie" ${F.statut==="publie"?"selected":""}>Publié</option><option value="brouillon" ${F.statut==="brouillon"?"selected":""}>Brouillon</option></select>
+        <select id="rvFP" style="max-width:220px"><option value="">Tous les propriétaires</option>${propOpts}</select>
+        <button class="btn o sm" id="rvFR">Réinitialiser</button>
+        <span class="sp"></span><span class="muted">${list.length} sur ${(releves||[]).length}</span></div>
+      <div style="overflow:auto">${list.length?`<table><thead><tr><th>Relevé</th><th>Statut</th><th>Dates</th><th>Propriétaires</th><th>Créé par</th><th>Créé le</th><th style="text-align:right">Total</th><th>Actions</th></tr></thead><tbody>${relRows}
+        <tr style="font-weight:700;background:rgba(0,0,0,.03)"><td colspan="6">TOTAL</td><td style="text-align:right">${money(total)}</td><td></td></tr></tbody></table>`:'<div class="empty">Aucun relevé. Cliquez sur « Ajouter un relevé ».</div>'}</div></div>`;
+  $("#rvFS").onchange=e=>{F.statut=e.target.value;renderReleves();};
+  $("#rvFP").onchange=e=>{F.prop=e.target.value;renderReleves();};
+  $("#rvFR").onclick=()=>{state.relF={statut:"",prop:""};renderReleves();};
+  $("#rvAdd").onclick=()=>releveForm();
+  $("#rvMod").onclick=()=>releveDepuisModele();
+  $("#rvCsv").onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const txt=h=>(''+h).replace(/<[^>]+>/g,'');
+    const lines=list.map(r=>[nomRel(r),r.statut==="publie"?"Publié":"Brouillon",r.periode_debut+" → "+r.periode_fin,txt(refName("proprietaire",r.proprietaire_id)),r.cree_par||"",(r.genere_le||"").slice(0,10),r.montant_brut,r.commission,r.frais,r.montant_net].map(q).join(';'));
+    const csv='﻿'+["Relevé;Statut;Dates;Propriétaire;Créé par;Créé le;Brut;Commission;Dépenses;Total net",...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download='Releves_proprietaires.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');
   };
   document.querySelectorAll("[data-vr]").forEach(b=>b.onclick=()=>releveDetail(b.dataset.vr));
   document.querySelectorAll("[data-dr]").forEach(b=>b.onclick=()=>releveDel(b.dataset.dr));
+  document.querySelectorAll("[data-pr]").forEach(b=>b.onclick=async()=>{
+    const r=state.cache.releves.find(x=>x.id===b.dataset.pr); if(!r)return;
+    const ns=r.statut==="publie"?"brouillon":"publie";
+    const {data,error}=await sb.from("releve_proprietaire").update({statut:ns}).eq("id",r.id).select();
+    if(error||!data||!data.length){toast("Erreur : "+(error?error.message:"modification refusée"));return;}
+    toast(ns==="publie"?"Relevé publié":"Relevé repassé en brouillon"); renderReleves();
+  });
+}
+function releveForm(pre){
+  pre=pre||{};
+  const first=new Date(); first.setDate(1);
+  const propOpts=(state.opts.proprietaire||[]).map(p=>`<option value="${p.id}" ${pre.pid===p.id?"selected":""}>${esc(p.nom)}</option>`).join("");
+  ouvrir(`<div class="h"><h3>Ajouter un relevé</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="field"><label>Nom du relevé</label><input id="rvNom" value="${esc(pre.nom||"")}" placeholder="ex. Relevé novembre 2026"></div>
+      <div class="field"><label>Propriétaire *</label><select id="rvProp"><option value="">—</option>${propOpts}</select></div>
+      <div class="row3"><div class="field"><label>Début *</label><input id="rvDeb" type="date" value="${pre.deb||isoD(first)}"></div>
+      <div class="field"><label>Fin *</label><input id="rvFin" type="date" value="${pre.fin||isoD(new Date())}"></div></div>
+      <p class="muted" style="font-size:12px">Le relevé reprend les réservations dont le départ tombe dans la période, la commission du propriétaire, ses dépenses et ses suppléments. Il est créé en brouillon.</p>
+      <div class="err" id="rvErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="rvGen">Générer le relevé</button></div>`);
+  $("#rvGen").onclick=async()=>{
+    const pid=$("#rvProp").value, deb=$("#rvDeb").value, fin=$("#rvFin").value;
+    if(!pid||!deb||!fin){$("#rvErr").textContent="Remplissez propriétaire et période.";return;}
+    if(fin<deb){$("#rvErr").textContent="La fin doit être après le début.";return;}
+    $("#rvGen").disabled=true;
+    const res=await genererReleve(pid,deb,fin,$("#rvNom").value.trim());
+    $("#rvGen").disabled=false;
+    if(res.error){$("#rvErr").textContent=res.error;return;}
+    fermer(); toast("Relevé généré"); renderReleves();
+  };
+}
+async function releveDepuisModele(){
+  const {data:mods}=await sb.from("releve_auto").select("*").order("cree_le",{ascending:false});
+  if(!mods||!mods.length){ouvrir(`<div class="h"><h3>Ajouter à partir du modèle</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><p class="muted">Aucun modèle pour l'instant. Les modèles sont les relevés automatiques : créez-en un dans l'onglet « Relevés automatiques ».</p></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button><button class="btn" onclick="fermer();goRub('releves','auto')">Ouvrir Relevés automatiques</button></div>`);return;}
+  ouvrir(`<div class="h"><h3>Ajouter à partir du modèle</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><div class="field"><label>Modèle</label><select id="rmSel">${mods.map(m=>`<option value="${m.id}">${esc(m.nom)} — ${m.proprietaire_id?refName("proprietaire",m.proprietaire_id):"Tous les propriétaires"}</option>`).join("")}</select></div>
+      <p class="muted" style="font-size:12px">La période proposée est le mois précédent. Vous pourrez la modifier.</p></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="rmOk">Continuer</button></div>`);
+  $("#rmOk").onclick=()=>{const m=mods.find(x=>x.id===$("#rmSel").value);const p=moisPrecedent();fermer();releveForm({nom:m.nom+" — "+p.label,pid:m.proprietaire_id||"",deb:p.deb,fin:p.fin});};
 }
 async function releveDetail(id){
   const r=(state.cache.releves||[]).find(x=>x.id===id); if(!r)return;
   const {data:lignes}=await sb.from("ligne_releve").select("*").eq("releve_id",id);
   const rows=(lignes||[]).map(l=>`<tr><td>${esc(l.libelle)}</td><td style="text-align:right">${money(l.montant_brut)}</td><td style="text-align:right">${money(l.commission)}</td><td style="text-align:right">${money(l.montant_net)}</td></tr>`).join("");
-  ouvrir(`<div class="h"><h3>Relevé — ${esc(refName("proprietaire",r.proprietaire_id))}</h3><button class="x" onclick="fermer()">×</button></div>
+  ouvrir(`<div class="h"><h3>${esc(r.nom||"Relevé")} — ${refName("proprietaire",r.proprietaire_id)}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
-      <p class="muted">${fdate(r.periode_debut)} → ${fdate(r.periode_fin)}</p>
+      <p class="muted">${fdate(r.periode_debut)} → ${fdate(r.periode_fin)} · ${r.statut==="publie"?"Publié":"Brouillon"} · créé par ${esc(r.cree_par||"—")}</p>
       <div class="kpis" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
         <div class="kpi"><div class="l">Brut</div><div class="v" style="font-size:20px">${money(r.montant_brut)}</div></div>
         <div class="kpi"><div class="l">Commission DPM</div><div class="v" style="font-size:20px">${money(r.commission)}</div></div>
