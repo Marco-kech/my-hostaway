@@ -512,7 +512,8 @@ const RUBRIQUES=[
     ["activite","Activité de location",{activite:1}],
     ["occ","Taux d'occupation",{occupation:1}],
     ["form","Formules",{formules:1}],
-    ["tax","Taxes",{ph:"La taxe de séjour se règle par bien (fiche bien → « Taxe de séjour / nuit »)."}]]},
+    ["tax","Taxes",{paramtaxes:1}],
+    ["paramfin","Paramètres financiers",{paramfin:1}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
     ["dep","Dépenses",{depfiltre:"depense"}],
     ["sup","Suppléments",{depfiltre:"supplement"}],
@@ -556,6 +557,7 @@ const RUBRIQUES=[
     ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
     ["lang","Langues",{paramlangues:1}],
     ["integ","Intégrations",{emailcfg:1}],
+    ["webhook","Webhooks",{webhooks:1}],
     ["api","API",{apikeys:1}],
     ["notif","Notifications",{notifcfg:1}]]},
 ];
@@ -891,6 +893,9 @@ function goRub(rk,sk){
   if(t.autosmsg)return renderAutoMsg();
   if(t.catdep)return renderCatDep();
   if(t.releves)return renderReleves();
+  if(t.webhooks)return renderWebhooks();
+  if(t.paramtaxes)return renderParamTaxes();
+  if(t.paramfin)return renderParamFinanciers();
   if(t.formules)return renderFormules();
   if(t.qualavis)return renderQualAvis();
   if(t.qualann)return renderQualAnn();
@@ -2298,6 +2303,71 @@ async function lancerDepensesAuto(){
 }
 
 /* ---------- FORMULES ---------- */
+
+
+/* ---------- WEBHOOKS ---------- */
+async function renderWebhooks(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("webhooks");
+  const hooks=v.liste||[];
+  await loadOpts("bien");
+  const rows=hooks.map((h,i)=>`<tr><td>${esc(h.url)}</td><td>${h.bien_id?refName("bien",h.bien_id):'Toutes'}</td><td>${esc(h.canal||'Tous')}</td><td style="text-align:center">${h.actif?'<span class="pill green">Actif</span>':'<span class="pill gray">Inactif</span>'}</td><td><div class="act"><button class="btn d sm" data-whd="${i}">×</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Webhooks</h3><span class="sp"></span><button class="btn g sm" id="whAdd">+ Ajouter un webhook</button></div>
+    <div class="phnote" style="margin:10px 16px">Les webhooks envoient une notification HTTP à l'URL configurée quand un événement se produit (nouvelle réservation, modification, annulation, message). Nécessite un endpoint public qui répond en HTTP 200.</div>
+    <div style="overflow:auto"><table><thead><tr><th>URL</th><th>Annonce</th><th>Canal</th><th style="text-align:center">Est activé</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="muted">Aucun webhook configuré.</td></tr>'}</tbody></table></div></div>`;
+  document.querySelector("#whAdd").onclick=()=>{
+    const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("");
+    ouvrir(`<div class="h"><h3>Ajouter un webhook</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>URL *</label><input id="whUrl" type="url" placeholder="https://example.com/webhook"></div>
+        <div class="field"><label>Annonce (vide = toutes)</label><select id="whBien"><option value="">Toutes</option>${bienOpts}</select></div>
+        <div class="field"><label>Canal (vide = tous)</label><select id="whCanal"><option value="">Tous</option>${["direct","airbnb","booking","vrbo","expedia"].map(c=>'<option>'+c+'</option>').join("")}</select></div>
+        <div class="err" id="whErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="whOk">Ajouter</button></div>`);
+    document.querySelector("#whOk").onclick=async()=>{const url=$("#whUrl").value.trim();
+      if(!url){$("#whErr").textContent="L'URL est obligatoire.";return;}
+      hooks.push({url,bien_id:$("#whBien").value||null,canal:$("#whCanal").value||null,actif:true});
+      const e=await reglSet("webhooks",{liste:hooks});if(e){$("#whErr").textContent=e.message;return;}
+      fermer();toast("Webhook ajouté");renderWebhooks();};
+  };
+  document.querySelectorAll("[data-whd]").forEach(b=>b.onclick=async()=>{hooks.splice(+b.dataset.whd,1);await reglSet("webhooks",{liste:hooks});toast("Webhook supprimé");renderWebhooks();});
+}
+/* ---------- TAXES ---------- */
+async function renderParamTaxes(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("taxes");
+  const taxes=v.liste||[{nom:"Taxe de séjour",type:"par_nuit",montant:3,devise:"MAD"}];
+  const rows=taxes.map((t,i)=>`<tr><td><b>${esc(t.nom)}</b></td><td>${esc(t.type==="pourcentage"?"Pourcentage":"Par nuit")}</td><td style="text-align:right">${t.type==="pourcentage"?(t.montant+" %"):money(t.montant)}</td><td><div class="act"><button class="btn d sm" data-txd="${i}">×</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Taxes applicables</h3><span class="sp"></span><button class="btn g sm" id="txAdd">+ Ajouter une taxe</button></div>
+    <div class="phnote" style="margin:10px 16px">Les taxes s'appliquent aux nouvelles réservations entrantes (direct, moteur de réservation). Pour Airbnb et Booking, les taxes sont gérées dans le canal. Le montant apparaît dans les rapports financiers.</div>
+    <div style="overflow:auto"><table><thead><tr><th>Type de taxe</th><th>Calcul</th><th style="text-align:right">Montant</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucune taxe configurée.</td></tr>'}</tbody></table></div></div>`;
+  document.querySelector("#txAdd").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Ajouter une taxe</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Nom *</label><input id="txNom"></div>
+        <div class="field"><label>Type</label><select id="txType"><option value="par_nuit">Montant fixe par nuit</option><option value="pourcentage">Pourcentage du tarif de base</option></select></div>
+        <div class="field"><label>Montant *</label><input id="txMnt" type="number"></div><div class="err" id="txErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="txOk">Ajouter</button></div>`);
+    document.querySelector("#txOk").onclick=async()=>{const nom=$("#txNom").value.trim(),type=$("#txType").value,montant=+$("#txMnt").value;
+      if(!nom||!montant){$("#txErr").textContent="Remplissez nom et montant.";return;}
+      taxes.push({nom,type,montant,devise:"MAD"});const e=await reglSet("taxes",{liste:taxes});
+      if(e){$("#txErr").textContent=e.message;return;}fermer();toast("Taxe ajoutée");renderParamTaxes();};
+  };
+  document.querySelectorAll("[data-txd]").forEach(b=>b.onclick=async()=>{taxes.splice(+b.dataset.txd,1);await reglSet("taxes",{liste:taxes});toast("Taxe supprimée");renderParamTaxes();});
+}
+/* ---------- PARAMÈTRES FINANCIERS ---------- */
+async function renderParamFinanciers(){
+  const v=await reglGet("param_financiers");
+  const f=(id,lab,val)=>`<div class="field"><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Paramètres financiers</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Symbole de devise, paramètres de calcul et options d'affichage des rapports financiers.</div>
+      <div class="row2">${f('pfDev','Symbole de devise dans les rapports',v.devise||'MAD')}${f('pfCommDef','Commission par défaut (%)',v.commission_defaut||'20')}</div>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfTTC" ${v.afficher_ttc!==false?'checked':''} style="width:auto"> Afficher les montants TTC dans les rapports</label>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfFraisOpt" ${v.frais_optionnels?'checked':''} style="width:auto"> Activer les frais optionnels / remises sur les réservations</label>
+      <button class="btn g" id="pfSave">Enregistrer</button> <span class="ok" id="pfOk"></span>
+    </div></div>`;
+  document.querySelector("#pfSave").onclick=async()=>{const val={devise:$("#pfDev").value,commission_defaut:+$("#pfCommDef").value||20,afficher_ttc:document.querySelector("#pfTTC").checked,frais_optionnels:document.querySelector("#pfFraisOpt").checked};const e=await reglSet("param_financiers",val);if(e){$("#pfOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#pfOk").textContent="Enregistré ✓";toast("Paramètres financiers enregistrés");};
+}
+
 async function renderFormules(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("proprietaire");
