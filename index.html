@@ -278,7 +278,7 @@ async function boot(){
   state.tenant=ten; state.role=membres[0].role;
   $("#tenantName").textContent=ten?ten.nom:"—";
   $("#userEmail").textContent=state.user.email;
-  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerRelevesAuto();
+  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto);
 }
 
 /* ---------- MODULES (data screens) ---------- */
@@ -413,7 +413,7 @@ const MODULES = {
       ["jour","Jour du mois de génération (1-28)",{type:"number",req:1,def:5}],
       ["message","Message d'accompagnement au propriétaire",{long:1}],["description","Description",{long:1}]]},
   depenses_auto:{title:"Automatisations de dépenses",add:"Ajouter une automatisation",table:"depense_auto",
-    cols:[["nom","Nom"],["nature","Nature",v=>pill(v)],["categorie","Catégorie"],["repetition","Répétition",v=>pill(v)],["bien_id","Bien",v=>v?refName("bien",v):'Tous les biens'],["montant","Montant",v=>money(v)],["actif","Actif",v=>v?pill('actif'):pill('inactif')]],
+    cols:[["nom","Nom"],["nature","Nature",v=>pill(v)],["categorie","Catégorie"],["repetition","Répétition",v=>pill(v)],["bien_id","Bien",v=>v?refName("bien",v):'Tous les biens'],["montant","Montant",v=>money(v)],["actif","Actif",v=>v?pill('actif'):pill('inactif')],["id","Exécution",v=>'<button class="btn o sm" onclick="depAutoRun(\''+v+'\')">Exécuter maintenant</button>']],
     fields:[["nom","Nom",{req:1}],["nature","Nature",{opts:["depense","supplement"],def:"depense"}],
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
       ["repetition","Répétition",{opts:["mensuel","hebdomadaire","annuel"],def:"mensuel"}],["jour_mois","Jour du mois (1-31)",{type:"number"}],
@@ -709,23 +709,123 @@ async function renderDocModeles(){
     $("#dmOk").textContent="Enregistré ✓"; toast("Modèles de document enregistrés");
   };
 }
+const CAT_DEP_STD=["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"];
+async function chargerCatDep(){
+  const {data}=await sb.from("categorie_depense").select("*").order("nom");
+  state.catDep=data||[];
+  const all=[...CAT_DEP_STD]; state.catDep.forEach(c=>{if(!all.includes(c.nom))all.push(c.nom);});
+  ["depense","depenses_auto"].forEach(k=>{const f=MODULES[k].fields.find(x=>x[0]==="categorie"); if(f)f[2].opts=all;});
+  return all;
+}
+function propDeDepense(r){ if(r.proprietaire_id)return r.proprietaire_id; const b=(state.opts.bien||[]).find(x=>x.id===r.bien_id); return b?b.proprietaire_id:null; }
 async function renderDepenses(type){
-  const m=MODULES['depense']; const isSup=type==='supplement';
+  const isSup=type==='supplement';
   $("#topAdd").hidden=false;$("#topAdd").textContent=isSup?"+ Ajouter un supplément":"+ Ajouter une dépense";
   $("#topAdd").onclick=()=>openForm('depense',{type});
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await Promise.all(["bien","proprietaire","reservation"].map(loadOpts));
-  const {data,error}=await sb.from('depense').select('*').eq('type',type).order('date_op',{ascending:false});
+  const cats=await chargerCatDep();
+  const [{data,error},{data:rels},vues]=await Promise.all([
+    sb.from('depense').select('*').eq('type',type).order('date_op',{ascending:false}),
+    sb.from('releve_proprietaire').select('id,nom,proprietaire_id,periode_debut'),
+    reglGet("vues_depenses")]);
   if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
-  const cols=m.cols.filter(c=>c[0]!=='type');
-  const rows=(data||[]).map(r=>{const tds=cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
-    return `<tr>${tds}<td><div class="act"><button class="btn o sm" data-ed="${r.id}">Modifier</button><button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;}).join("");
-  const total=(data||[]).reduce((s,r)=>s+Number(r.montant||0),0);
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>${isSup?'Suppléments':'Dépenses'}</h3><span class="sp"></span><span class="muted">${(data||[]).length} · total ${money(total)}</span></div>
-    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucun${isSup?' supplément':'e dépense'}. Cliquez sur « ${isSup?'+ Ajouter un supplément':'+ Ajouter une dépense'} ».</div>`}</div></div>`;
   state.cache=state.cache||{}; state.cache['depense']=data||[];
-  document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm('depense',(state.cache['depense']||[]).find(x=>x.id===b.dataset.ed)));
-  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow('depense',b.dataset.del));
+  state.depF=state.depF||{}; const F=state.depF[type]=state.depF[type]||{q:"",cat:"",bien:"",rel:"",du:"",au:""};
+  const relNom=id=>{const r=(rels||[]).find(x=>x.id===id);return r?(r.nom||("Relevé "+refName("proprietaire",r.proprietaire_id))):"";};
+  const listeVues=((vues&&vues.liste)||[]).filter(v=>v.type===type);
+  const filtrer=()=>(data||[]).filter(r=>(!F.q||((r.libelle||"")+" "+(r.notes||"")).toLowerCase().includes(F.q.toLowerCase()))&&(!F.cat||r.categorie===F.cat)&&(!F.bien||r.bien_id===F.bien)&&(!F.rel||(F.rel==="avec"?!!r.releve_id:!r.releve_id))&&(!F.du||r.date_op>=F.du)&&(!F.au||r.date_op<=F.au));
+  const txt=h=>(''+h).replace(/<[^>]+>/g,'');
+  const paint=()=>{
+    const list=filtrer();
+    const rows=list.map(r=>`<tr><td><b>${esc(r.libelle||"—")}</b></td><td>${fdate(r.date_op)}</td><td>${esc(r.categorie||"—")}</td>
+      <td>${r.bien_id?refName("bien",r.bien_id):'—'}</td><td>${r.reservation_id?refName("reservation",r.reservation_id):'—'}</td>
+      <td>${propDeDepense(r)?refName("proprietaire",propDeDepense(r)):'—'}</td><td>${r.releve_id?esc(relNom(r.releve_id)):'<span class="muted">—</span>'}</td>
+      <td style="text-align:right">${money(r.montant)}</td>
+      <td><div class="act"><button class="btn o sm" data-ed="${r.id}">Modifier</button><button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`).join("");
+    const total=list.reduce((s,r)=>s+Number(r.montant||0),0);
+    $("#depTable").innerHTML=list.length?`<table><thead><tr><th>Nom</th><th>Date</th><th>Catégories</th><th>Annonce</th><th>Réservation</th><th>Propriétaire</th><th>Relevés du propriétaire</th><th style="text-align:right">Montant</th><th>Actions</th></tr></thead><tbody>${rows}
+      <tr style="font-weight:700;background:rgba(0,0,0,.03)"><td colspan="7">TOTAL</td><td style="text-align:right">${money(total)}</td><td></td></tr></tbody></table>`:`<div class="empty">Aucun${isSup?' supplément':'e dépense'}${(data||[]).length?' pour ces filtres':''}.</div>`;
+    $("#depCount").textContent=list.length+" sur "+(data||[]).length;
+    document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm('depense',(state.cache['depense']||[]).find(x=>x.id===b.dataset.ed)));
+    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow('depense',b.dataset.del));
+    return list;
+  };
+  const opt=(v,l,sel)=>`<option value="${esc(v)}" ${sel===v?"selected":""}>${esc(l)}</option>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>${isSup?'Suppléments':'Dépenses'}</h3><span class="sp"></span>
+      <button class="btn o sm" id="depImp">Importer</button><input type="file" id="depFile" accept=".csv,text/csv" hidden>
+      <button class="btn o sm" id="depCsv">⬇ CSV</button>
+      <button class="btn o sm" id="depVue">Nouvelle vue personnalisée</button></div>
+    <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line,#eee)">
+      <input id="dfQ" placeholder="Rechercher…" value="${esc(F.q)}" style="max-width:160px">
+      <select id="dfCat" style="max-width:150px"><option value="">Toutes catégories</option>${cats.map(c=>opt(c,c,F.cat)).join("")}</select>
+      <select id="dfBien" style="max-width:170px"><option value="">Toutes les annonces</option>${(state.opts.bien||[]).map(b=>opt(b.id,b.nom,F.bien)).join("")}</select>
+      <select id="dfRel" style="max-width:170px"><option value="">Relevé : tous</option>${opt("avec","Rattaché à un relevé",F.rel)}${opt("sans","Sans relevé",F.rel)}</select>
+      <input id="dfDu" type="date" value="${F.du}" title="Du" style="max-width:140px"><input id="dfAu" type="date" value="${F.au}" title="Au" style="max-width:140px">
+      <button class="btn o sm" id="dfR">Réinitialiser</button>
+      ${listeVues.length?`<select id="dfVue" style="max-width:170px"><option value="">Vues enregistrées</option>${listeVues.map((v,i)=>`<option value="${i}">${esc(v.nom)}</option>`).join("")}</select><button class="btn d sm" id="dfVueDel" title="Supprimer la vue choisie">×</button>`:''}
+      <span class="sp"></span><span class="muted" id="depCount"></span></div>
+    <div style="overflow:auto" id="depTable"></div></div>`;
+  paint();
+  const bind=(id,key,ev)=>{$("#"+id)["on"+(ev||"change")]=e=>{F[key]=e.target.value;paint();};};
+  bind("dfQ","q","input");bind("dfCat","cat");bind("dfBien","bien");bind("dfRel","rel");bind("dfDu","du");bind("dfAu","au");
+  $("#dfR").onclick=()=>{state.depF[type]=null;renderDepenses(type);};
+  if($("#dfVue")){
+    $("#dfVue").onchange=e=>{const v=listeVues[+e.target.value];if(!v)return;state.depF[type]={...v.filtres};renderDepenses(type);};
+    $("#dfVueDel").onclick=async()=>{const v=listeVues[+$("#dfVue").value];if(!v){toast("Choisissez d'abord une vue");return;}
+      const reste=((vues&&vues.liste)||[]).filter(x=>x!==v);const e=await reglSet("vues_depenses",{liste:reste});if(e){toast("Erreur : "+e.message);return;}toast("Vue supprimée");renderDepenses(type);};
+  }
+  $("#depVue").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Nouvelle vue personnalisée</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted">Enregistre les filtres actuellement affichés pour les retrouver en un clic.</p>
+      <div class="field"><label>Nom de la vue *</label><input id="vuNom"></div><div class="err" id="vuErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="vuOk">Enregistrer</button></div>`);
+    $("#vuOk").onclick=async()=>{const nom=$("#vuNom").value.trim();if(!nom){$("#vuErr").textContent="Donnez un nom à la vue.";return;}
+      const liste=[...((vues&&vues.liste)||[]),{nom,type,filtres:{...F}}];const e=await reglSet("vues_depenses",{liste});
+      if(e){$("#vuErr").textContent=e.message;return;}fermer();toast("Vue enregistrée");renderDepenses(type);};
+  };
+  $("#depCsv").onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const lines=filtrer().map(r=>[r.libelle,r.date_op,r.categorie,r.bien_id?txt(refName("bien",r.bien_id)):"",r.reservation_id?txt(refName("reservation",r.reservation_id)):"",propDeDepense(r)?txt(refName("proprietaire",propDeDepense(r))):"",r.releve_id?relNom(r.releve_id):"",r.montant].map(q).join(';'));
+    const csv='﻿'+["Nom;Date;Catégorie;Annonce;Réservation;Propriétaire;Relevé;Montant",...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download=(isSup?'Supplements':'Depenses')+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');
+  };
+  $("#depImp").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Importer des ${isSup?'suppléments':'dépenses'}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted">Fichier CSV (séparateur « ; » ou « , ») avec une ligne d'en-têtes. Colonnes reconnues : <b>Nom</b>, <b>Date</b> (AAAA-MM-JJ ou JJ/MM/AAAA), <b>Montant</b> (obligatoires), Catégorie, Annonce (nom exact du bien).</p>
+      <div class="field"><input type="file" id="impF" accept=".csv,text/csv"></div><div id="impPrev" class="muted"></div><div class="err" id="impErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="impOk" disabled>Importer</button></div>`);
+    let prets=[];
+    $("#impF").onchange=async e=>{
+      const f=e.target.files[0]; if(!f)return; const res=lireCsvDepenses(await f.text(),type);
+      prets=res.lignes; $("#impErr").textContent=res.erreurs.slice(0,5).join(" · ");
+      $("#impPrev").textContent=prets.length+" ligne(s) prête(s) à importer"+(res.erreurs.length?", "+res.erreurs.length+" ignorée(s)":"");
+      $("#impOk").disabled=!prets.length;
+    };
+    $("#impOk").onclick=async()=>{$("#impOk").disabled=true;const {error}=await sb.from("depense").insert(prets);
+      if(error){$("#impErr").textContent=error.message;$("#impOk").disabled=false;return;}fermer();toast(prets.length+" ligne(s) importée(s)");renderDepenses(type);};
+  };
+}
+function lireCsvDepenses(texte,type){
+  const lignes=[], erreurs=[];
+  const rows=texte.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());
+  if(rows.length<2)return {lignes,erreurs:["Fichier vide ou sans en-têtes."]};
+  const sep=(rows[0].split(';').length>=rows[0].split(',').length)?';':',';
+  const cut=l=>{const out=[];let cur='',q=false;for(let i=0;i<l.length;i++){const c=l[i];if(q){if(c==='"'&&l[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=false;else cur+=c;}else if(c==='"')q=true;else if(c===sep){out.push(cur);cur='';}else cur+=c;}out.push(cur);return out.map(x=>x.trim());};
+  const norm=s=>s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,'');
+  const H=cut(rows[0]).map(norm); const ix=n=>H.findIndex(h=>h.startsWith(n));
+  const iN=ix("nom")>=0?ix("nom"):ix("libelle"), iD=ix("date"), iM=ix("montant"), iC=ix("categorie"), iA=ix("annonce")>=0?ix("annonce"):ix("bien");
+  if(iN<0||iD<0||iM<0)return {lignes,erreurs:["En-têtes Nom, Date et Montant obligatoires."]};
+  rows.slice(1).forEach((l,k)=>{
+    const c=cut(l); let d=c[iD]||''; const m=d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m)d=m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+    const montant=Number((c[iM]||'').replace(/\s/g,'').replace(',','.'));
+    if(!c[iN]||!/^\d{4}-\d{2}-\d{2}$/.test(d)||!isFinite(montant)||c[iM]===''){erreurs.push("Ligne "+(k+2)+" illisible");return;}
+    const bien=iA>=0&&c[iA]?(state.opts.bien||[]).find(b=>norm(b.nom)===norm(c[iA])):null;
+    if(iA>=0&&c[iA]&&!bien){erreurs.push("Ligne "+(k+2)+" : annonce « "+c[iA]+" » inconnue");return;}
+    lignes.push({tenant_id:state.tenant.id,type,libelle:c[iN],date_op:d,montant,categorie:iC>=0&&c[iC]?c[iC]:null,bien_id:bien?bien.id:null,proprietaire_id:bien?bien.proprietaire_id:null});
+  });
+  return {lignes,erreurs};
 }
 function goRub(rk,sk){
   const rub=RUBRIQUES.find(r=>r.k===rk)||RUBRIQUES[0];
@@ -919,6 +1019,7 @@ async function renderEnvois(){
 /* ---------- FORM ---------- */
 async function openForm(k,row){
   const m=MODULES[k];
+  if(k==="depense"||k==="depenses_auto"){try{await chargerCatDep();}catch(e){}}
   await Promise.all([...new Set(m.fields.filter(f=>f[2]&&f[2].ref).map(f=>f[2].ref))].map(loadOpts));
   row=row||{};
   const P=row.parametres||{};
@@ -1656,12 +1757,66 @@ async function renderQualAnn(){
 /* ---------- CATEGORIES DE DEPENSES ---------- */
 async function renderCatDep(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const all=await chargerCatDep();
   const {data}=await sb.from("depense").select("categorie,montant,type");
   const map={};
-  (data||[]).forEach(d=>{const k=d.categorie||'Sans catégorie';map[k]=map[k]||{dep:0,sup:0};if(d.type==='supplement')map[k].sup+=Number(d.montant||0);else map[k].dep+=Number(d.montant||0);});
-  const rows=Object.keys(map).sort().map(k=>`<tr><td>${esc(k)}</td><td style="text-align:right">${money(map[k].dep)}</td><td style="text-align:right">${money(map[k].sup)}</td></tr>`).join("");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Totaux par catégorie</h3></div>
-    <div style="overflow:auto">${(data&&data.length)?`<table><thead><tr><th>Catégorie</th><th style="text-align:right">Dépenses</th><th style="text-align:right">Suppléments</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucune dépense saisie. Ajoutez-en dans « Dépenses ».</div>'}</div></div>`;
+  (data||[]).forEach(d=>{const k=d.categorie||'Sans catégorie';map[k]=map[k]||{dep:0,sup:0,n:0};map[k].n++;if(d.type==='supplement')map[k].sup+=Number(d.montant||0);else map[k].dep+=Number(d.montant||0);});
+  const noms=[...all]; Object.keys(map).forEach(k=>{if(!noms.includes(k))noms.push(k);});
+  const perso=n=>(state.catDep||[]).find(c=>c.nom===n);
+  const rows=noms.map(k=>{const v=map[k]||{dep:0,sup:0,n:0};const p=perso(k);return `<tr><td><b>${esc(k)}</b> ${p?'':'<span class="muted" style="font-size:11px">standard</span>'}</td><td style="text-align:center">${v.n}</td><td style="text-align:right">${money(v.dep)}</td><td style="text-align:right">${money(v.sup)}</td><td>${p?`<button class="btn d sm" data-cdel="${p.id}">×</button>`:''}</td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Catégories</h3><span class="sp"></span><button class="btn g sm" id="catAdd">+ Ajouter une catégorie</button></div>
+    <div style="overflow:auto"><table><thead><tr><th>Catégorie</th><th style="text-align:center">Lignes</th><th style="text-align:right">Dépenses</th><th style="text-align:right">Suppléments</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  $("#catAdd").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Ajouter une catégorie</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Nom de la catégorie *</label><input id="catNom"></div><div class="err" id="catErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="catOk">Enregistrer</button></div>`);
+    $("#catOk").onclick=async()=>{const nom=$("#catNom").value.trim();
+      if(!nom){$("#catErr").textContent="Saisissez un nom.";return;}
+      if(noms.some(n=>n.toLowerCase()===nom.toLowerCase())){$("#catErr").textContent="Cette catégorie existe déjà.";return;}
+      const {error}=await sb.from("categorie_depense").insert({tenant_id:state.tenant.id,nom});
+      if(error){$("#catErr").textContent=error.message;return;}fermer();toast("Catégorie ajoutée");renderCatDep();};
+  };
+  document.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{
+    const c=(state.catDep||[]).find(x=>x.id===b.dataset.cdel); const n=(map[c.nom]||{n:0}).n;
+    ouvrir(`<div class="h"><h3>Supprimer la catégorie « ${esc(c.nom)} » ?</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted">${n?n+" ligne(s) utilisent cette catégorie : elles conservent leur libellé de catégorie, seule l'entrée de la liste est retirée.":"Aucune ligne n'utilise cette catégorie."}</p><div class="err" id="cdErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="cdOk">Supprimer</button></div>`);
+    $("#cdOk").onclick=async()=>{const {error}=await sb.from("categorie_depense").delete().eq("id",c.id);if(error){$("#cdErr").textContent=error.message;return;}fermer();toast("Supprimée");renderCatDep();};
+  });
+}
+/* ---------- AUTOMATISATIONS DE DEPENSES : moteur ---------- */
+function echeanceAuto(rule){
+  const n=new Date(); const rep=rule.repetition||"mensuel";
+  if(rep==="hebdomadaire"){const d=new Date(n);d.setDate(n.getDate()-((n.getDay()+6)%7));return isoD(d);}
+  const j=Number(rule.jour_mois||1);
+  if(rep==="annuel"){const d=new Date(n.getFullYear(),0,Math.min(j,31));return d<=n?isoD(d):null;}
+  const dernier=new Date(n.getFullYear(),n.getMonth()+1,0).getDate();
+  const d=new Date(n.getFullYear(),n.getMonth(),Math.min(j,dernier));
+  return d<=n?isoD(d):null;
+}
+async function executerDepenseAuto(rule){
+  await loadOpts("bien");
+  const date=echeanceAuto(rule); if(!date)return {crees:0,date:null};
+  const biens=rule.bien_id?(state.opts.bien||[]).filter(b=>b.id===rule.bien_id):(state.opts.bien||[]).filter(b=>!rule.proprietaire_id||b.proprietaire_id===rule.proprietaire_id);
+  const type=rule.nature==="supplement"?"supplement":"depense"; let crees=0;
+  for(const b of biens){
+    const {data:ex}=await sb.from("depense").select("id").eq("libelle",rule.nom).eq("date_op",date).eq("bien_id",b.id).eq("type",type).limit(1);
+    if(ex&&ex.length)continue;
+    const {error}=await sb.from("depense").insert({tenant_id:state.tenant.id,type,libelle:rule.nom,date_op:date,categorie:rule.categorie||null,bien_id:b.id,proprietaire_id:rule.proprietaire_id||b.proprietaire_id||null,montant:rule.montant,notes:"Créée par l'automatisation « "+rule.nom+" »"});
+    if(!error)crees++;
+  }
+  return {crees,date};
+}
+async function depAutoRun(id){
+  const {data}=await sb.from("depense_auto").select("*").eq("id",id).single(); if(!data)return;
+  const n=await executerDepenseAuto(data);
+  toast(!n.date?"Échéance pas encore atteinte ce mois-ci":(n.crees?n.crees+" ligne(s) créée(s) au "+fdate(n.date):"Déjà créée pour l'échéance du "+fdate(n.date)));
+}
+async function lancerDepensesAuto(){
+  try{const {data:rules}=await sb.from("depense_auto").select("*").eq("actif",true); let t=0;
+    for(const r of (rules||[])){const n=await executerDepenseAuto(r);t+=n.crees;}
+    if(t)toast(t+" dépense(s) automatique(s) créée(s)");
+  }catch(e){console.warn("dépenses auto",e);}
 }
 
 /* ---------- FORMULES ---------- */
@@ -1699,8 +1854,9 @@ async function genererReleve(pid,deb,fin,nom){
   if(!biensProp.length)return {error:"Ce propriétaire n’a aucun bien."};
   const {data:resa,error:e1}=await sb.from("reservation").select("*").in("bien_id",biensProp).neq("statut","annulee").gte("depart",deb).lte("depart",fin);
   if(e1)return {error:e1.message};
-  const {data:deps,error:e2}=await sb.from("depense").select("*").eq("proprietaire_id",pid).gte("date_op",deb).lte("date_op",fin);
+  const {data:depsAll,error:e2}=await sb.from("depense").select("*").gte("date_op",deb).lte("date_op",fin);
   if(e2)return {error:e2.message};
+  const deps=(depsAll||[]).filter(d=>d.proprietaire_id===pid||(!d.proprietaire_id&&biensProp.includes(d.bien_id)));
   let brut=0, commission=0, frais=0; const lignes=[];
   (resa||[]).forEach(r=>{const b=Number(r.prix_total||0);const c=b*comm/100;brut+=b;commission+=c;lignes.push({libelle:refName("bien",r.bien_id)+" · "+fdate(r.arrivee),montant_brut:b,commission:c,montant_net:b-c});});
   (deps||[]).forEach(d=>{const m=Number(d.montant||0);const sup=d.type==="supplement";
