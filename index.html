@@ -347,6 +347,12 @@ const MODULES = {
       ["utilisations_max","Utilisations maximum",{type:"number"}],
       ["utilisations","Utilisations actuelles",{type:"number",def:0}],
       ["statut","Statut",{opts:["actif","inactif","expire"],def:"actif"}]]},
+  avis_auto_rules:{title:"Avis automatiques",add:"Ajouter un avis automatique",table:"avis_auto",
+    cols:[["nom","Nom"]],
+    fields:[["nom","Nom de la règle",{req:1}],["evenement","Événement déclencheur",{opts:["depart","arrivee"],def:"depart"}],
+      ["delai_jours","Délai après l'événement (jours)",{type:"number",req:1,def:3}],
+      ["bien_id","Annonce (vide = toutes)",{ref:"bien"}],["canal","Canal (vide = tous)",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"]}],
+      ["message","Message envoyé au voyageur",{long:1}]]},
   modeles_avis:{title:"Modèles d'avis",add:"Ajouter un modèle",table:"modele_avis",
     cols:[["nom","Nom"],["recommande","Recommandé",v=>pill(v)],["note_proprete","Propreté"],["note_communication","Communication"],["note_regles","Règles"]],
     fields:[["nom","Nom du modèle",{req:1}],["recommande","Recommandé",{opts:["Oui","Non"],def:"Oui"}],
@@ -429,12 +435,19 @@ const MODULES = {
       ["bien_id","Bien (vide = tous)",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
       ["montant","Montant",{type:"number",req:1}]]},
   avis:{title:"Avis",add:"Ajouter un avis",table:"avis",
-    cols:[["bien_id","Bien",v=>v?refName("bien",v):'—'],["voyageur_id","Voyageur",v=>v?refName("voyageur",v):'—'],["canal","Canal",v=>v?pill(v):'—'],["note_globale","Note",v=>v!=null?('★ '+v):'—'],["statut","Statut",v=>pill(v)]],
-    fields:[["reservation_id","Réservation",{ref:"reservation"}],["bien_id","Bien",{ref:"bien"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
-      ["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"]}],
+    cols:[["voyageur_id","Nom du voyageur",v=>v?refName("voyageur",v):'—'],["reservation_id","ID de réservation",v=>v?esc(String(v).slice(0,8)):'—'],
+      ["bien_id","Nom de l'annonce",v=>v?refName("bien",v):'—'],["canal","Canal",v=>v?pill(v):'—'],["origine","Origine",v=>v?pill(v):'—'],
+      ["note_globale","Avis global",v=>v!=null?('★ '+v):'—'],["afficher_site","Moteur de réservation",v=>v?'✓':'—'],
+      ["etiquettes","Étiquettes",v=>v||'—'],["statut","Statut",v=>pill(v)]],
+    fields:[["__s1","Réservation",{section:1}],["reservation_id","Réservation",{ref:"reservation"}],["bien_id","Bien",{ref:"bien"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
+      ["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"]}],["origine","Origine",{opts:["airbnb","booking","vrbo","direct","google","tripadvisor","autre"]}],
+      ["__s2","Notes",{section:1}],
       ["note_globale","Note globale /5",{type:"number"}],["note_proprete","Propreté /5",{type:"number"}],["note_communication","Communication /5",{type:"number"}],
       ["note_emplacement","Emplacement /5",{type:"number"}],["note_qualite_prix","Rapport qualité-prix /5",{type:"number"}],
-      ["commentaire","Commentaire",{long:1}],["statut","Statut",{opts:["publie","en_attente","masque"],def:"publie"}]]},
+      ["__s3","Contenu",{section:1}],
+      ["commentaire","Commentaire du voyageur",{long:1}],["note_interne","Note interne (non visible)",{long:1}],
+      ["etiquettes","Étiquettes (séparées par des virgules)",{}],["afficher_site","Afficher dans le moteur de réservation",{opts:["true","false"],def:"false"}],
+      ["statut","Statut",{opts:["publie","en_attente","masque","programme"],def:"publie"}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
 const PILLMAP={accepte:"blue",en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
@@ -472,7 +485,7 @@ const RUBRIQUES=[
     ["arch","Archivé",{tachesarch:1}],
     ["cp","Champs personnalisés",{champperso:"tache"}]]},
   {k:"avis",label:"Avis",icon:"★",subs:[
-    ["gerer","Gérer les avis",{m:"avis"}],
+    ["gerer","Gérer les avis",{avislist:1}],
     ["auto","Avis automatiques",{avisauto:1}],
     ["mod","Modèles d'avis",{m:"modeles_avis"}],
     ["ia","Analyses IA",{qualavis:1}]]},
@@ -868,7 +881,8 @@ function goRub(rk,sk){
   if(t.emailcfg)return renderEmailConfig();
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
-  if(t.avisauto)return renderAvisAuto();
+  if(t.avislist)return renderAvisList();
+  if(t.avisauto)return renderAvisAutoList();
   if(t.relevesauto)return renderRelevesAuto();
   if(t.envois)return renderEnvois();
   if(t.sitedesign)return renderSiteDesign();
@@ -1071,7 +1085,7 @@ async function openForm(k,row){
         continue;}
       let val;
       if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
-      else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); }
+      else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); if(val==="true")val=true; if(val==="false")val=false; }
       if(o.p) params[key]=val; else d[key]=val;
     }
     const missing=m.fields.filter(f=>f[2]&&f[2].req).some(f=>{const o=f[2];const val=o.p?params[f[0]]:d[f[0]];return val==null||val==="";});
@@ -1642,18 +1656,89 @@ async function renderOccupation(){
 }
 
 /* ---------- AVIS & RELEVES AUTOMATIQUES ---------- */
-async function renderAvisAuto(){
+async function renderAvisList(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const v=await reglGet("avis_auto");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Avis automatiques</h3></div>
-    <div style="padding:16px">
-      <div class="phnote" style="margin-bottom:12px">Envoie automatiquement une demande d'avis au voyageur quelques jours après son départ.</div>
-      <label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="aaActif" ${v.actif?'checked':''} style="width:auto"> Activer les demandes d'avis automatiques</label>
-      <div class="field"><label>Délai après le départ (jours)</label><input id="aaDelai" type="number" value="${v.delai_jours!=null?v.delai_jours:3}" style="max-width:160px"></div>
-      <div class="field"><label>Message envoyé</label><textarea id="aaMsg" rows="4">${esc(v.modele||"Bonjour, merci d'avoir séjourné chez nous ! Si vous avez un instant, votre avis nous aiderait beaucoup. À très bientôt.")}</textarea></div>
-      <button class="btn g" id="aaSave">Enregistrer</button> <span class="ok" id="aaOk"></span>
-    </div></div>`;
-  $("#aaSave").onclick=async()=>{const e=await reglSet("avis_auto",{actif:$("#aaActif").checked,delai_jours:+$("#aaDelai").value||0,modele:$("#aaMsg").value});if(e){$("#aaOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#aaOk").textContent="Enregistré ✓";toast("Avis automatiques enregistrés");};
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur"),loadOpts("reservation")]);
+  const {data,error}=await sb.from("avis").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.avis=data||[];
+  const F=state.avisF=state.avisF||{du:"",au:"",statut:"",voyageur:"",bien:"",etiq:"",origine:"",q:""};
+  const resaDe=a=>{const r=(state.opts.reservation||[]).find(x=>x.id===a.reservation_id);return r||{};};
+  const list=(data||[]).filter(a=>{
+    const r=resaDe(a);
+    return (!F.q||((a.commentaire||"")+" "+(refName("voyageur",a.voyageur_id))+" "+(refName("bien",a.bien_id))).toLowerCase().includes(F.q.toLowerCase()))
+    &&(!F.du||((r.arrivee||"")>=F.du||(r.depart||"")>=F.du))
+    &&(!F.au||((r.arrivee||"9999")<=F.au||(r.depart||"9999")<=F.au))
+    &&(!F.statut||a.statut===F.statut)&&(!F.bien||a.bien_id===F.bien)
+    &&(!F.origine||a.origine===F.origine)&&(!F.etiq||((a.etiquettes||"").toLowerCase().includes(F.etiq.toLowerCase())));
+  });
+  const m=MODULES.avis;
+  const rows=list.map(a=>{
+    const r=resaDe(a);
+    return `<tr>
+      <td>${a.voyageur_id?refName("voyageur",a.voyageur_id):'—'}</td>
+      <td><span class="muted" style="font-size:11px">${a.reservation_id?esc(String(a.reservation_id).slice(0,8)):'—'}</span></td>
+      <td>${a.bien_id?refName("bien",a.bien_id):'—'}</td>
+      <td>${a.canal?pill(a.canal):'—'}</td><td>${a.origine?pill(a.origine):'—'}</td>
+      <td>${r.arrivee?fdate(r.arrivee):'—'}</td><td>${r.depart?fdate(r.depart):'—'}</td>
+      <td>${pill(a.statut)}</td>
+      <td>${a.note_globale!=null?('★ '+a.note_globale):'—'}</td>
+      <td style="text-align:center">${a.afficher_site?'✓':'—'}</td>
+      <td>${esc(a.etiquettes||'')}</td>
+      <td><div class="act"><button class="btn o sm" data-ed="${a.id}">Modifier</button><button class="btn d sm" data-del="${a.id}">×</button></div></td></tr>`;
+  }).join("");
+  const opt=(v,l,sel)=>`<option value="${esc(v)}" ${sel===v?"selected":""}>${esc(l)}</option>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Gérer les avis</h3><span class="sp"></span>
+      <button class="btn o sm" id="avCsv">⬇ CSV</button>
+      <button class="btn g sm" id="avAdd">+ Ajouter un avis</button></div>
+    <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line,#eee)">
+      <span class="muted">Du (arrivée)</span><input id="afDu" type="date" value="${F.du}" style="max-width:140px">
+      <span class="muted">Au (départ)</span><input id="afAu" type="date" value="${F.au}" style="max-width:140px">
+      <select id="afSt" style="max-width:140px"><option value="">Statut : tous</option>${["publie","en_attente","masque","programme"].map(s=>opt(s,s.replace(/_/g," "),F.statut)).join("")}</select>
+      <select id="afBien" style="max-width:170px"><option value="">Annonce : toutes</option>${(state.opts.bien||[]).map(b=>opt(b.id,b.nom,F.bien)).join("")}</select>
+      <select id="afOr" style="max-width:140px"><option value="">Origine : toutes</option>${["airbnb","booking","vrbo","direct","google","tripadvisor","autre"].map(o=>opt(o,o,F.origine)).join("")}</select>
+      <input id="afEt" placeholder="Étiquettes…" value="${esc(F.etiq)}" style="max-width:130px">
+      <input id="afQ" placeholder="Rechercher…" value="${esc(F.q)}" style="max-width:160px">
+      <button class="btn o sm" id="afR">Réinitialiser</button>
+      <span class="sp"></span><span class="muted">${list.length} sur ${(data||[]).length}</span></div>
+    <div style="overflow:auto">${list.length?`<table><thead><tr><th>Nom du voyageur</th><th>ID de réservation</th><th>Nom de l'annonce</th><th>Canal</th><th>Origine</th><th>Enregistrement</th><th>Départ</th><th>Statut</th><th>Avis global</th><th>Moteur</th><th>Étiquettes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun avis${(data||[]).length?" pour ces filtres":""}.</div>'}</div></div>`;
+  const bind=(id,key,ev)=>{const el=$("#"+id);if(el)el["on"+(ev||"change")]=e=>{F[key]=e.target.value;renderAvisList();};};
+  bind("afDu","du");bind("afAu","au");bind("afSt","statut");bind("afBien","bien");bind("afOr","origine");bind("afEt","etiq","input");bind("afQ","q","input");
+  $("#afR").onclick=()=>{state.avisF=null;renderAvisList();};
+  $("#avAdd").onclick=()=>openForm("avis");
+  $("#avCsv").onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const txt=h=>(''+h).replace(/<[^>]+>/g,'');
+    const lines=list.map(a=>{const r=resaDe(a);return [txt(refName("voyageur",a.voyageur_id)),a.reservation_id||"",txt(refName("bien",a.bien_id)),a.canal,a.origine,r.arrivee,r.depart,a.statut,a.note_globale,a.afficher_site?"Oui":"",a.etiquettes,a.commentaire].map(q).join(';');});
+    const csv='﻿'+["Voyageur;ID résa;Annonce;Canal;Origine;Arrivée;Départ;Statut;Note;Moteur;Étiquettes;Commentaire",...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download='Avis.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');
+  };
+  document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm("avis",(state.cache.avis||[]).find(x=>x.id===b.dataset.ed)));
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow("avis",b.dataset.del));
+}
+/* ---------- AVIS AUTOMATIQUES (règles multiples) ---------- */
+async function renderAvisAutoList(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("modele_avis")]);
+  const {data:rules,error}=await sb.from("avis_auto").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.avis_auto_rules=rules||[];
+  const rows=(rules||[]).map(r=>`<div class="kc" style="margin-bottom:12px">
+    <div class="kc-t">${esc(r.nom)}</div>
+    <div class="kc-m">${pill(r.evenement==="arrivee"?"Arrivée":"Départ")} · ${r.delai_jours} jour(s) après${r.bien_id?(' · '+refName("bien",r.bien_id)):' · Toutes les annonces'}${r.canal?(' · Canal '+pill(r.canal)):''}</div>
+    <div class="kc-s muted">Créée le ${fdate((r.cree_le||"").slice(0,10))}</div>
+    <div class="kc-a"><button class="btn o sm" data-aat="${r.id}">${r.actif?'<span class="pill green">actif</span>':'<span class="pill gray">inactif</span>'}</button>
+      <button class="btn o sm" data-aam="${r.id}">Modifier</button><button class="btn d sm" data-aad="${r.id}">×</button></div>
+  </div>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Avis automatiques</h3><span class="sp"></span><button class="btn g sm" id="aaAdd">+ Ajouter un avis automatique</button></div>
+    <div class="phnote" style="margin:12px 16px">Chaque règle envoie automatiquement une demande d'avis au voyageur après son séjour (événement + délai). L'envoi par e-mail attend la validation du domaine d'envoi.</div>
+    <div style="padding:16px">${rows||'<div class="empty">Aucune règle. Cliquez sur « Ajouter un avis automatique ».</div>'}</div></div>`;
+  $("#aaAdd").onclick=()=>openForm("avis_auto_rules");
+  const byId=id=>state.cache.avis_auto_rules.find(x=>x.id===id);
+  document.querySelectorAll("[data-aat]").forEach(b=>b.onclick=async()=>{const r=byId(b.dataset.aat);const {error:e}=await sb.from("avis_auto").update({actif:!r.actif}).eq("id",r.id);if(e){toast("Erreur : "+e.message);return;}renderAvisAutoList();});
+  document.querySelectorAll("[data-aam]").forEach(b=>b.onclick=()=>openForm("avis_auto_rules",byId(b.dataset.aam)));
+  document.querySelectorAll("[data-aad]").forEach(b=>b.onclick=()=>delRow("avis_auto_rules",b.dataset.aad));
 }
 async function renderRelevesAuto(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
