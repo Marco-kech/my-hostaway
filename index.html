@@ -278,7 +278,7 @@ async function boot(){
   state.tenant=ten; state.role=membres[0].role;
   $("#tenantName").textContent=ten?ten.nom:"—";
   $("#userEmail").textContent=state.user.email;
-  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto);
+  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto).then(majPropreteAuto);
 }
 
 /* ---------- MODULES (data screens) ---------- */
@@ -1294,7 +1294,9 @@ async function renderCalMultiple(){
   const shown=!actif?ordered:ordered.filter(row=>row.parent?(okB(row.b)||(enfByParent[row.b.id]||[]).some(okB)):okB(row.b));
   let body=shown.map(row=>{
     const b=row.b;
-    const nm=row.child?`<span class="muted" style="padding-left:16px">↳ ${esc(b.nom)}</span>`:(row.parent?`<strong>${esc(b.nom)}</strong>`:esc(b.nom));
+    const pc={propre:"#4caf50",en_nettoyage:"#ff9800",a_nettoyer:"#f44336",non_defini:"#ccc"};
+    const pdot=b.proprete?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${pc[b.proprete]||pc.non_defini};margin-right:4px;cursor:pointer" title="Propreté: ${esc(b.proprete.replace(/_/g,' '))}" data-propb="${b.id}"></span>`:'';
+    const nm=row.child?`${pdot}<span class="muted" style="padding-left:16px">↳ ${esc(b.nom)}</span>`:(row.parent?`${pdot}<strong>${esc(b.nom)}</strong>`:`${pdot}${esc(b.nom)}`);
     let tds=`<td>${nm}</td>`;
     let d=1;
     while(d<=days){
@@ -1328,6 +1330,14 @@ async function renderCalMultiple(){
   $("#cfPays").onchange=e=>{cf.pays=e.target.value;renderCalMultiple();};
   $("#cfVille").onchange=e=>{cf.ville=e.target.value;renderCalMultiple();};
   if($("#cfReset"))$("#cfReset").onclick=()=>{state.calF={q:"",ville:"",pays:"",dispo:""};renderCalMultiple();};
+  document.querySelectorAll("[data-propb]").forEach(dot=>dot.onclick=async()=>{
+    const bid=dot.dataset.propb; const b=(state.opts.bien||[]).find(x=>x.id===bid); if(!b)return;
+    const cycle=["propre","a_nettoyer","en_nettoyage"];
+    const next=cycle[(cycle.indexOf(b.proprete||"propre")+1)%cycle.length];
+    const {error}=await sb.from("bien").update({proprete:next}).eq("id",bid);
+    if(error){toast("Erreur : "+error.message);return;}
+    b.proprete=next; toast("Propreté : "+next.replace(/_/g," ")); renderCalMultiple();
+  });
   $("#cmPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalMultiple();};
   $("#cmNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalMultiple();};
 }
@@ -2610,6 +2620,32 @@ function renderGroupes(){
       <div style="overflow:auto"><table><thead><tr><th>Rôle</th>${areas.map(a=>`<th style="text-align:center">${a}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
     </div>
     <div class="panel"><div style="padding:16px"><div class="phnote">Rôles standards DPM (modèle Hostaway : créer / lire / modifier / supprimer par module et par bien). Les <b>groupes personnalisés</b> — droits à la carte et attribution par bien — seront ajoutés plus tard.</div></div></div>`;
+}
+
+
+/* ---------- PROPRETÉ AUTO ---------- */
+async function majPropreteAuto(){
+  try{
+    await loadOpts("bien");
+    const today=new Date().toISOString().slice(0,10);
+    const now2h=new Date(Date.now()+2*3600e3).toISOString().slice(0,10);
+    const [{data:resaDep},{data:tachesMenage}]=await Promise.all([
+      sb.from("reservation").select("bien_id,depart").neq("statut","annulee").lte("depart",now2h).gte("depart",new Date(Date.now()-2*864e5).toISOString().slice(0,10)),
+      sb.from("tache").select("bien_id,statut,date_prevue").eq("type","menage").in("statut",["fait"]).gte("date_prevue",new Date(Date.now()-7*864e5).toISOString().slice(0,10))
+    ]);
+    const biens=state.opts.bien||[];
+    for(const b of biens){
+      const depRecent=(resaDep||[]).some(r=>r.bien_id===b.id&&r.depart<=now2h);
+      const menageFait=(tachesMenage||[]).some(t=>t.bien_id===b.id);
+      let cible=b.proprete||"propre";
+      if(depRecent&&!menageFait)cible="a_nettoyer";
+      else if(depRecent&&menageFait)cible="propre";
+      if(cible!==b.proprete){
+        await sb.from("bien").update({proprete:cible}).eq("id",b.id);
+        b.proprete=cible;
+      }
+    }
+  }catch(e){console.warn("propreté auto",e);}
 }
 
 init();
