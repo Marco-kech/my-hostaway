@@ -1052,8 +1052,15 @@ async function renderCalMultiple(){
     sb.from("blocage").select("*").lte("debut",eISO).gte("fin",sISO),
   ]);
   let head=`<th>Bien</th>`;for(let d=1;d<=days;d++)head+=`<th>${d}</th>`;
-  let body=(biens||[]).map(b=>{
-    let tds=`<td>${esc(b.nom)}</td>`;
+  const allB=biens||[];
+  const enfByParent={}; allB.filter(b=>b.type_unite==='enfant'&&b.parent_id).forEach(b=>{(enfByParent[b.parent_id]=enfByParent[b.parent_id]||[]).push(b);});
+  const ordered=[];
+  allB.filter(b=>b.type_unite==='parent').forEach(p=>{ordered.push({b:p,parent:true});(enfByParent[p.id]||[]).forEach(e=>ordered.push({b:e,child:true}));});
+  allB.filter(b=>b.type_unite!=='parent'&&!(b.type_unite==='enfant'&&b.parent_id&&allB.some(x=>x.id===b.parent_id))).forEach(s=>ordered.push({b:s}));
+  let body=ordered.map(row=>{
+    const b=row.b;
+    const nm=row.child?`<span class="muted" style="padding-left:16px">↳ ${esc(b.nom)}</span>`:(row.parent?`<strong>${esc(b.nom)}</strong>`:esc(b.nom));
+    let tds=`<td>${nm}</td>`;
     for(let d=1;d<=days;d++){
       const iso=new Date(y,mo,d).toISOString().slice(0,10);
       const r=(resa||[]).find(x=>x.bien_id===b.id&&iso>=x.arrivee&&iso<x.depart);
