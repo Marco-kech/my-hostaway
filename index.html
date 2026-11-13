@@ -408,8 +408,10 @@ const MODULES = {
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["canal","Canal",{opts:["airbnb","booking","vrbo","expedia","abritel","direct","autre"],def:"airbnb"}],
       ["ical_import_url","URL iCal (import)",{}],["statut_sync","Statut de synchro",{}]]},
   membres:{title:"Utilisateurs",table:"membre",
-    cols:[["nom","Nom"],["role","Rôle",v=>esc(ROLE_LABELS[v]||v)],["statut","Statut",v=>pill(v)]],
-    fields:[["nom","Nom",{}],["role","Rôle",{opts:["proprietaire_compte","administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner","proprietaire_bien","partenaire"],def:"gestionnaire"}],
+    cols:[["avatar_url","",v=>v?'<img src="'+esc(v)+'" style="width:28px;height:28px;border-radius:50%">':'<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:#ddd;text-align:center;line-height:28px;font-size:12px">👤</span>'],["nom","Nom"],["email","E-mail"],["titre","Titre"],["role","Groupes d'utilisateurs",v=>esc(ROLE_LABELS[v]||v)],["last_sign_in","Dernière connexion",v=>v?fdate(v.slice(0,10)):'—'],["statut","Statut",v=>pill(v)]],
+    fields:[["nom","Nom complet",{req:1}],["email","E-mail",{type:"email"}],["titre","Titre du poste",{}],
+      ["telephone","Téléphone",{}],
+      ["role","Rôle / groupe",{opts:["proprietaire_compte","administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner","proprietaire_bien","partenaire"],def:"gestionnaire"}],
       ["statut","Statut",{opts:["actif","invite","suspendu"],def:"actif"}]]},
   connaissances:{title:"Base de connaissances",add:"Ajouter un fait",table:"fait_connaissance",
     cols:[["bien_id","Bien",v=>v?refName("bien",v):'<span class="pill gray">Général</span>'],["categorie","Catégorie"],["texte","Information",v=>esc((v||"").slice(0,90))]],
@@ -523,7 +525,7 @@ const RUBRIQUES=[
     ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
     ["market","Marketplace",{ph:"~220 partenaires par catégorie (canaux, serrures, ménage, paiement, tarification, CRM) : configurer / connecté."}]]},
   {k:"users",label:"Utilisateurs & groupes",icon:"☺",subs:[
-    ["u","Utilisateurs",{m:"membres"}],
+    ["u","Utilisateurs",{userslist:1}],
     ["g","Groupes & droits",{groupes:1}],
     ["inter","Intervenants",{m:"intervenants"}]]},
   {k:"site",label:"Moteur de réservation",icon:"◫",subs:[
@@ -537,8 +539,8 @@ const RUBRIQUES=[
     ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
     ["lang","Langues",{paramlangues:1}],
     ["integ","Intégrations",{emailcfg:1}],
-    ["api","API",{ph:"Clé de compte et clé secrète : créer, révoquer ; identifiants partenaires."}],
-    ["notif","Notifications",{ph:"Préférences de notifications PWA et e-mail."}]]},
+    ["api","API",{apikeys:1}],
+    ["notif","Notifications",{notifcfg:1}]]},
 ];
 
 /* ---------- NAV ---------- */
@@ -881,6 +883,9 @@ function goRub(rk,sk){
   if(t.emailcfg)return renderEmailConfig();
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
+  if(t.apikeys)return renderApiKeys();
+  if(t.notifcfg)return renderNotifCfg();
+  if(t.userslist)return renderUsersList();
   if(t.avislist)return renderAvisList();
   if(t.avisauto)return renderAvisAutoList();
   if(t.relevesauto)return renderRelevesAuto();
@@ -1516,13 +1521,32 @@ async function renderTarifDyn(){
 async function renderCanauxCarte(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
-  const {data:canaux}=await sb.from("canal_connexion").select("*");
+  const {data:liens,error}=await sb.from("canal_bien").select("*");
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
   const biens=state.opts.bien||[];
-  const byBien={}; (canaux||[]).forEach(c=>{(byBien[c.bien_id]=byBien[c.bien_id]||[]).push(c);});
-  const rows=biens.map(b=>{const cs=byBien[b.id]||[];const chips=cs.length?cs.map(c=>pill(c.canal)).join(' '):'<span class="muted">aucun</span>';return `<tr><td>${esc(b.nom)}</td><td>${chips}</td><td style="text-align:center">${cs.length}</td></tr>`;}).join("");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Carte des annonces — canaux</h3></div>
-    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th>Canaux liés</th><th style="text-align:center">Nb</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="muted">Aucun bien</td></tr>'}</tbody></table></div>
-    <div style="padding:16px"><div class="phnote">Chaque bien peut être relié à plusieurs canaux (onglet « Canaux connectés »). La synchronisation automatique des calendriers (flux iCal Airbnb / Booking) est l'extension iCal — gratuite, à activer quand tu veux.</div></div></div>`;
+  const CANAUX=["airbnb","booking","direct","vrbo","expedia","google","marriott","abritel"];
+  const byBien={};(liens||[]).forEach(l=>{(byBien[l.bien_id]=byBien[l.bien_id]||{})[l.canal]=l;});
+  const rows=biens.map(b=>{
+    const cells=CANAUX.map(c=>{const l=(byBien[b.id]||{})[c];
+      if(!l)return `<td style="text-align:center"><button class="btn o sm" data-cbA="${b.id}" data-cbC="${c}">+</button></td>`;
+      return `<td style="text-align:center"><button class="btn ${l.actif?'g':'o'} sm" data-cbT="${l.id}">${l.actif?'ACTIVÉ':'DÉSACTIVÉ'}</button></td>`;
+    }).join("");
+    return `<tr><td style="white-space:nowrap"><b>${esc(b.nom)}</b></td>${cells}</tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Mappage de l'annonce</h3><span class="sp"></span>
+      <button class="btn o sm" id="cmCsv">⬇ Exporter CSV</button>
+      <button class="btn o sm" id="cmFilt">Filtres</button></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th>${CANAUX.map(c=>`<th style="text-align:center">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows||'<tr><td colspan="'+(1+CANAUX.length)+'" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>`;
+  document.querySelectorAll("[data-cbT]").forEach(b=>b.onclick=async()=>{const l=(liens||[]).find(x=>x.id===b.dataset.cbT);if(!l)return;
+    const {error:e}=await sb.from("canal_bien").update({actif:!l.actif}).eq("id",l.id);if(e){toast("Erreur : "+e.message);return;}renderCanauxCarte();});
+  document.querySelectorAll("[data-cbA]").forEach(b=>b.onclick=async()=>{
+    const {error:e}=await sb.from("canal_bien").insert({tenant_id:state.tenant.id,bien_id:b.dataset.cbA,canal:b.dataset.cbC,actif:true});
+    if(e){toast("Erreur : "+e.message);return;}toast("Canal ajouté");renderCanauxCarte();});
+  const csvBtn=document.querySelector("#cmCsv"); if(csvBtn)csvBtn.onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const lines=biens.map(b=>[b.nom,...CANAUX.map(c=>{const l=(byBien[b.id]||{})[c];return l?(l.actif?"ACTIVÉ":"DÉSACTIVÉ"):"—";})].map(q).join(';'));
+    const csv='﻿'+["Annonce;"+CANAUX.join(';'),...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download='Canaux_annonces.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
 }
 
 /* ---------- SYNCHRO ICAL ---------- */
@@ -1798,24 +1822,106 @@ async function lancerRelevesAuto(){
 }
 
 /* ---------- SITE : DESIGN & PARAMETRES ---------- */
-async function renderSiteDesign(){
+/* ---------- USERS LIST (custom, with CSV + invite) ---------- */
+async function renderUsersList(){
+  const m=MODULES.membres;
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const v=await reglGet("site_design");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Design du site de réservation</h3></div>
+  await loadOpts("bien");
+  const {data,error}=await sb.from("membre").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.membres=data||[];
+  const rows=(data||[]).map(r=>`<tr>
+    <td>${r.avatar_url?'<img src="'+esc(r.avatar_url)+'" style="width:28px;height:28px;border-radius:50%">':'<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:#ddd;text-align:center;line-height:28px;font-size:12px">👤</span>'}</td>
+    <td><b>${esc(r.nom||'—')}</b></td><td>${esc(r.email||'—')}</td><td>${esc(r.titre||'—')}</td>
+    <td>${esc(ROLE_LABELS[r.role]||r.role)}</td><td>${r.last_sign_in?fdate(r.last_sign_in.slice(0,10)):'—'}</td>
+    <td>${pill(r.statut)}</td>
+    <td><div class="act"><button class="btn o sm" data-ed="${r.id}">Modifier</button></div></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Utilisateurs</h3><span class="sp"></span>
+      <button class="btn o sm" id="uCsv">⬇ CSV</button>
+      <button class="btn g sm" id="uAdd">+ Inviter un utilisateur</button></div>
+    <div style="overflow:auto"><table><thead><tr><th></th><th>Nom</th><th>E-mail</th><th>Titre</th><th>Groupes d'utilisateurs</th><th>Dernière connexion</th><th>Statut</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="8" class="muted">Aucun utilisateur</td></tr>'}</tbody></table></div></div>`;
+  document.querySelector("#uAdd").onclick=()=>openForm("membres");
+  document.querySelector("#uCsv").onclick=()=>{
+    const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const lines=(data||[]).map(r=>[r.nom,r.email,r.titre,ROLE_LABELS[r.role]||r.role,r.last_sign_in?(r.last_sign_in.slice(0,10)):'',r.statut].map(q).join(';'));
+    const csv='﻿'+["Nom;E-mail;Titre;Groupe;Dernière connexion;Statut",...lines].join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+    a.href=url;a.download='Utilisateurs.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
+  document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm("membres",(state.cache.membres||[]).find(x=>x.id===b.dataset.ed)));
+}
+/* ---------- API KEYS ---------- */
+async function renderApiKeys(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data,error}=await sb.from("api_key").select("*").order("cree_le",{ascending:false});
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  state.cache=state.cache||{}; state.cache.api_keys=data||[];
+  const rows=(data||[]).map(r=>`<tr><td><span class="muted" style="font-size:11px">${esc(r.id.slice(0,8))}</span></td>
+    <td><b>${esc(r.nom)}</b></td><td><code style="font-size:11px">${esc(r.cle_api)}</code></td><td>${esc(r.partenaire||'—')}</td>
+    <td>${fdate((r.cree_le||'').slice(0,10))}</td>
+    <td><button class="btn d sm" data-akd="${r.id}">Révoquer</button></td></tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Clés API</h3><span class="sp"></span><button class="btn g sm" id="akAdd">+ Créer</button></div>
+    <div style="overflow:auto"><table><thead><tr><th>ID</th><th>Nom</th><th>Clé API</th><th>Partenaire</th><th>Créé</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6" class="muted">Aucune clé</td></tr>'}</tbody></table></div></div>`;
+  document.querySelector("#akAdd").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Créer une clé API</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Nom *</label><input id="akNom"></div><div class="field"><label>Partenaire</label><input id="akPart"></div><div class="err" id="akErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="akOk">Créer</button></div>`);
+    document.querySelector("#akOk").onclick=async()=>{const nom=document.querySelector("#akNom").value.trim();
+      if(!nom){document.querySelector("#akErr").textContent="Le nom est obligatoire.";return;}
+      const {error:e}=await sb.from("api_key").insert({tenant_id:state.tenant.id,nom,partenaire:document.querySelector("#akPart").value.trim()||null});
+      if(e){document.querySelector("#akErr").textContent=e.message;return;}fermer();toast("Clé créée");renderApiKeys();};};
+  document.querySelectorAll("[data-akd]").forEach(b=>b.onclick=()=>{
+    ouvrir(`<div class="h"><h3>Révoquer cette clé ?</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted">La clé sera supprimée définitivement. Les intégrations qui l'utilisent cesseront de fonctionner.</p><div class="err" id="akdErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn d" id="akdOk">Révoquer</button></div>`);
+    document.querySelector("#akdOk").onclick=async()=>{const {error:e}=await sb.from("api_key").delete().eq("id",b.dataset.akd);if(e){document.querySelector("#akdErr").textContent=e.message;return;}fermer();toast("Clé révoquée");renderApiKeys();};});
+}
+/* ---------- NOTIFICATIONS ---------- */
+async function renderNotifCfg(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("notifications");
+  const cats=[["nouvelle_reservation","Nouvelle réservation"],["annulation","Annulation"],["message_voyageur","Message d'un voyageur"],["enregistrement","Enregistrement (check-in)"],["depart","Départ (check-out)"],["paiement","Paiement reçu"],["tache","Tâche créée / terminée"],["avis","Nouvel avis reçu"]];
+  const chk=cats.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="nf_${k}" ${(v[k]!==false)?'checked':''} style="width:auto"> ${l}</label>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Préférences de notifications</h3></div>
     <div style="padding:16px">
-      <div class="row2">
-        <div class="field"><label>Couleur de marque</label><input id="sdBrand" value="${esc(v.brand||'#14352A')}"></div>
-        <div class="field"><label>Couleur d'accent</label><input id="sdGold" value="${esc(v.gold||'#C9A227')}"></div>
-      </div>
-      <div class="row2">
-        <div class="field"><label>Police des titres</label><select id="sdTitre">${['Cormorant Garamond','Playfair Display','Manrope','Georgia'].map(o=>`<option ${o===(v.titre||'Cormorant Garamond')?'selected':''}>${o}</option>`).join('')}</select></div>
-        <div class="field"><label>Police du texte</label><select id="sdTexte">${['Manrope','Inter','System','Georgia'].map(o=>`<option ${o===(v.texte||'Manrope')?'selected':''}>${o}</option>`).join('')}</select></div>
-      </div>
-      <div class="field"><label>URL du logo</label><input id="sdLogo" value="${esc(v.logo||'')}" placeholder="https://..."></div>
-      <div class="field"><label>Image de fond (URL)</label><input id="sdBg" value="${esc(v.bg||'')}" placeholder="https://..."></div>
-      <div style="margin-top:8px"><button class="btn g" id="sdSave">Enregistrer</button> <span class="ok" id="sdOk"></span></div>
+      <div class="phnote" style="margin-bottom:12px">Active ou désactive les notifications par catégorie. Les notifications par e-mail sont envoyées à l'adresse du compte.</div>
+      ${chk}
+      <div style="margin-top:12px"><button class="btn g" id="nfSave">Enregistrer</button> <span class="ok" id="nfOk"></span></div>
     </div></div>`;
-  $("#sdSave").onclick=async()=>{const valeur={brand:$("#sdBrand").value,gold:$("#sdGold").value,titre:$("#sdTitre").value,texte:$("#sdTexte").value,logo:$("#sdLogo").value,bg:$("#sdBg").value};const e=await reglSet("site_design",valeur);if(e){$("#sdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#sdOk").textContent="Enregistré ✓";toast("Design enregistré");};
+  document.querySelector("#nfSave").onclick=async()=>{const valeur={};cats.forEach(([k])=>{valeur[k]=document.querySelector("#nf_"+k).checked;});
+    const e=await reglSet("notifications",valeur);if(e){document.querySelector("#nfOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    document.querySelector("#nfOk").textContent="Enregistré ✓";toast("Notifications enregistrées");};
+}
+
+async function renderSiteDesign(){
+  const v=await reglGet("site_design");
+  const c=(id,lab,val)=>`<div class="field" style="flex:1;min-width:120px"><label>${lab}</label><input id="${id}" type="color" value="${val||'#000000'}" style="height:38px;padding:2px;cursor:pointer"></div>`;
+  const f=(id,lab,val)=>`<div class="field" style="flex:1;min-width:200px"><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
+  const cls="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px";
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Design du moteur de réservation</h3><span class="sp"></span><button class="btn g" id="sdSave">Enregistrer</button><button class="btn o" id="sdUnpub" style="margin-left:8px">Dépublier</button></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Domaine : <b>${esc(v.domaine||'(non configuré)')}</b></div>
+      <div class="field"><label>Image ou vidéo de fond (URL)</label><input id="sdBg" value="${esc(v.bg||'')}"></div>
+      <div class="field"><label>Assombrir l'image de fond (%)</label><input id="sdDarken" type="number" min="0" max="100" value="${v.darken!=null?v.darken:30}" style="max-width:120px"></div>
+      <div style="${cls}">
+        ${c('sdBrand','Couleur de la marque',v.brand||'#14352A')}
+        ${c('sdGold','Couleur secondaire',v.gold||'#C9A227')}
+        ${c('sdDark','Couleur sombre',v.dark||'#1a1a1a')}
+        ${c('sdHeader','En-tête',v.header||'#14352A')}
+        ${c('sdHeaderTxt','Texte en-tête',v.header_text||'#ffffff')}
+        ${c('sdFooter','Pied de page',v.footer||'#14352A')}
+        ${c('sdFooterTxt','Texte pied de page',v.footer_text||'#ffffff')}
+      </div>
+      <div style="${cls}">
+        ${f('sdFontT','Police des titres',v.titre||'Cormorant Garamond')}
+        ${f('sdFontB','Police du texte',v.texte||'Manrope')}
+      </div>
+      <div class="field"><label>Éléments (composants, format JSON)</label><textarea id="sdElem" rows="3">${esc(JSON.stringify(v.elements||{},null,2))}</textarea></div>
+      ${v.bg?'<div style="margin:12px 0;border-radius:8px;overflow:hidden;position:relative;height:120px;background:url('+esc(v.bg)+') center/cover"><div style="position:absolute;inset:0;background:rgba(0,0,0,'+(v.darken||30)/100+')"></div></div>':''}
+    </div></div>`;
+  document.querySelector("#sdSave").onclick=async()=>{let elem=v.elements||{};try{elem=JSON.parse(document.querySelector("#sdElem").value);}catch(e){}
+    const valeur={bg:$("#sdBg").value,darken:+$("#sdDarken").value||0,brand:$("#sdBrand").value,gold:$("#sdGold").value,dark:$("#sdDark").value,header:$("#sdHeader").value,header_text:$("#sdHeaderTxt").value,footer:$("#sdFooter").value,footer_text:$("#sdFooterTxt").value,titre:$("#sdFontT").value,texte:$("#sdFontB").value,elements:elem,domaine:v.domaine};
+    const e=await reglSet("site_design",valeur);if(e){toast("Erreur : "+e.message);return;}toast("Design enregistré");renderSiteDesign();};
+  document.querySelector("#sdUnpub").onclick=()=>toast("Dépublication : le site sera masqué aux visiteurs (à implémenter côté serveur).");
 }
 async function renderSiteParams(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -1840,17 +1946,28 @@ async function renderSiteParams(){
 async function renderParamCompte(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const v=await reglGet("compte");
-  const f=(id,lab,val)=>`<div class="field"><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Détails du compte</h3></div>
-    <div style="padding:16px">
-      <div class="row2">${f('cpSoc','Société',v.societe||'DPM Conciergerie')}${f('cpEmail','E-mail',v.email)}</div>
-      <div class="row2">${f('cpTel','Téléphone',v.tel)}${f('cpTelU',"Téléphone d'urgence",v.tel_urgence)}</div>
-      ${f('cpAdr','Adresse',v.adresse)}
-      <div class="row3">${f('cpVille','Ville',v.ville||'Marrakech')}${f('cpCP','Code postal',v.cp)}${f('cpPays','Pays',v.pays||'Maroc')}</div>
-      <div class="row2">${f('cpWeb','Site web',v.web)}${f('cpFact',"E-mail de facturation",v.email_facture)}</div>
-      <div style="margin-top:8px"><button class="btn g" id="cpSave">Enregistrer</button> <span class="ok" id="cpOk"></span></div>
-    </div></div>`;
-  $("#cpSave").onclick=async()=>{const valeur={societe:$("#cpSoc").value,email:$("#cpEmail").value,tel:$("#cpTel").value,tel_urgence:$("#cpTelU").value,adresse:$("#cpAdr").value,ville:$("#cpVille").value,cp:$("#cpCP").value,pays:$("#cpPays").value,web:$("#cpWeb").value,email_facture:$("#cpFact").value};const e=await reglSet("compte",valeur);if(e){$("#cpOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#cpOk").textContent="Enregistré ✓";toast("Compte enregistré");};
+  const f=(id,lab,val,w)=>`<div class="field" ${w?'style="flex:1;min-width:'+w+'"':''}><label>${lab}</label><input id="${id}" value="${esc(val||'')}"></div>`;
+  const uid=state.tenant?state.tenant.id:'—';
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead"><h3>Détails du compte</h3></div>
+      <div style="padding:16px">
+        <div class="phnote" style="margin-bottom:12px">ID du compte : <code style="font-size:11px">${esc(uid)}</code></div>
+        <div class="row2">${f('cpSoc','Société',v.societe||'DPM Conciergerie')}${f('cpEmail','E-mail',v.email||state.user.email)}</div>
+        <div class="row2">${f('cpTel','Téléphone',v.tel)}${f('cpTelU',"Téléphone d'urgence",v.tel_urgence)}</div>
+        ${f('cpAdr','Adresse',v.adresse)}
+        <div class="row3">${f('cpVille','Ville',v.ville||'Marrakech')}${f('cpCP','Code postal',v.cp)}${f('cpPays','Pays',v.pays||'Maroc')}</div>
+        <div class="row2">${f('cpWeb','Site web',v.web)}${f('cpFact',"E-mail de facturation",v.email_facture)}</div>
+        <div class="field"><label>Logo du profil (URL)</label><input id="cpLogo" value="${esc(v.logo_profil||'')}"></div>
+        <div class="field"><label>Logo de l'entreprise (URL)</label><input id="cpLogoE" value="${esc(v.logo_entreprise||'')}"></div>
+        <div style="display:flex;gap:16px;margin:10px 0">${v.logo_profil?'<img src="'+esc(v.logo_profil)+'" style="height:48px;border-radius:8px">':''}${v.logo_entreprise?'<img src="'+esc(v.logo_entreprise)+'" style="height:48px;border-radius:8px">':''}</div>
+        <div style="margin-top:8px"><button class="btn g" id="cpSave">Enregistrer</button> <span class="ok" id="cpOk"></span></div>
+      </div></div>
+    <div class="panel"><div class="phead"><h3>Actions</h3></div>
+      <div style="padding:16px">
+        <button class="btn o" onclick="toast('Changement de mot de passe : utiliser la page de connexion Supabase.')">Changer le mot de passe</button>
+        <button class="btn d" style="margin-left:8px" onclick="toast('Désactivation du compte : contacter le support.')">Désactiver le compte</button>
+      </div></div>`;
+  document.querySelector("#cpSave").onclick=async()=>{const valeur={societe:$("#cpSoc").value,email:$("#cpEmail").value,tel:$("#cpTel").value,tel_urgence:$("#cpTelU").value,adresse:$("#cpAdr").value,ville:$("#cpVille").value,cp:$("#cpCP").value,pays:$("#cpPays").value,web:$("#cpWeb").value,email_facture:$("#cpFact").value,logo_profil:$("#cpLogo").value,logo_entreprise:$("#cpLogoE").value};const e=await reglSet("compte",valeur);if(e){$("#cpOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#cpOk").textContent="Enregistré ✓";toast("Compte enregistré");};
 }
 async function renderParamLangues(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
