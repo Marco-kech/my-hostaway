@@ -1174,7 +1174,30 @@ async function renderFinances(){
   const totDu=(resa||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
   const totEnc=(resa||[]).reduce((s,r)=>s+Number(r.montant_paye||0),0);
   const reste=totDu-totEnc;
+  const today=new Date().toISOString().slice(0,10);
+  const nts=(a,d)=>(a&&d)?Math.max(0,Math.round((new Date(d)-new Date(a))/864e5)):0;
+  const reel=(resa||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
+  const aRev=reel.reduce((s,r)=>s+Number(r.prix_total||0),0), aNuits=reel.reduce((s,r)=>s+nts(r.arrivee,r.depart),0);
+  const CAN={direct:"Direct",airbnb:"Airbnb",booking:"Booking.com",vrbo:"Vrbo",expedia:"Expedia",abritel:"Abritel",autre:"Autre"};
+  const parCanal=(rows,val)=>{const o={};rows.forEach(r=>{const k=r.canal||'autre';o[k]=(o[k]||0)+val(r);});return Object.entries(o).sort((a,b)=>b[1]-a[1]);};
+  const widget=(titre,entries,fmt)=>{const max=Math.max(1,...entries.map(e=>e[1]));
+    return `<div class="panel"><div class="phead"><h3>${titre}</h3></div><div style="padding:10px 14px">${entries.length?entries.map(([k,v])=>`<div style="margin:6px 0;font-size:12.5px"><div style="display:flex;justify-content:space-between"><span>${esc(CAN[k]||k)}</span><strong>${fmt(v)}</strong></div><div style="height:6px;border-radius:3px;background:rgba(128,128,128,.15);margin-top:3px"><div style="height:6px;border-radius:3px;width:${Math.round(v/max*100)}%;background:#c9a24a"></div></div></div>`).join(""):'<div class="muted" style="font-size:12.5px">Aucune donnée</div>'}</div></div>`;};
+  const aVenir=(resa||[]).filter(r=>r.arrivee>=today), departsAV=(resa||[]).filter(r=>r.depart>=today);
   $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Revenus de location</div><div class="v" style="font-size:22px">${money(aRev)}</div><div class="s">confirmées + terminées</div></div>
+      <div class="kpi"><div class="l">Nuits réservées</div><div class="v">${aNuits}</div></div>
+      <div class="kpi"><div class="l">Prix moyen / nuit</div><div class="v" style="font-size:22px">${money(aNuits?aRev/aNuits:0)}</div></div>
+      <div class="kpi"><div class="l">Revenu moyen / séjour</div><div class="v" style="font-size:22px">${money(reel.length?aRev/reel.length:0)}</div></div>
+      <div class="kpi"><div class="l">Total réservations</div><div class="v">${reel.length}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${widget('Revenus par canal',parCanal(reel,r=>Number(r.prix_total||0)),v=>money(v))}
+      ${widget('Nuits réservées par canal',parCanal(reel,r=>nts(r.arrivee,r.depart)),v=>v)}
+      ${widget('Réservations par canal',parCanal(reel,()=>1),v=>v)}
+      ${widget('Arrivées à venir par canal',parCanal(aVenir,()=>1),v=>v)}
+      ${widget('Départs à venir par canal',parCanal(departsAV,()=>1),v=>v)}
+    </div>
     <div class="kpis">
       <div class="kpi"><div class="l">Facturé</div><div class="v" style="font-size:24px">${money(totDu)}</div></div>
       <div class="kpi"><div class="l">Encaissé</div><div class="v" style="font-size:24px">${money(totEnc)}</div></div>
