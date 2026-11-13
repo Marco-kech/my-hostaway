@@ -1305,7 +1305,8 @@ async function renderCalMultiple(){
       const bl=(blos||[]).find(x=>x.bien_id===b.id&&iso>=x.debut&&iso<x.fin);
       if(r){let span=0,dd=d;while(dd<=days){const i2=dayISO(dd);if(i2>=r.arrivee&&i2<r.depart){span++;dd++;}else break;}
         const voy=esc(refName("voyageur",r.voyageur_id)),nb=r.nb_personnes?(' · '+r.nb_personnes+' voy.'):'';
-        tds+=`<td class="bk" colspan="${span}" title="${voy}"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:0 4px">${voy}${nb}</div></td>`;d+=span;}
+        const cc=r.statut==='confirmee'||r.statut==='terminee'?'bk':r.statut==='demande'?'bky':r.statut==='annulee'?'bkr':'bkb';
+        tds+=`<td class="${cc}" colspan="${span}" title="${voy} (${esc(r.statut)})"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:0 4px">${voy}${nb}</div></td>`;d+=span;}
       else if(bl){let span=0,dd=d;while(dd<=days){const i2=dayISO(dd);const b2=(blos||[]).find(x=>x.bien_id===b.id&&i2>=x.debut&&i2<x.fin);if(b2&&b2===bl){span++;dd++;}else break;}
         tds+=`<td class="bl" colspan="${span}" style="font-size:11px">× bloqué</td>`;d+=span;}
       else {tds+=`<td style="font-size:9px;color:#c4c4c4;text-align:center;font-weight:400">${(!row.parent&&b.prix_nuit_base)?Math.round(b.prix_nuit_base):''}</td>`;d++;}
@@ -1316,7 +1317,9 @@ async function renderCalMultiple(){
   await loadOpts("voyageur");
   $("#content").innerHTML=`<div class="panel"><div class="phead">
     <button class="btn o sm" id="cmPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
-    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">${shown.length} annonce(s)${actif?" (filtré)":""} — barre = réservé · × bloqué</span></div>
+    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">${shown.length} annonce(s)${actif?" (filtré)":""}</span>
+      <button class="btn o sm" id="cmTarif">Modifier les tarifs en masse</button>
+      <button class="btn o sm" id="cmLegend">Légende</button></div>
     <div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap">
       <input id="cfQ" placeholder="Rechercher une annonce…" value="${esc(cf.q)}" style="flex:1;min-width:160px">
       <select id="cfDispo"><option value="">Disponibilité : toutes</option><option value="libre" ${cf.dispo==="libre"?"selected":""}>Avec nuits libres ce mois</option><option value="complet" ${cf.dispo==="complet"?"selected":""}>Complet ce mois</option></select>
@@ -1338,6 +1341,43 @@ async function renderCalMultiple(){
     if(error){toast("Erreur : "+error.message);return;}
     b.proprete=next; toast("Propreté : "+next.replace(/_/g," ")); renderCalMultiple();
   });
+  $("#cmTarif").onclick=()=>{
+    const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("");
+    ouvrir(`<div class="h"><h3>Modifier les tarifs en masse</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b">
+        <div class="phnote" style="margin-bottom:12px">Sélectionnez un bien et une plage de dates, puis saisissez le nouveau tarif par nuit. Les jours libres dans la plage seront mis à jour ; les jours réservés ne sont pas modifiés.</div>
+        <div class="field"><label>Bien *</label><select id="mtBien"><option value="">—</option>${bienOpts}</select></div>
+        <div class="row2"><div class="field"><label>Du *</label><input id="mtDu" type="date"></div><div class="field"><label>Au *</label><input id="mtAu" type="date"></div></div>
+        <div class="field"><label>Nouveau prix par nuit *</label><input id="mtPrix" type="number"></div>
+        <div class="err" id="mtErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="mtOk">Appliquer</button></div>`);
+    document.querySelector("#mtOk").onclick=async()=>{
+      const bid=$("#mtBien").value, du=$("#mtDu").value, au=$("#mtAu").value, prix=Number($("#mtPrix").value);
+      if(!bid||!du||!au||!prix){$("#mtErr").textContent="Remplissez tous les champs.";return;}
+      const {data,error}=await sb.from("bien").update({prix_nuit_base:prix}).eq("id",bid);
+      if(error){$("#mtErr").textContent=error.message;return;}
+      invalidate("bien"); fermer(); toast("Tarif mis à jour : "+prix+" MAD/nuit"); renderCalMultiple();
+    };
+  };
+  $("#cmLegend").onclick=()=>{
+    ouvrir(`<div class="h"><h3>Légende du calendrier</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <span class="pill green" style="padding:6px 12px">● Propre</span>
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff9800;margin-right:4px"></span><span>En nettoyage</span>
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f44336;margin-right:4px"></span><span>À nettoyer</span>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:var(--brand,#14352A);color:#fff;font-size:12px">Confirmée</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:#e6a817;color:#fff;font-size:12px">Demande</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:#c0392b;color:#fff;font-size:12px">Annulée / double</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:#2980b9;color:#fff;font-size:12px">Propriétaire</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;background:#999;color:#fff;font-size:12px">× Bloqué</span>
+        </div>
+        <p class="muted" style="margin-top:12px;font-size:12px">Cliquez sur un point de propreté pour changer l'état (propre → à nettoyer → en nettoyage → propre). Le prix par nuit s'affiche dans les cellules libres.</p>
+      </div>
+      <div class="f"><button class="btn" onclick="fermer()">Fermer</button></div>`);
+  };
   $("#cmPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalMultiple();};
   $("#cmNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalMultiple();};
 }
