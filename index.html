@@ -290,7 +290,7 @@ const MODULES = {
       ["nom","Nom de l'annonce",{req:1}],
       ["type","Type de bien",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
       ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
-      ["statut","Statut",{opts:["actif","inactif"],def:"actif"}],
+      ["statut","Statut",{opts:["en_ligne","masque","brouillon"],def:"en_ligne"}],
       ["type_unite","Type d'unité",{opts:["simple","parent","enfant"],def:"simple"}],
       ["parent_id","Annonce parente (si unité enfant)",{ref:"bien"}],
       ["__s2","Localisation",{section:1}],
@@ -423,12 +423,12 @@ const MODULES = {
       ["commentaire","Commentaire",{long:1}],["statut","Statut",{opts:["publie","en_attente","masque"],def:"publie"}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
-const PILLMAP={actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
+const PILLMAP={en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
   acompte:"gold",en_attente:"gold",a_faire:"gold",demande:"gold",brouillon:"gray",
   non_paye:"red",annulee:"red",echoue:"red",no_show:"red",inactif:"gray",en_cours:"blue",
   direct:"blue",airbnb:"red",booking:"blue",vrbo:"gold",whatsapp:"green",email:"blue",sms:"gold",interne:"gray",sortant:"blue",entrant:"gold",
   menage:"blue",chauffeur:"gold",petit_dejeuner:"green",maintenance:"red",accueil:"blue",checkin:"green",checkout:"gold",transport:"blue",inspection:"gray"};
-function pill(v){if(v==null||v==="")return "—";const c=PILLMAP[v]||"gray";return `<span class="pill ${c}">${esc(String(v).replace(/_/g," "))}</span>`;}
+function pill(v){if(v==null||v==="")return "—";const c=PILLMAP[v]||"gray";return `<span class="pill ${c}">${esc(v==="masque"?"masqué":String(v).replace(/_/g," "))}</span>`;}
 
 /* ---------- RUBRIQUES (18 Hostaway menu) ---------- */
 /* sub = [key, label, target]; target: {d}=dashboard {c}=calendrier {cm}=cal multiple {ca}=cal annuel {fi}=finances {m:module} {ph:"desc"} */
@@ -1003,7 +1003,7 @@ async function renderDashboard(){
   const demandes=act.filter(r=>r.statut==='demande').length;
   const enregistrement=checkins.count||0;
   const liste=(arr,emptyTxt)=>arr.length?arr.slice(0,6).map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line,#f0f0f0);font-size:12.5px"><span>${esc(refName('voyageur',r.voyageur_id))} · <span class="muted">${esc(refName('bien',r.bien_id))}</span></span><span class="muted" style="white-space:nowrap">${fdate(r.arrivee)}→${fdate(r.depart)}</span></div>`).join(""):`<div class="muted" style="padding:10px 0;font-size:12.5px">${emptyTxt}</div>`;
-  const bInactives=bAll.filter(b=>b.statut==='inactif').length;
+  const bInactives=bAll.filter(b=>b.statut==='masque'||b.statut==='inactif').length;
   const bIncompletes=bAll.filter(b=>!b.prix_nuit_base||!b.capacite).length;
   const ms=msgs.data||[];
   const msgEnvoyes=ms.filter(m=>m.sens==='sortant').length;
