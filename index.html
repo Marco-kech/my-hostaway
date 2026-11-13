@@ -765,6 +765,17 @@ function refName(table,id){
 function invalidate(table){ delete state.opts[table]; }
 
 /* ---------- LIST ---------- */
+function exportCSV(k,rows){
+  const m=MODULES[k];
+  const q=v=>{v=(v==null?'':''+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const header=m.cols.map(c=>c[1]).join(';');
+  const lines=(rows||[]).map(r=>m.cols.map(c=>{let v=r[c[0]];if(c[2]){try{v=(''+c[2](v,r)).replace(/<[^>]+>/g,'');}catch(e){}}return q(v);}).join(';'));
+  const csv='﻿'+[header,...lines].join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=(m.title||k).replace(/[^a-z0-9]/gi,'_')+'.csv';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Export CSV généré');
+}
 function orderBiensHierarchy(arr){
   const enfByParent={}; arr.filter(b=>b.type_unite==='enfant'&&b.parent_id).forEach(b=>{(enfByParent[b.parent_id]=enfByParent[b.parent_id]||[]).push(b);});
   const out=[];
@@ -812,6 +823,7 @@ function paintList(k){
       <button class="btn o sm" id="lsPrev" ${st.page<=1?'disabled':''}>←</button>
       <span class="muted" style="font-size:12px">${st.page}/${pages}</span>
       <button class="btn o sm" id="lsNext" ${st.page>=pages?'disabled':''}>→</button>
+      <button class="btn o sm" id="lsExport" title="Exporter en CSV">⬇ CSV</button>
     </div>
     <div style="overflow:auto">${total?`<table><thead><tr>${m.cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${q?'Aucun résultat pour « '+esc(st.q)+' ».':'Aucun élément.'+(m.add?' Cliquez sur « '+m.add+' ».':'')}</div>`}</div>
   </div>`;
@@ -820,6 +832,7 @@ function paintList(k){
   const sizeEl=document.getElementById('lsSize'); if(sizeEl)sizeEl.onchange=()=>{st.size=Number(sizeEl.value);st.page=1;paintList(k);};
   const prev=document.getElementById('lsPrev'); if(prev)prev.onclick=()=>{if(st.page>1){st.page--;paintList(k);}};
   const next=document.getElementById('lsNext'); if(next)next.onclick=()=>{if(st.page<pages){st.page++;paintList(k);}};
+  const exp=document.getElementById('lsExport'); if(exp)exp.onclick=()=>exportCSV(k,filtered);
   document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
   document.querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>sendMessageEmail(k,b.dataset.send));
