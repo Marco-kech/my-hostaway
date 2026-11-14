@@ -13,6 +13,15 @@
   --danger:#A33A2A; --ok:#2e7d52; --warn:#b7791f; --info:#2c6e9b;
   --display:"Cormorant Garamond",Georgia,serif; --body:"Manrope",system-ui,sans-serif;
   --r:12px; --sh:0 1px 3px rgba(20,53,42,.08),0 4px 16px rgba(20,53,42,.05);
+  --bg2:#EFEDE5;
+}
+/* Dark mode */
+[data-theme="dark"]{
+  --bg:#1a1e1c; --surface:#242826; --ink:#e0e4e1; --muted:#8a9690; --line:#3a3e3c;
+  --brand:#1d4a3a; --brand2:#2a6650; --gold:#d4ae2e; --gold-soft:rgba(201,162,39,.15); --onbrand:#e0e4e1;
+  --danger:#d9534f; --ok:#4aad6f; --warn:#d4a84a; --info:#5a9cc5;
+  --sh:0 1px 3px rgba(0,0,0,.2),0 4px 16px rgba(0,0,0,.15);
+  --bg2:#2a2e2c;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -183,6 +192,18 @@ tr:hover td{background:rgba(201,162,39,.04)}
 /* Image preview dans galerie */
 .photo-preview{cursor:pointer;transition:transform .2s}
 .photo-preview:hover{transform:scale(1.03)}
+.search-item:hover{background:var(--bg2)}
+/* Dark mode overrides */
+[data-theme="dark"] th{background:var(--surface)}
+[data-theme="dark"] .cal .d{background:var(--surface)}
+[data-theme="dark"] #auth{background:radial-gradient(1200px 600px at 100% -10%,rgba(201,162,39,.08),transparent),radial-gradient(900px 500px at -10% 110%,rgba(20,53,42,.08),transparent),var(--bg)}
+[data-theme="dark"] .pill.green{background:#1a3d2a;color:#6cc88a}
+[data-theme="dark"] .pill.gold{background:rgba(201,162,39,.2);color:#d4ae2e}
+[data-theme="dark"] .pill.red{background:#3d1a1a;color:#e88080}
+[data-theme="dark"] .pill.gray{background:#3a3e3c;color:#aaa}
+[data-theme="dark"] .pill.blue{background:#1a2d3d;color:#7ab5d9}
+[data-theme="dark"] .kcol{background:var(--surface)}
+[data-theme="dark"] .calm .mo{background:var(--surface)}
 
 /* ---------- RESPONSIVE MOBILE ---------- */
 @media(max-width:820px){
@@ -284,6 +305,11 @@ tr:hover td{background:rgba(201,162,39,.04)}
   <div id="main">
     <div class="mobnav" id="mobnav"></div>
     <header id="top"><h2 id="pageTitle">Tableau de bord</h2><div class="sp"></div>
+      <div style="position:relative" id="searchWrap">
+        <input id="globalSearch" type="search" placeholder="🔍 Rechercher…" style="width:200px;padding:7px 12px;font-size:13px;border-radius:999px;border:1px solid var(--line);background:var(--bg2)">
+        <div id="searchDrop" hidden style="position:absolute;right:0;top:calc(100%+4px);width:360px;max-height:380px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);z-index:50;padding:8px"></div>
+      </div>
+      <button class="btn o sm" id="darkToggle" title="Mode sombre" style="font-size:15px;padding:6px 10px">🌙</button>
       <div style="position:relative" id="notifWrap">
         <button class="btn o sm" id="notifBtn" title="Notifications" style="font-size:16px;padding:6px 10px;position:relative">🔔<span id="notifBadge" class="badge" hidden>0</span></button>
         <div id="notifDrop" hidden style="position:absolute;right:0;top:calc(100%+6px);width:340px;max-height:400px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);z-index:50">
@@ -311,6 +337,29 @@ const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&
 const money = (n,d="MAD") => (n==null?"—":Number(n).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:2})+" "+d);
 const fdate = d => d? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 let TT; function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(TT);TT=setTimeout(()=>t.hidden=true,2200);}
+
+/* ---------- SVG CHARTS ---------- */
+function svgBarChart(data,{w=400,h=180,color='#C9A227',label='Valeur',prefix='',suffix=''}={}){
+  if(!data||!data.length)return '<div class="muted" style="padding:16px;font-size:12px;text-align:center">Pas de données</div>';
+  const max=Math.max(...data.map(d=>d.v),1);const gap=4;const bw=(w-60)/(data.length)-(gap);
+  const bars=data.map((d,i)=>{const bh=Math.max(2,(d.v/max)*(h-40));const x=50+i*(bw+gap);const y=h-25-bh;
+    return `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${color}" opacity=".85"><title>${esc(d.l)}: ${prefix}${d.v.toLocaleString("fr-FR")}${suffix}</title></rect>
+    <text x="${x+bw/2}" y="${h-10}" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="600">${esc(d.l)}</text>`;}).join("");
+  const lines=Array.from({length:4},(_,i)=>{const y=h-25-(i/3)*(h-40);const val=Math.round(max*i/3);
+    return `<line x1="46" x2="${w}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="3"/><text x="42" y="${y+3}" text-anchor="end" fill="var(--muted)" font-size="9">${prefix}${val>=1000?(val/1000).toFixed(0)+'k':val}${suffix}</text>`;}).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px;height:auto">${lines}${bars}</svg>`;
+}
+function svgLineChart(data,{w=400,h=160,color='#14352A',fill='rgba(20,53,42,.1)',label='',suffix='%'}={}){
+  if(!data||!data.length)return '';
+  const max=Math.max(...data.map(d=>d.v),1);const px=i=>50+i*((w-60)/(data.length-1||1));const py=v=>h-25-(v/max)*(h-40);
+  const pts=data.map((d,i)=>`${px(i)},${py(d.v)}`).join(" ");
+  const area=`${px(0)},${h-25} ${pts} ${px(data.length-1)},${h-25}`;
+  const dots=data.map((d,i)=>`<circle cx="${px(i)}" cy="${py(d.v)}" r="3.5" fill="${color}"><title>${esc(d.l)}: ${d.v}${suffix}</title></circle>`).join("");
+  const labels=data.map((d,i)=>`<text x="${px(i)}" y="${h-10}" text-anchor="middle" fill="var(--muted)" font-size="9">${esc(d.l)}</text>`).join("");
+  const lines=Array.from({length:4},(_,i)=>{const y=py(max*i/3);const val=Math.round(max*i/3);
+    return `<line x1="46" x2="${w}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="3"/><text x="42" y="${y+3}" text-anchor="end" fill="var(--muted)" font-size="9">${val}${suffix}</text>`;}).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px;height:auto">${lines}<polygon points="${area}" fill="${fill}"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>${dots}${labels}</svg>`;
+}
 function ouvrir(h){$("#dlg").innerHTML=h;$("#ov").hidden=false;const i=$("#dlg").querySelector("input,select,textarea");if(i)i.focus();}
 function fermer(){$("#ov").hidden=true;$("#dlg").innerHTML="";}
 $("#ov").addEventListener("click",e=>{if(e.target===$("#ov"))fermer();});
@@ -318,6 +367,16 @@ $("#ov").addEventListener("click",e=>{if(e.target===$("#ov"))fermer();});
 const state = { user:null, tenant:null, rub:"apercu", sub:null, opts:{} };
 
 /* ---------- AUTH ---------- */
+/* ---------- DARK MODE ---------- */
+(function(){try{if(localStorage.getItem('dpm_dark')==='1')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+const _dt=document.getElementById("darkToggle");
+if(_dt)_dt.addEventListener("click",()=>{
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  if(isDark){document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('dpm_dark','0');}catch(e){}_dt.textContent='🌙';}
+  else{document.documentElement.setAttribute('data-theme','dark');try{localStorage.setItem('dpm_dark','1');}catch(e){}_dt.textContent='☀️';}
+});
+(function(){try{if(localStorage.getItem('dpm_dark')==='1'&&_dt)_dt.textContent='☀️';}catch(e){}})();
+
 let signup=false;
 $("#aEye").addEventListener("click",()=>{const p=$("#aPass");p.type=p.type==="password"?"text":"password";});
 
@@ -699,7 +758,8 @@ const RUBRIQUES=[
     ["integ","Intégrations",{emailcfg:1}],
     ["webhook","Webhooks",{webhooks:1}],
     ["api","API",{apikeys:1}],
-    ["notif","Notifications",{notifcfg:1}]]},
+    ["notif","Notifications",{notifcfg:1}],
+    ["journal","Journal d'activité",{journalact:1}]]},
 ];
 
 /* ---------- NAV ---------- */
@@ -1074,6 +1134,7 @@ function goRub(rk,sk){
   if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.photogalerie)return renderPhotosGalerie();
+  if(t.journalact)return renderJournal();
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -1314,6 +1375,22 @@ async function openForm(k,row){
   ouvrir(`<div class="h"><h3>${row.id?"Modifier":m.add}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">${body.join("")}<div class="err" id="fErr"></div></div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="fSave">Enregistrer</button></div>`);
+  /* Auto-calcul prix réservation */
+  if(m.table==='reservation'){
+    const calcPrix=async()=>{
+      const bienEl=document.getElementById('f_bien_id'),arrEl=document.getElementById('f_arrivee'),depEl=document.getElementById('f_depart'),pxEl=document.getElementById('f_prix_total');
+      if(!bienEl||!arrEl||!depEl||!pxEl)return;
+      const bid=bienEl.value,arr=arrEl.value,dep=depEl.value;
+      if(!bid||!arr||!dep)return;
+      const nuits=Math.max(1,Math.round((new Date(dep)-new Date(arr))/864e5));
+      const bien=(state.opts.bien||[]).find(b=>b.id===bid);
+      if(bien&&bien.prix_nuit_base&&(!pxEl.value||pxEl.dataset.auto==='1')){
+        pxEl.value=Math.round(nuits*Number(bien.prix_nuit_base));pxEl.dataset.auto='1';
+      }
+    };
+    ['f_bien_id','f_arrivee','f_depart'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',calcPrix);});
+    const pxEl=document.getElementById('f_prix_total');if(pxEl)pxEl.addEventListener('input',()=>{pxEl.dataset.auto='0';});
+  }
   $("#fSave").onclick=async()=>{
     const d={}; const params={...(row.parametres||{})};
     for(const f of m.fields){const[key,,o]=f;
@@ -1340,7 +1417,7 @@ async function openForm(k,row){
     else res=await sb.from(m.table).insert(d);
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
-    invalidate(m.table); fermer(); toast("Enregistré"); goRub(state.rub,state.sub);
+    invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table); goRub(state.rub,state.sub);
   };
 }
 async function delRow(k,id){
@@ -1351,7 +1428,7 @@ async function delRow(k,id){
   $("#dOk").onclick=async()=>{
     const {error}=await sb.from(m.table).delete().eq("id",id);
     if(error){$("#dErr").textContent=error.message;return;}
-    invalidate(m.table);fermer();toast("Supprimé");goRub(state.rub,state.sub);
+    invalidate(m.table);fermer();toast("Supprimé");logAction('suppression',m.table,id,m.table);goRub(state.rub,state.sub);
   };
 }
 
@@ -1434,11 +1511,28 @@ async function renderDashboard(){
         <div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">Incomplètes</span><strong>${bIncompletes}</strong></div>
       </div></div>
     </div>
-    <div class="panel"><div class="phead"><h3>Revenus confirmés (ce mois)</h3><span class="sp"></span><span class="muted">${money(revConfirmes)}</span></div></div>
+    <div class="row2">
+      <div class="panel"><div class="phead"><h3>Revenus mensuels</h3><span class="sp"></span><span class="muted">${money(revConfirmes)} ce mois</span></div><div style="padding:12px" id="dashChartRev"></div></div>
+      <div class="panel"><div class="phead"><h3>Occupation (nuits/mois)</h3><span class="sp"></span><span class="muted">${taux}% ce mois</span></div><div style="padding:12px" id="dashChartOcc"></div></div>
+    </div>
     <div class="panel"><div class="phead"><h3>Prochaines arrivées</h3></div><div id="dashNext" style="overflow:auto"><div class="center"><span class="spin"></span></div></div></div>`;
   await loadOpts("bien");await loadOpts("voyageur");
   const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).neq("statut","annulee").order("arrivee").limit(8);
   const _dn=$("#dashNext"); if(!_dn) return;
+  /* Graphiques historiques */
+  const MOISFR_SHORT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+  const now=new Date();const chartData=[];const occData=[];
+  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const mStart=d.toISOString().slice(0,10);const mEnd=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+    const {data:mr}=await sb.from("reservation").select("prix_total,statut").gte("arrivee",mStart).lte("arrivee",mEnd).in("statut",["confirmee","terminee"]);
+    const rev=(mr||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
+    chartData.push({l:MOISFR_SHORT[d.getMonth()],v:Math.round(rev)});
+    const daysInMonth=(new Date(d.getFullYear(),d.getMonth()+1,0)).getDate();
+    const {data:oc}=await sb.from("reservation").select("arrivee,depart").lte("arrivee",mEnd).gte("depart",mStart).neq("statut","annulee");
+    let nts=0;(oc||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),d));const dd=new Date(Math.min(new Date(r.depart),new Date(mEnd)));nts+=Math.max(0,(dd-a)/864e5);});
+    const cap=nbBiens*daysInMonth;occData.push({l:MOISFR_SHORT[d.getMonth()],v:cap?Math.round(nts/cap*100):0});
+  }
+  const rc=document.getElementById("dashChartRev");if(rc)rc.innerHTML=svgBarChart(chartData,{color:'#C9A227',prefix:'',suffix:' MAD'});
+  const oc2=document.getElementById("dashChartOcc");if(oc2)oc2.innerHTML=svgLineChart(occData,{color:'#14352A',suffix:'%'});
   _dn.innerHTML=(next&&next.length)?`<table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>Paiement</th></tr></thead><tbody>${next.map(r=>`<tr><td>${refName("bien",r.bien_id)}</td><td>${refName("voyageur",r.voyageur_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.statut_paiement)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Aucune arrivée programmée.</div>`;
 }
 
@@ -1896,6 +1990,7 @@ async function renderIcalSync(){
           <div style="display:flex;gap:8px">
             <input readonly value="${esc(exportUrl)}" style="flex:1">
             <button class="btn o sm" data-copy="${esc(exportUrl)}">Copier</button>
+            <button class="btn o sm" data-dlics="${b.id}" title="Télécharger le fichier .ics">📥 .ics</button>
           </div>
         </div>
         <div style="overflow:auto;margin-top:10px"><table><thead><tr><th>Canal</th><th>Flux importé (URL)</th><th style="text-align:center">Blocages</th><th>Dernière synchro</th><th></th></tr></thead>
@@ -1914,6 +2009,21 @@ async function renderIcalSync(){
   $("#content").querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>{navigator.clipboard.writeText(btn.dataset.copy).then(()=>toast("Lien copié")).catch(()=>toast("Copie impossible — sélectionnez le champ"));});
   $("#content").querySelectorAll("[data-sync]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.sync;btn.disabled=true;const old=btn.textContent;btn.textContent="…";const {data,error}=await sb.rpc("ical_sync_bien",{p_bien:id});if(error){btn.disabled=false;btn.textContent=old;toast("Erreur de synchro");}else{toast(`Synchro OK — ${(data&&data.blocages)||0} blocage(s) importé(s)`);renderIcalSync();}});
   $("#content").querySelectorAll("[data-addsrc]").forEach(btn=>btn.onclick=async()=>{const id=btn.dataset.addsrc;const canal=$("#content").querySelector('[data-addcanal="'+id+'"]').value;const url=($("#content").querySelector('[data-addurl="'+id+'"]').value||"").trim();if(!url){toast("URL manquante");return;}const {error}=await sb.from("ical_source").insert({tenant_id:state.tenant.id,bien_id:id,canal,url});if(error){toast("Erreur à l'ajout");}else{toast("Flux ajouté");renderIcalSync();}});
+  $("#content").querySelectorAll("[data-dlics]").forEach(btn=>btn.onclick=async()=>{
+    const bid=btn.dataset.dlics;btn.disabled=true;
+    const {data:resas}=await sb.from("reservation").select("arrivee,depart,voyageur_id,statut,canal,notes").eq("bien_id",bid).neq("statut","annulee").order("arrivee");
+    const nom=(biens||[]).find(b=>b.id===bid)?.nom||'bien';
+    const pad=s=>(s<10?'0':'')+s;
+    const icsDate=d=>{const dt=new Date(d);return dt.getFullYear()+pad(dt.getMonth()+1)+pad(dt.getDate());};
+    let ics="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DPM Conciergerie//My Hostaway//FR\r\nX-WR-CALNAME:"+nom+"\r\n";
+    (resas||[]).forEach(r=>{
+      const voy=refName("voyageur",r.voyageur_id);
+      ics+="BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:"+icsDate(r.arrivee)+"\r\nDTEND;VALUE=DATE:"+icsDate(r.depart)+"\r\nSUMMARY:"+voy+" ("+r.canal+")\r\nDESCRIPTION:Statut: "+r.statut+(r.notes?'\\n'+r.notes:'')+"\r\nEND:VEVENT\r\n";
+    });
+    ics+="END:VCALENDAR";
+    const blob=new Blob([ics],{type:"text/calendar"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=nom.replace(/\s+/g,'_')+".ics";a.click();
+    btn.disabled=false;toast("Fichier .ics téléchargé");
+  });
   $("#content").querySelectorAll("[data-delsrc]").forEach(btn=>btn.onclick=async()=>{const {error}=await sb.from("ical_source").delete().eq("id",btn.dataset.delsrc);if(error){toast("Erreur suppression");}else{toast("Flux supprimé");renderIcalSync();}});
 }
 
@@ -3138,6 +3248,81 @@ async function majPropreteAuto(){
     }
   }catch(e){console.warn("propreté auto",e);}
 }
+
+/* ---------- JOURNAL D'ACTIVITÉ ---------- */
+async function logAction(action,entite,entite_id,details){
+  try{await sb.from("journal").insert({tenant_id:state.tenant.id,user_id:state.user.id,action,entite,entite_id,details});}catch(e){console.warn("logAction",e);}
+}
+async function renderJournal(){
+  $("#topAdd").hidden=true;
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data,error}=await sb.from("journal").select("*").order("created_at",{ascending:false}).limit(100);
+  if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
+  const list=data||[];
+  const ICONS={creation:'🟢',modification:'🔵',suppression:'🔴',connexion:'🟡',export:'📤',import:'📥'};
+  const rows=list.map(j=>`<tr>
+    <td style="white-space:nowrap">${fdate(j.created_at)} <span class="muted" style="font-size:11px">${new Date(j.created_at).toLocaleTimeString("fr-FR",{hour:'2-digit',minute:'2-digit'})}</span></td>
+    <td>${ICONS[j.action]||'⚪'} ${esc(j.action)}</td>
+    <td>${esc(j.entite||'—')}</td>
+    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(j.details||'—')}</td>
+  </tr>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Journal d'activité</h3><span class="sp"></span><span class="muted">${list.length} dernières actions</span>
+    <button class="btn o sm" id="jrnCsv">📥 CSV</button></div>
+    ${list.length?`<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Action</th><th>Entité</th><th>Détails</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="empty">Aucune activité enregistrée.</div>'}
+  </div>`;
+  $("#jrnCsv").onclick=()=>{
+    const csv="Date;Action;Entité;Détails\n"+list.map(j=>`${j.created_at};${j.action};${j.entite||''};${(j.details||'').replace(/;/g,',')}`).join("\n");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="journal_activite.csv";a.click();
+  };
+}
+
+/* ---------- RECHERCHE GLOBALE ---------- */
+let _searchTO;
+const gSearch=document.getElementById("globalSearch");
+const gDrop=document.getElementById("searchDrop");
+if(gSearch){
+  gSearch.addEventListener("input",()=>{clearTimeout(_searchTO);_searchTO=setTimeout(doSearch,300);});
+  gSearch.addEventListener("focus",()=>{if(gSearch.value.trim().length>=2)doSearch();});
+  document.addEventListener("click",e=>{if(!document.getElementById("searchWrap")?.contains(e.target))gDrop.hidden=true;});
+}
+async function doSearch(){
+  const q=(gSearch.value||"").trim().toLowerCase();
+  if(q.length<2){gDrop.hidden=true;return;}
+  gDrop.hidden=false;gDrop.innerHTML='<div class="center"><span class="spin"></span></div>';
+  const like='%'+q+'%';
+  const [biens,resas,voyageurs]=await Promise.all([
+    sb.from("bien").select("id,nom,ville").ilike("nom",like).limit(5),
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,canal").or(`canal.ilike.${like}`).limit(5),
+    sb.from("voyageur").select("id,nom,email,telephone").or(`nom.ilike.${like},email.ilike.${like},telephone.ilike.${like}`).limit(5)
+  ]);
+  let html='';
+  const bList=biens.data||[];
+  const vList=voyageurs.data||[];
+  const rList=resas.data||[];
+  // Also search biens by ville
+  const [bVille]=await Promise.all([sb.from("bien").select("id,nom,ville").ilike("ville",like).limit(5)]);
+  const bAll=[...bList,...(bVille.data||[]).filter(b=>!bList.find(x=>x.id===b.id))].slice(0,6);
+  // Also search resas by voyageur name
+  const vIds=vList.map(v=>v.id);
+  let rByV=[];
+  if(vIds.length){const {data:rv}=await sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut").in("voyageur_id",vIds).limit(5);rByV=rv||[];}
+  const rAll=[...rList,...rByV.filter(r=>!rList.find(x=>x.id===r.id))].slice(0,6);
+  if(bAll.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);padding:4px 8px;text-transform:uppercase">Biens</div>`;
+    html+=bAll.map(b=>`<div class="search-item" onclick="fermerSearch();goRub('annonces','liste')" style="padding:8px 10px;cursor:pointer;border-radius:8px;font-size:13px"><b>${esc(b.nom)}</b> <span class="muted">— ${esc(b.ville||'')}</span></div>`).join("");
+  }
+  if(vList.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);padding:4px 8px;text-transform:uppercase;margin-top:4px">Voyageurs</div>`;
+    html+=vList.map(v=>`<div class="search-item" onclick="fermerSearch();goRub('resa','voyageurs')" style="padding:8px 10px;cursor:pointer;border-radius:8px;font-size:13px"><b>${esc(v.nom)}</b> <span class="muted">${esc(v.email||'')} ${esc(v.telephone||'')}</span></div>`).join("");
+  }
+  if(rAll.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);padding:4px 8px;text-transform:uppercase;margin-top:4px">Réservations</div>`;
+    html+=rAll.map(r=>`<div class="search-item" onclick="fermerSearch();goRub('resa','liste')" style="padding:8px 10px;cursor:pointer;border-radius:8px;font-size:13px">${refName("voyageur",r.voyageur_id)} · ${refName("bien",r.bien_id)} <span class="muted">${fdate(r.arrivee)}</span></div>`).join("");
+  }
+  if(!html)html='<div class="muted" style="padding:12px;text-align:center;font-size:13px">Aucun résultat pour « '+esc(q)+' »</div>';
+  gDrop.innerHTML=html;
+}
+function fermerSearch(){gDrop.hidden=true;gSearch.value="";}
 
 /* ---------- NOTIFICATIONS ---------- */
 async function chargerNotifs(){
