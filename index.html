@@ -154,6 +154,85 @@ td .act{display:flex;gap:6px}
 .kc-s{font-size:12px;color:var(--muted);margin-bottom:8px}
 .kc-a{display:flex;flex-wrap:wrap;gap:4px}
 .kc-a .btn{padding:4px 8px;font-size:11.5px}
+
+/* ---------- POLISH UI ---------- */
+/* Transitions douces */
+.btn,.nav button,.mobnav button,#subtabs button,input,select,textarea{transition:all .15s ease}
+.card,.panel,.kpi,.kc,.kcol{transition:box-shadow .2s ease,transform .15s ease}
+.panel:hover,.kpi:hover{box-shadow:0 4px 14px rgba(20,53,42,.1)}
+.kc:hover{box-shadow:0 3px 10px rgba(20,53,42,.1);transform:translateY(-1px)}
+tr:hover td{background:rgba(201,162,39,.04)}
+/* Bouton action tooltip */
+.btn[title]{position:relative}
+.btn[title]:hover::after{content:attr(title);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:50;pointer-events:none;opacity:0;animation:tipIn .15s ease forwards}
+@keyframes tipIn{to{opacity:1}}
+/* Focus visible */
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+/* Drag-and-drop kanban */
+.kc[draggable="true"]{cursor:grab}
+.kc[draggable="true"]:active{cursor:grabbing;opacity:.7}
+.kcol.drag-over{background:rgba(201,162,39,.1);border-color:var(--gold)}
+/* Scroll subtabs indicateur */
+#subtabs{scrollbar-width:none;-ms-overflow-style:none}
+#subtabs::-webkit-scrollbar{display:none}
+/* Badges compteur */
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:0 5px;margin-left:6px}
+/* Skeleton loading */
+.skel{background:linear-gradient(90deg,var(--bg2) 25%,var(--line) 50%,var(--bg2) 75%);background-size:200% 100%;animation:skel 1.5s infinite;border-radius:6px;height:18px}
+@keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* Image preview dans galerie */
+.photo-preview{cursor:pointer;transition:transform .2s}
+.photo-preview:hover{transform:scale(1.03)}
+
+/* ---------- RESPONSIVE MOBILE ---------- */
+@media(max-width:820px){
+  #content{padding:14px}
+  #top h2{font-size:18px}
+  #top{padding:10px 14px}
+  #subtabs{padding:0 10px;position:relative;top:auto}
+  #subtabs button{padding:9px 10px;font-size:12.5px}
+  .dlg{width:min(480px,96%);border-radius:12px}
+  .dlg .h h3{font-size:18px}
+  .dlg .b{padding:14px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .kpi .v{font-size:22px}
+  .calm{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+}
+@media(max-width:560px){
+  #content{padding:10px}
+  #top{padding:8px 10px;top:auto;position:relative}
+  #top h2{font-size:16px}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:12px}
+  .kpi .v{font-size:20px}
+  .panel{border-radius:8px;margin-bottom:12px}
+  .phead{padding:10px 12px}
+  /* Tableaux responsives : scroll horizontal */
+  .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:600px}
+  th,td{padding:8px 10px;font-size:12.5px}
+  /* Modal plein écran mobile */
+  .ov{padding:0}
+  .dlg{width:100%;min-height:100vh;border-radius:0}
+  .dlg .h{position:sticky;top:0;background:var(--surface);z-index:1}
+  .row2{grid-template-columns:1fr}
+  /* Mobnav améliorée */
+  .mobnav{padding:8px 10px;gap:4px}
+  .mobnav button{padding:6px 10px;font-size:12px}
+  /* Filtres en colonne */
+  .filters-row{flex-direction:column!important;align-items:stretch!important}
+  .filters-row>*{width:100%!important;min-width:0!important}
+  /* Calendar responsive */
+  .cal .d{min-height:44px;padding:3px 4px;font-size:10px}
+  .calm{grid-template-columns:1fr}
+  .gridscroll{max-width:calc(100vw - 20px)}
+}
+@media(max-width:380px){
+  .kpis{grid-template-columns:1fr}
+  .card{padding:20px}
+  h1{font-size:22px!important}
+  .mobnav button{font-size:11px;padding:5px 8px}
+}
 </style>
 </head>
 <body>
@@ -165,10 +244,18 @@ td .act{display:flex;gap:6px}
     <p class="muted" style="margin:10px 0 18px">Gestion de locations saisonnières — multi-propriétés.</p>
     <div id="authForm">
       <div class="field"><label>E-mail</label><input id="aEmail" type="email" autocomplete="email" placeholder="vous@exemple.com"></div>
-      <div class="field"><label>Mot de passe</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+      <div class="field"><label>Mot de passe</label><div style="position:relative"><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••" style="padding-right:36px"><button type="button" id="aEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;opacity:.5" title="Afficher/masquer">👁</button></div></div>
       <div class="err" id="aErr"></div><div class="ok" id="aOk"></div>
       <button class="btn" id="aBtn" style="width:100%">Se connecter</button>
       <div class="switch" id="aSwitch">Pas encore de compte ? <a id="aToggle">Créer un compte</a></div>
+      <div class="switch" id="aForgot"><a id="aForgotLink" style="font-size:12px">Mot de passe oublié ?</a></div>
+      <div id="aResetBox" hidden style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:8px">
+        <p style="font-size:13px;margin:0 0 8px">Entrez votre e-mail pour recevoir un lien de réinitialisation :</p>
+        <div class="field"><input id="aResetEmail" type="email" placeholder="vous@exemple.com"></div>
+        <div class="err" id="aResetErr"></div><div class="ok" id="aResetOk"></div>
+        <button class="btn" id="aResetBtn" style="width:100%;font-size:13px">Envoyer le lien</button>
+        <div class="switch"><a id="aResetBack" style="font-size:12px">← Retour à la connexion</a></div>
+      </div>
     </div>
   </div>
 </div>
@@ -196,7 +283,15 @@ td .act{display:flex;gap:6px}
   </aside>
   <div id="main">
     <div class="mobnav" id="mobnav"></div>
-    <header id="top"><h2 id="pageTitle">Tableau de bord</h2><div class="sp"></div><button class="btn g sm" id="topAdd" hidden></button></header>
+    <header id="top"><h2 id="pageTitle">Tableau de bord</h2><div class="sp"></div>
+      <div style="position:relative" id="notifWrap">
+        <button class="btn o sm" id="notifBtn" title="Notifications" style="font-size:16px;padding:6px 10px;position:relative">🔔<span id="notifBadge" class="badge" hidden>0</span></button>
+        <div id="notifDrop" hidden style="position:absolute;right:0;top:calc(100%+6px);width:340px;max-height:400px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);z-index:50">
+          <div style="padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center"><b>Notifications</b><span class="sp"></span><a id="notifMarkAll" style="font-size:12px;cursor:pointer;color:var(--brand2)">Tout marquer lu</a></div>
+          <div id="notifList" style="padding:8px"></div>
+        </div>
+      </div>
+      <button class="btn g sm" id="topAdd" hidden></button></header>
     <div class="subtabs" id="subtabs" hidden></div>
     <main id="content"><div class="center"><span class="spin"></span></div></main>
   </div>
@@ -224,6 +319,8 @@ const state = { user:null, tenant:null, rub:"apercu", sub:null, opts:{} };
 
 /* ---------- AUTH ---------- */
 let signup=false;
+$("#aEye").addEventListener("click",()=>{const p=$("#aPass");p.type=p.type==="password"?"text":"password";});
+
 $("#aToggle").addEventListener("click",()=>{
   signup=!signup;
   $("#aBtn").textContent = signup?"Créer mon compte":"Se connecter";
@@ -249,6 +346,47 @@ $("#aBtn").addEventListener("click",async()=>{
   }catch(e){ $("#aErr").textContent = e.message||"Erreur d'authentification."; }
   $("#aBtn").disabled=false;
 });
+
+/* ---------- MOT DE PASSE OUBLIÉ ---------- */
+$("#aForgotLink").addEventListener("click",()=>{
+  $("#authForm").querySelectorAll(".field,#aBtn,#aSwitch,#aForgot,#aErr,#aOk").forEach(el=>el.hidden=true);
+  $("#aResetBox").hidden=false;
+  $("#aResetEmail").value=$("#aEmail").value||"";
+  $("#aResetErr").textContent="";$("#aResetOk").textContent="";
+});
+$("#aResetBack").addEventListener("click",()=>{
+  $("#authForm").querySelectorAll(".field,#aBtn,#aSwitch,#aForgot,#aErr,#aOk").forEach(el=>el.hidden=false);
+  $("#aResetBox").hidden=true;
+});
+$("#aResetBtn").addEventListener("click",async()=>{
+  const email=$("#aResetEmail").value.trim();
+  $("#aResetErr").textContent="";$("#aResetOk").textContent="";
+  if(!email){$("#aResetErr").textContent="Entrez votre e-mail.";return;}
+  $("#aResetBtn").disabled=true;
+  try{
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+    if(error)throw error;
+    $("#aResetOk").textContent="✉ Lien de réinitialisation envoyé ! Vérifiez votre boîte mail (et les spams).";
+  }catch(e){$("#aResetErr").textContent=e.message||"Erreur.";}
+  $("#aResetBtn").disabled=false;
+});
+/* Handle password recovery redirect */
+if(location.hash.includes('type=recovery')){
+  const params=new URLSearchParams(location.hash.substring(1));
+  if(params.get('type')==='recovery'){
+    sb.auth.onAuthStateChange((event,session)=>{
+      if(event==='PASSWORD_RECOVERY'&&session){
+        const newPass=prompt("Entrez votre nouveau mot de passe (min 6 caractères) :");
+        if(newPass&&newPass.length>=6){
+          sb.auth.updateUser({password:newPass}).then(({error})=>{
+            if(error)alert("Erreur : "+error.message);
+            else { alert("Mot de passe mis à jour !"); location.hash=""; }
+          });
+        }
+      }
+    });
+  }
+}
 
 $("#obOut").addEventListener("click",()=>sb.auth.signOut());
 $("#logout").addEventListener("click",()=>sb.auth.signOut());
@@ -278,7 +416,7 @@ async function boot(){
   state.tenant=ten; state.role=membres[0].role;
   $("#tenantName").textContent=ten?ten.nom:"—";
   $("#userEmail").textContent=state.user.email;
-  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto).then(majPropreteAuto);
+  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto).then(majPropreteAuto).then(chargerNotifs);
 }
 
 /* ---------- MODULES (data screens) ---------- */
@@ -495,6 +633,7 @@ const RUBRIQUES=[
     ["livre","Livre d'or",{m:"voyageurs"}]]},
   {k:"annonces",label:"Annonces",icon:"⌂",subs:[
     ["liste","Liste",{m:"biens"}],
+    ["photos","Photos",{photogalerie:1}],
     ["cp","Champs personnalisés",{champperso:"bien"}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
@@ -548,8 +687,9 @@ const RUBRIQUES=[
     ["inter","Intervenants",{m:"intervenants"}]]},
   {k:"site",label:"Moteur de réservation",icon:"◫",subs:[
     ["design","Design",{sitedesign:1}],
-    ["ann","Annonces",{ph:"Annonces publiées sur le site, ajout auto des nouvelles, catégories, étiquettes — à venir."}],
-    ["pages","Pages",{ph:"Accueil, à propos, confidentialité, conditions, contact, confirmation, menus — à venir."}],
+    ["ann","Annonces publiées",{siteannonces:1}],
+    ["pages","Pages",{sitepages:1}],
+    ["preview","Aperçu public",{sitepreview:1}],
     ["param","Paramètres",{siteparams:1}],
     ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs — à venir."}]]},
   {k:"params",label:"Paramètres",icon:"⚙",subs:[
@@ -923,6 +1063,9 @@ function goRub(rk,sk){
   if(t.relevesauto)return renderRelevesAuto();
   if(t.envois)return renderEnvois();
   if(t.sitedesign)return renderSiteDesign();
+  if(t.siteannonces)return renderSiteAnnonces();
+  if(t.sitepages)return renderSitePages();
+  if(t.sitepreview)return renderSitePreview();
   if(t.siteparams)return renderSiteParams();
   if(t.paramcompte)return renderParamCompte();
   if(t.paramlangues)return renderParamLangues();
@@ -930,10 +1073,72 @@ function goRub(rk,sk){
   if(t.inbox)return renderInbox();
   if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
+  if(t.photogalerie)return renderPhotosGalerie();
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
+async function renderPhotosGalerie(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const sel=state.photosBien||"";
+  let h=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+    <select id="pgBien" style="min-width:200px"><option value="">— Choisir un bien —</option>${biens.map(b=>`<option value="${b.id}" ${b.id===sel?"selected":""}>${esc(b.nom)}</option>`).join("")}</select>
+    <button class="btn" id="pgUpBtn" style="font-size:13px" disabled>📤 Ajouter des photos</button>
+    <input type="file" id="pgFileIn" multiple accept="image/*" style="display:none">
+  </div>
+  <div id="pgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px"></div>`;
+  $("#content").innerHTML=h;
+  const bienSel=$("#pgBien"),upBtn=$("#pgUpBtn"),fileIn=$("#pgFileIn"),grid=$("#pgGrid");
+  async function loadPhotos(){
+    grid.innerHTML="";
+    const bid=bienSel.value;if(!bid){grid.innerHTML='<p class="muted">Sélectionnez un bien pour voir ses photos.</p>';upBtn.disabled=true;return;}
+    upBtn.disabled=false;state.photosBien=bid;
+    const{data,error}=await sb.from("bien_photo").select("*").eq("bien_id",bid).order("ordre",{ascending:true});
+    if(error){grid.innerHTML='<p class="err">'+esc(error.message)+'</p>';return;}
+    if(!data||!data.length){grid.innerHTML='<p class="muted">Aucune photo. Cliquez « Ajouter des photos » pour commencer.</p>';return;}
+    grid.innerHTML=data.map((p,i)=>`<div class="card" style="padding:0;overflow:hidden;position:relative" data-id="${p.id}">
+      <img src="${esc(p.url)}" style="width:100%;height:140px;object-fit:cover;display:block" loading="lazy">
+      <div style="padding:6px 8px;font-size:12px">
+        <input value="${esc(p.legende||'')}" placeholder="Légende…" style="width:100%;border:1px solid var(--bord);border-radius:4px;padding:2px 4px;font-size:11px" onchange="majLegendePhoto('${p.id}',this.value)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+          <span class="muted">#${i+1}</span>
+          <button class="btn d" style="font-size:11px;padding:2px 6px" onclick="suppPhoto('${p.id}')">🗑</button>
+        </div>
+      </div>
+    </div>`).join("");
+  }
+  bienSel.onchange=loadPhotos;
+  upBtn.onclick=()=>fileIn.click();
+  fileIn.onchange=async()=>{
+    const bid=bienSel.value;if(!bid)return;
+    const files=Array.from(fileIn.files);if(!files.length)return;
+    upBtn.disabled=true;upBtn.textContent="⏳ Upload…";
+    const{data:existing}=await sb.from("bien_photo").select("ordre").eq("bien_id",bid).order("ordre",{ascending:false}).limit(1);
+    let ordre=(existing&&existing[0])?existing[0].ordre+1:0;
+    for(const file of files){
+      const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const path=state.tenant.id+'/biens/'+bid+'/'+Date.now()+'_'+safe;
+      const up=await sb.storage.from('uploads').upload(path,file,{upsert:true});
+      if(up.error){toast('Erreur upload: '+up.error.message);continue;}
+      const url=sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
+      await sb.from("bien_photo").insert({tenant_id:state.tenant.id,bien_id:bid,url,legende:'',ordre});
+      ordre++;
+    }
+    upBtn.disabled=false;upBtn.textContent="📤 Ajouter des photos";fileIn.value="";
+    invalidate("bien_photo");loadPhotos();toast(files.length+" photo(s) ajoutée(s)");
+  };
+  if(sel)loadPhotos();
+}
+async function majLegendePhoto(id,val){
+  await sb.from("bien_photo").update({legende:val}).eq("id",id);
+}
+async function suppPhoto(id){
+  if(!confirm("Supprimer cette photo ?"))return;
+  await sb.from("bien_photo").delete().eq("id",id);
+  invalidate("bien_photo");renderPhotosGalerie();toast("Photo supprimée");
+}
+
 function renderPlaceholder(rubLabel,subLabel,desc){
   $("#topAdd").hidden=true;
   $("#content").innerHTML=`<div class="panel">
@@ -1101,7 +1306,7 @@ async function openForm(k,row){
     }else if(o.opts){
       const blank=(!o.req&&o.def==null)?'<option value="">—</option>':'';
       inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
-    }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*">${v?' <a href="'+esc(v)+'" target="_blank" class="muted" style="font-size:11px">fichier actuel</a>':''}`; }
+    }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">${v?` <a href="${esc(v)}" target="_blank" class="muted" style="font-size:11px">📎 fichier actuel</a>`:''}`; }
     else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
     return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
@@ -1115,9 +1320,9 @@ async function openForm(k,row){
       if(o.section)continue;
       if(o.file){const el=document.getElementById('f_'+key);const file=el&&el.files&&el.files[0];
         if(file){const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=state.tenant.id+'/'+key+'_'+Date.now()+'_'+safe;
-          const up=await sb.storage.from('voyageur-docs').upload(path,file,{upsert:true});
+          const up=await sb.storage.from('uploads').upload(path,file,{upsert:true});
           if(up.error){$("#fErr").textContent='Upload : '+up.error.message;return;}
-          d[key]=sb.storage.from('voyageur-docs').getPublicUrl(path).data.publicUrl;
+          d[key]=sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
         } else if(row[key]!=null){ d[key]=row[key]; }
         continue;}
       let val;
@@ -1527,7 +1732,7 @@ async function renderTaches(){
   const cols=TACHE_COLS.filter(c=>c[0]!=="annulee"||list.some(t=>t.statut==="annulee"));
   const card=t=>{
     const moves=TACHE_COLS.filter(c=>c[0]!==t.statut).map(c=>`<button class="btn o sm" data-mv="${t.id}" data-to="${c[0]}">→ ${c[1]}</button>`).join("");
-    return `<div class="kc">
+    return `<div class="kc" draggable="true" data-tid="${t.id}">
       <div class="kc-t">${esc(t.titre)}</div>
       <div class="kc-m">${pill(t.type)}${t.bien_id?(' · '+refName("bien",t.bien_id)):''}${canalDe(t)?(' · '+pill(canalDe(t))):''}</div>
       <div class="kc-s">${t.date_prevue?fdate(t.date_prevue):'—'}${t.heure_prevue?(' '+String(t.heure_prevue).slice(0,5)):''}${t.date_echeance?(' → avant le '+fdate(t.date_echeance)):''}</div>
@@ -1537,7 +1742,7 @@ async function renderTaches(){
   };
   const colHtml=cols.map(c=>{
     const items=list.filter(t=>t.statut===c[0]);
-    return `<div class="kcol"><div class="kcol-h"><span class="pill ${c[2]}">${c[1]}</span><span class="muted">${items.length}</span></div>${items.map(card).join("")||'<div class="muted" style="padding:8px;font-size:12px">Vide</div>'}</div>`;
+    return `<div class="kcol" data-col="${c[0]}"><div class="kcol-h"><span class="pill ${c[2]}">${c[1]}</span><span class="muted">${items.length}</span></div>${items.map(card).join("")||'<div class="muted" style="padding:8px;font-size:12px">Vide</div>'}</div>`;
   }).join("");
   const opt=(v,l,sel)=>`<option value="${esc(v)}" ${sel===v?"selected":""}>${esc(l)}</option>`;
   const inter=state.opts.intervenant||[];
@@ -1566,6 +1771,18 @@ async function renderTaches(){
   document.querySelectorAll("[data-arc]").forEach(b=>b.onclick=()=>maj(b.dataset.arc,{archive:true},"Tâche archivée"));
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
   document.querySelectorAll("[data-delt]").forEach(b=>b.onclick=()=>delRow('taches',b.dataset.delt));
+  /* Drag-and-drop kanban */
+  let dragId=null;
+  document.querySelectorAll('.kc[draggable]').forEach(c=>{
+    c.addEventListener('dragstart',e=>{dragId=c.dataset.tid;e.dataTransfer.effectAllowed='move';c.style.opacity='.5';});
+    c.addEventListener('dragend',()=>{dragId=null;c.style.opacity='';document.querySelectorAll('.kcol').forEach(col=>col.classList.remove('drag-over'));});
+  });
+  document.querySelectorAll('.kcol[data-col]').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over');});
+    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
+    col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!dragId)return;
+      const newStatut=col.dataset.col;await maj(dragId,{statut:newStatut},"Tâche déplacée");});
+  });
 }
 async function renderTachesArch(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -2232,6 +2449,74 @@ async function renderSiteDesign(){
     const e=await reglSet("site_design",valeur);if(e){toast("Erreur : "+e.message);return;}toast("Design enregistré");renderSiteDesign();};
   document.querySelector("#sdUnpub").onclick=()=>toast("Dépublication : le site sera masqué aux visiteurs (à implémenter côté serveur).");
 }
+async function renderSiteAnnonces(){
+  const biens=(await loadOpts("bien"))||[];
+  const {data:all}=await sb.from("bien").select("id,nom,ville,afficher_site,type_unite").order("nom");
+  const list=all||[];
+  const rows=list.map(b=>`<tr>
+    <td><b>${esc(b.nom)}</b></td><td>${esc(b.ville||'—')}</td><td>${pill(b.type_unite||'autre')}</td>
+    <td><label style="cursor:pointer"><input type="checkbox" data-bid="${b.id}" ${b.afficher_site?'checked':''} style="width:auto"> Publié</label></td>
+  </tr>`).join("");
+  const pub=list.filter(b=>b.afficher_site).length;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Annonces sur le moteur de réservation</h3><span class="sp"></span><span class="muted">${pub} / ${list.length} publiés</span></div>
+    ${list.length?`<table><thead><tr><th>Nom</th><th>Ville</th><th>Type</th><th>Statut</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun bien. Créez-en d\'abord dans Annonces → Liste.</div>'}
+  </div>`;
+  document.querySelectorAll('[data-bid]').forEach(cb=>cb.onchange=async()=>{
+    const {error}=await sb.from("bien").update({afficher_site:cb.checked}).eq("id",cb.dataset.bid);
+    if(error){toast("Erreur : "+error.message);cb.checked=!cb.checked;return;}
+    toast(cb.checked?"Publié sur le site":"Retiré du site");invalidate("bien");
+  });
+}
+
+async function renderSitePages(){
+  const v=await reglGet("site_pages")||{accueil:"",apropos:"",confidentialite:"",conditions:"",contact_email:"",contact_tel:""};
+  const f=(k,l,val,long)=>long?`<div class="field"><label>${l}</label><textarea id="sp_${k}" rows="4">${esc(val||'')}</textarea></div>`:`<div class="field"><label>${l}</label><input id="sp_${k}" value="${esc(val||'')}"></div>`;
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Pages du site</h3><span class="sp"></span><button class="btn g" id="spSave">Enregistrer</button></div>
+    <div style="padding:16px">
+      <div class="fsec">Accueil</div>
+      ${f("titre_accueil","Titre principal",v.titre_accueil)}
+      ${f("desc_accueil","Description d'accroche",v.desc_accueil,true)}
+      <div class="fsec">À propos</div>
+      ${f("apropos","Texte « À propos »",v.apropos,true)}
+      <div class="fsec">Contact</div>
+      <div class="row2">${f("contact_email","E-mail de contact",v.contact_email)}${f("contact_tel","Téléphone",v.contact_tel)}</div>
+      ${f("contact_adresse","Adresse",v.contact_adresse)}
+      <div class="fsec">Mentions légales</div>
+      ${f("confidentialite","Politique de confidentialité",v.confidentialite,true)}
+      ${f("conditions","Conditions générales",v.conditions,true)}
+    </div></div>`;
+  $("#spSave").onclick=async()=>{
+    const val={};document.querySelectorAll('[id^="sp_"]').forEach(el=>val[el.id.replace("sp_","")]=el.value);
+    const e=await reglSet("site_pages",val);if(e){toast("Erreur : "+e.message);return;}toast("Pages enregistrées");
+  };
+}
+
+async function renderSitePreview(){
+  const design=await reglGet("site_design")||{};
+  const pages=await reglGet("site_pages")||{};
+  const {data:biens}=await sb.from("bien").select("id,nom,ville,type_unite,description").eq("afficher_site",true).order("nom");
+  const list=biens||[];
+  const bg=design.bg_color||'#14352A';const accent=design.accent||'#C9A227';const txt=design.text_color||'#ffffff';
+  const cards=list.map(b=>`<div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+    <div style="height:140px;background:linear-gradient(135deg,${bg},${accent});display:grid;place-items:center;color:${txt};font-size:24px;font-weight:700">${esc(b.nom?b.nom[0]:'?')}</div>
+    <div style="padding:14px"><h4 style="margin:0 0 4px">${esc(b.nom)}</h4><div style="font-size:13px;color:#666">${esc(b.ville||'')} · ${esc(b.type_unite||'')}</div>
+    <p style="font-size:12.5px;color:#888;margin:8px 0 0;max-height:40px;overflow:hidden">${esc((b.description||'').slice(0,100))}</p></div></div>`).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Aperçu du moteur de réservation</h3><span class="sp"></span><span class="muted">${list.length} bien(s) publiés</span></div>
+    <div style="padding:20px;background:${bg};color:${txt};text-align:center;border-radius:0">
+      <h2 style="margin:0 0 8px;color:${accent}">${esc(pages.titre_accueil||'Bienvenue')}</h2>
+      <p style="margin:0;opacity:.8;max-width:500px;display:inline-block">${esc(pages.desc_accueil||'Découvrez nos locations saisonnières')}</p>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <input placeholder="Arrivée" type="date" style="width:140px;border-radius:8px;border:0;padding:10px">
+        <input placeholder="Départ" type="date" style="width:140px;border-radius:8px;border:0;padding:10px">
+        <select style="width:120px;border-radius:8px;border:0;padding:10px"><option>Voyageurs</option><option>1</option><option>2</option><option>3</option><option>4+</option></select>
+        <button style="background:${accent};color:#fff;border:0;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer">Rechercher</button>
+      </div>
+    </div>
+    <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">${cards||'<p class="muted">Aucun bien publié. Activez la publication dans l\'onglet Annonces publiées.</p>'}</div>
+  </div>
+  <p class="muted" style="margin-top:8px;font-size:12px">Cet aperçu montre le rendu du moteur de réservation. La version publique sera accessible via un lien dédié une fois le domaine configuré.</p>`;
+}
+
 async function renderSiteParams(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const v=await reglGet("site_params");
@@ -2853,6 +3138,54 @@ async function majPropreteAuto(){
     }
   }catch(e){console.warn("propreté auto",e);}
 }
+
+/* ---------- NOTIFICATIONS ---------- */
+async function chargerNotifs(){
+  try{
+    const {data}=await sb.from("notification").select("*").order("created_at",{ascending:false}).limit(30);
+    const notifs=data||[];
+    const unread=notifs.filter(n=>!n.lu).length;
+    const badge=$("#notifBadge");
+    if(unread>0){badge.textContent=unread;badge.hidden=false;}else{badge.hidden=true;}
+    const list=$("#notifList");
+    if(!notifs.length){list.innerHTML='<p class="muted" style="text-align:center;padding:12px;font-size:13px">Aucune notification</p>';return;}
+    list.innerHTML=notifs.map(n=>`<div style="padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;${n.lu?'opacity:.6':''}" data-nid="${n.id}" ${n.lien?`onclick="fermerNotifs();goRub('${n.lien}')"`:''}>
+      <div style="font-size:13px;font-weight:${n.lu?'400':'700'}">${n.type==='alerte'?'🔴':n.type==='succes'?'🟢':n.type==='tache'?'✅':'🔵'} ${esc(n.titre)}</div>
+      ${n.message?`<div class="muted" style="font-size:12px;margin-top:2px">${esc(n.message)}</div>`:''}
+      <div class="muted" style="font-size:11px;margin-top:3px">${fdate(n.created_at)}</div>
+    </div>`).join("");
+  }catch(e){console.warn("notifs",e);}
+}
+function fermerNotifs(){$("#notifDrop").hidden=true;}
+async function creerNotif(type,titre,message,lien){
+  try{await sb.from("notification").insert({tenant_id:state.tenant.id,user_id:state.user.id,type,titre,message,lien});}catch(e){console.warn("creerNotif",e);}
+}
+/* Toggle dropdown */
+document.addEventListener("click",e=>{
+  const wrap=document.getElementById("notifWrap");
+  if(!wrap||!wrap.contains(e.target)){const d=document.getElementById("notifDrop");if(d)d.hidden=true;}
+});
+const _nb=document.getElementById("notifBtn");
+if(_nb)_nb.addEventListener("click",()=>{const d=$("#notifDrop");d.hidden=!d.hidden;if(!d.hidden)chargerNotifs();});
+const _nma=document.getElementById("notifMarkAll");
+if(_nma)_nma.addEventListener("click",async()=>{
+  await sb.from("notification").update({lu:true}).eq("lu",false);
+  chargerNotifs();toast("Notifications marquées lues");
+});
+/* Auto-notif sur nouvelle résa */
+sb.channel('resa-changes').on('postgres_changes',{event:'INSERT',schema:'public',table:'reservation'},payload=>{
+  const r=payload.new;if(!r||r.tenant_id!==state.tenant?.id)return;
+  creerNotif('succes','Nouvelle réservation','Réservation de '+(r.voyageur_nom||'un voyageur')+' du '+fdate(r.date_arrivee)+' au '+fdate(r.date_depart),'reservations');
+  chargerNotifs();toast("🔔 Nouvelle réservation !");
+}).subscribe();
+/* Auto-notif sur nouvelle tâche */
+sb.channel('tache-changes').on('postgres_changes',{event:'INSERT',schema:'public',table:'tache'},payload=>{
+  const t=payload.new;if(!t||t.tenant_id!==state.tenant?.id)return;
+  creerNotif('tache','Nouvelle tâche',t.titre||'Tâche créée','taches');
+  chargerNotifs();
+}).subscribe();
+/* Refresh notifs toutes les 2 min */
+setInterval(()=>{if(state.tenant)chargerNotifs();},120000);
 
 init();
 </script>
