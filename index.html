@@ -438,7 +438,7 @@ const MODULES = {
     fields:[["type","Type",{opts:["depense","supplement"],def:"depense"}],["date_op","Date",{type:"date",req:1}],["libelle","Libellé",{req:1}],
       ["categorie","Catégorie",{opts:["Ménage","Maintenance","Réparation","Fournitures","Linge","Loyer","Taxe foncière","Commission","Utilities","Autre"]}],
       ["bien_id","Bien",{ref:"bien"}],["proprietaire_id","Propriétaire",{ref:"proprietaire"}],["reservation_id","Réservation",{ref:"reservation"}],
-      ["montant","Montant",{type:"number",req:1}],["notes","Notes",{long:1}]]},
+      ["montant","Montant",{type:"number",req:1}],["fichier_url","Pièce jointe",{file:1}],["masque_releve","Masquer dans les relevés",{opts:["false","true"],def:"false"}],["notes","Notes",{long:1}]]},
   releves_auto:{title:"Relevés automatiques",add:"Ajouter un relevé automatique",table:"releve_auto",
     cols:[["nom","Relevé automatique"]],
     fields:[["nom","Nom du relevé automatique",{req:1}],["proprietaire_id","Propriétaire (vide = tous les propriétaires)",{ref:"proprietaire"}],
@@ -1189,20 +1189,7 @@ async function renderDashboard(){
   const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
   let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
   const capacity=nbBiens*30; const taux=capacity?Math.round(nights/capacity*100):0;
-  const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${AF.bien===b.id?"selected":""}>${esc(b.nom)}</option>`).join("");
-  const canalOpts=["direct","airbnb","booking","vrbo","expedia","abritel","autre"].map(c=>`<option value="${c}" ${AF.canal===c?"selected":""}>${c}</option>`).join("");
-  const datesRapides=[["","Personnalisé"],["7j","7 derniers jours"],["30j","30 derniers jours"],["mois","Mois en cours"],["trim","Trimestre en cours"],["an","Année en cours"]];
-  const drOpts=datesRapides.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
   $("#content").innerHTML=`
-    <div class="panel" style="margin-bottom:12px"><div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <select id="afBien" style="max-width:180px"><option value="">Annonce : toutes</option>${bienOpts}</select>
-      <select id="afCanal" style="max-width:140px"><option value="">Canal : tous</option>${canalOpts}</select>
-      <span class="muted">Du</span><input id="afDu" type="date" value="${AF.du}" style="max-width:140px">
-      <span class="muted">Au</span><input id="afAu" type="date" value="${AF.au}" style="max-width:140px">
-      <select id="afDR" style="max-width:170px">${drOpts}</select>
-      <button class="btn o sm" id="afReset">Réinitialiser</button>
-      <span class="sp"></span><span class="muted">${(resa||[]).length} réservation(s)</span>
-    </div></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Biens gérés</div><div class="v">${nbBiens}</div><div class="s">propriétés actives</div></div>
       <div class="kpi"><div class="l">Réservations à venir</div><div class="v">${nbFut}</div><div class="s">séjours en cours/futurs</div></div>
@@ -1566,7 +1553,9 @@ async function renderTaches(){
   bind("tfBien","bien");bind("tfCanal","canal");bind("tfAff","aff");bind("tfSup","sup");bind("tfTri","tri");bind("tfType","type");bind("tfDu","du");bind("tfAu","au");
   $("#tfPlus").onclick=()=>{F.plus=!F.plus;renderTaches();};
   $("#tfR").onclick=()=>{state.tacheF=null;renderTaches();};
-  const maj=async(id,patch,msg)=>{const {data:d,error:e}=await sb.from("tache").update(patch).eq("id",id).select();if(e||!d||!d.length){toast("Erreur : "+(e?e.message:"modification refusée"));return;}toast(msg);renderTaches();};
+  const maj=async(id,patch,msg)=>{const {data:d,error:e}=await sb.from("tache").update(patch).eq("id",id).select();if(e||!d||!d.length){toast("Erreur : "+(e?e.message:"modification refusée"));return;}
+    if(patch.statut==="fait"){const t=(state.cache.taches||[]).find(x=>x.id===id);if(t&&t.cout){await sb.from("depense").insert({tenant_id:state.tenant.id,type:"depense",libelle:t.titre,date_op:new Date().toISOString().slice(0,10),categorie:t.type,bien_id:t.bien_id,reservation_id:t.reservation_id,montant:t.cout,notes:"Créée à la clôture de la tâche"});toast("Dépense de "+money(t.cout)+" créée");}if(t&&t.type==="menage"&&t.bien_id){await sb.from("bien").update({proprete:"propre"}).eq("id",t.bien_id);}}
+    toast(msg);renderTaches();};
   document.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>maj(b.dataset.mv,{statut:b.dataset.to},"Tâche déplacée"));
   document.querySelectorAll("[data-arc]").forEach(b=>b.onclick=()=>maj(b.dataset.arc,{archive:true},"Tâche archivée"));
   document.querySelectorAll("[data-edt]").forEach(b=>b.onclick=()=>openForm('taches',(state.cache.taches||[]).find(x=>x.id===b.dataset.edt)));
@@ -2258,20 +2247,7 @@ async function renderQualAvis(){
   const five=(data||[]).filter(a=>Number(a.note_globale)>=4.5).length;
   const crit=[["note_proprete","Propreté"],["note_communication","Communication"],["note_emplacement","Emplacement"],["note_qualite_prix","Rapport qualité-prix"]];
   const bars=crit.map(c=>{const m=avg(nums(c[0]));const pct=m!=null?(m/5*100):0;return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${c[1]}</span><span><b>${fmt(m)}</b> /5</span></div><div style="background:var(--line);border-radius:6px;height:8px;margin-top:4px"><div style="width:${pct}%;background:var(--gold);height:8px;border-radius:6px"></div></div></div>`;}).join("");
-  const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${AF.bien===b.id?"selected":""}>${esc(b.nom)}</option>`).join("");
-  const canalOpts=["direct","airbnb","booking","vrbo","expedia","abritel","autre"].map(c=>`<option value="${c}" ${AF.canal===c?"selected":""}>${c}</option>`).join("");
-  const datesRapides=[["","Personnalisé"],["7j","7 derniers jours"],["30j","30 derniers jours"],["mois","Mois en cours"],["trim","Trimestre en cours"],["an","Année en cours"]];
-  const drOpts=datesRapides.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
   $("#content").innerHTML=`
-    <div class="panel" style="margin-bottom:12px"><div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <select id="afBien" style="max-width:180px"><option value="">Annonce : toutes</option>${bienOpts}</select>
-      <select id="afCanal" style="max-width:140px"><option value="">Canal : tous</option>${canalOpts}</select>
-      <span class="muted">Du</span><input id="afDu" type="date" value="${AF.du}" style="max-width:140px">
-      <span class="muted">Au</span><input id="afAu" type="date" value="${AF.au}" style="max-width:140px">
-      <select id="afDR" style="max-width:170px">${drOpts}</select>
-      <button class="btn o sm" id="afReset">Réinitialiser</button>
-      <span class="sp"></span><span class="muted">${(resa||[]).length} réservation(s)</span>
-    </div></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Note moyenne</div><div class="v">${g!=null?('★ '+fmt(g)):'—'}</div><div class="s">sur ${total} avis</div></div>
       <div class="kpi"><div class="l">Avis 4,5★ et +</div><div class="v">${total?Math.round(five/total*100):0}%</div><div class="s">${five} / ${total}</div></div>
