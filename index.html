@@ -966,6 +966,7 @@ async function renderInbox(){
       <button class="btn o sm" id="ibxNote" title="Note interne (non envoyée au voyageur)">📝 Note</button>
       <select id="ibxTpl" style="font-size:12px;padding:3px 6px"><option value="">Modèle…</option>${tplOpts}</select>
       <button class="btn o sm" id="ibxSched" title="Programmer / enregistrer en brouillon">📅 Programmer</button>
+      <button class="btn o sm" id="ibxIA" title="Générer une réponse avec l'IA" style="background:var(--gold-soft);border-color:var(--gold)">✨ IA</button>
     </div>
     <div style="display:flex;gap:8px">
       <textarea id="ibxMsg" rows="2" placeholder="Écrivez un message…" style="flex:1;resize:none"></textarea>
@@ -999,6 +1000,22 @@ async function renderInbox(){
   if(noteBtn){noteBtn.style.fontWeight=state.inboxNote?'700':'';noteBtn.onclick=()=>{state.inboxNote=!state.inboxNote;state.inboxSched=false;noteBtn.style.fontWeight=state.inboxNote?'700':'';toast(state.inboxNote?'Mode note interne activé':'Mode note désactivé');const sd=document.getElementById('ibxSched');if(sd)sd.style.fontWeight='';};}
   const schedBtn=document.getElementById('ibxSched');
   if(schedBtn){schedBtn.style.fontWeight=state.inboxSched?'700':'';schedBtn.onclick=()=>{state.inboxSched=!state.inboxSched;state.inboxNote=false;schedBtn.style.fontWeight=state.inboxSched?'700':'';toast(state.inboxSched?'Le message sera enregistré en brouillon':'Mode brouillon désactivé');if(noteBtn)noteBtn.style.fontWeight='';};}
+  const iaBtn=document.getElementById('ibxIA');
+  if(iaBtn) iaBtn.onclick=async()=>{
+    iaBtn.disabled=true;iaBtn.textContent='⏳ IA…';
+    // Construire le contexte à partir du bien + réservation sélectionnés
+    let ctx='';
+    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));if(r){const b=(state.opts.bien||[]).find(x=>x.id===r.bien_id);ctx=`Réservation du ${r.arrivee||''} au ${r.depart||''}. Statut: ${r.statut||''}. Canal: ${r.canal||''}.`;if(b)ctx+=` Bien: ${b.nom||''}, ${b.ville||''}.${b.parametres?.wifi_mdp?' WiFi: '+b.parametres.wifi_mdp:''}${b.parametres?.code_acces?' Code accès: '+b.parametres.code_acces:''}`;}}
+    // Prendre le dernier message reçu comme contexte de question
+    const lastMsg=(thread||[]).filter(m=>m.sens==='entrant').pop();
+    const question=lastMsg?lastMsg.corps:'Le voyageur n\'a pas encore envoyé de message. Propose un message de bienvenue.';
+    const res=await genererReponseIA(question, ctx);
+    iaBtn.disabled=false;iaBtn.textContent='✨ IA';
+    if(res.error){toast('IA : '+res.error);return;}
+    document.getElementById('ibxMsg').value=res.reply||'';
+    document.getElementById('ibxMsg').focus();
+    toast('Réponse IA générée — relisez avant d\'envoyer');
+  };
   const joinBtn=document.getElementById('ibxJoin');
   if(joinBtn) joinBtn.onclick=()=>toast('Pièces jointes : à brancher (stockage)');
   const sb2=document.getElementById('ibxSend');
@@ -3264,17 +3281,66 @@ async function renderIaConfig(){
         <div class="field"><label>Longueur</label><select id="iaLong">${opt(['Standard','Concis','Approfondi'],v.longueur||'Standard')}</select></div>
       </div>
       <div class="field"><label>Signature / instructions supplémentaires</label><textarea id="iaSign" rows="3">${esc(v.signature||'')}</textarea></div>
-      <div class="phnote">L'IA s'appuiera sur ta <b>Base de connaissances</b>, les détails du bien et de la réservation. ⚠️ La génération de réponses en direct nécessite une clé d'IA (OpenAI / Anthropic), service payant — je ne l'active pas sans ton accord.</div>
+      <hr style="margin:16px 0;border-color:var(--line)">
+      <h4 style="margin:0 0 8px">Clé API Anthropic (Claude)</h4>
+      <div class="phnote" style="margin-bottom:10px">Modèle utilisé : <b>Claude Haiku 4.5</b> (~0.001$/réponse). Créez une clé sur <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> et collez-la ici.</div>
+      <div class="field"><label>Clé API Anthropic</label><input id="iaKey" type="password" value="${esc(v.anthropic_key||'')}" placeholder="sk-ant-..."></div>
+      <div class="field"><label>Tester l'IA</label><div class="row2"><input id="iaTestQ" placeholder="Tapez un message de voyageur test…"><button class="btn o sm" id="iaTestBtn">Tester</button></div></div>
+      <div id="iaTestR" style="margin-top:4px"></div>
       <div style="margin-top:12px"><button class="btn g" id="iaSave">Enregistrer les réglages</button> <span class="ok" id="iaOk"></span></div>
     </div></div>`;
   $("#iaSave").onclick=async()=>{
-    const valeur={auto:$("#iaAuto").value,delai:$("#iaDelai").value,ton:$("#iaTon").value,longueur:$("#iaLong").value,signature:$("#iaSign").value};
+    const valeur={auto:$("#iaAuto").value,delai:$("#iaDelai").value,ton:$("#iaTon").value,longueur:$("#iaLong").value,signature:$("#iaSign").value,anthropic_key:$("#iaKey").value.trim()};
     $("#iaSave").disabled=true;
     const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle:"ia",valeur},{onConflict:"tenant_id,cle"});
     $("#iaSave").disabled=false;
     if(error){$("#iaOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}
     $("#iaOk").textContent="Enregistré ✓"; toast("Réglages IA enregistrés");
   };
+  $("#iaTestBtn").onclick=async()=>{
+    const q=$("#iaTestQ").value.trim(); if(!q){toast("Tapez un message test");return;}
+    $("#iaTestR").innerHTML='<span class="spin"></span> Génération en cours…';
+    const res=await genererReponseIA(q,"Bien : Villa Rose, 3 chambres, piscine, Marrakech. Check-in 15h, check-out 11h. WiFi : DPM-Guest / mdp12345.");
+    if(res.error){$("#iaTestR").innerHTML='<span class="err">'+esc(res.error)+'</span>';}
+    else{$("#iaTestR").innerHTML='<div style="background:var(--gold-soft);padding:12px;border-radius:8px;white-space:pre-wrap">'+esc(res.reply)+'</div>';}
+  };
+}
+async function genererReponseIA(message, contexte){
+  const cfg=await reglGet("ia");
+  if(!cfg||!cfg.anthropic_key){return {error:"Clé API Anthropic non configurée. Allez dans Paramètres > IA."};}
+  const ton=cfg.ton||'professionnelle et chaleureuse';
+  const langue='français';
+  const system=`Tu es l'assistant IA de DPM Conciergerie, une société de gestion locative haut de gamme à Marrakech.
+Tu réponds aux messages des voyageurs de manière ${ton.toLowerCase()}.
+Langue de réponse : ${langue}.
+${contexte?'Informations sur le bien et le séjour :\n'+contexte:''}
+Règles :
+- Sois concis (2-4 phrases max)
+- Utilise le vouvoiement
+- Signe "L'équipe DPM Conciergerie"
+- Ne donne jamais d'information que tu n'as pas dans le contexte
+- Si tu ne sais pas, propose de contacter l'équipe
+${cfg.signature?'Instructions supplémentaires : '+cfg.signature:''}`;
+  try{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":cfg.anthropic_key,"anthropic-version":"2023-06-01","Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:300,system,messages:[{role:"user",content:message}]})});
+    if(!r.ok){const j=await r.json().catch(()=>({}));return {error:j.error?.message||"Erreur API "+r.status};}
+    const d=await r.json(); return {reply:d.content?.[0]?.text||""};
+  }catch(e){
+    // CORS bloqué → tenter via la fonction Supabase RPC pg_net
+    try{
+      const {data,error}=await sb.rpc("generer_reponse_ia",{p_message:message,p_contexte:contexte||'',p_ton:ton,p_langue:langue});
+      if(error)return {error:error.message};
+      if(data&&data.error)return {error:data.error};
+      if(data&&data.request_id){
+        // pg_net est async, on poll le résultat
+        await new Promise(r=>setTimeout(r,3000));
+        const {data:resp}=await sb.from("net._http_response").select("status_code,body").eq("id",data.request_id).maybeSingle();
+        if(resp&&resp.body){try{const j=JSON.parse(resp.body);return {reply:j.content?.[0]?.text||""};}catch(e){return {error:"Réponse invalide"};}}
+        return {error:"Réponse IA en cours, réessayez dans quelques secondes"};
+      }
+      return {reply:data?.reply||JSON.stringify(data)};
+    }catch(e2){return {error:"CORS bloqué et RPC échouée : "+e2.message};}
+  }
 }
 
 /* ---------- MESSAGES AUTOMATISES ---------- */
