@@ -204,6 +204,18 @@ tr:hover td{background:rgba(201,162,39,.04)}
 [data-theme="dark"] .pill.blue{background:#1a2d3d;color:#7ab5d9}
 [data-theme="dark"] .kcol{background:var(--surface)}
 [data-theme="dark"] .calm .mo{background:var(--surface)}
+/* Print */
+@media print{
+  #side,.mobnav,#top,#subtabs,.ov,#toast,#searchWrap,#notifWrap,#darkToggle,#topAdd,.btn:not(.no-print){display:none!important}
+  #app{display:block!important}
+  #main{display:block!important}
+  #content{padding:0!important;max-width:none!important}
+  .panel{break-inside:avoid;box-shadow:none;border:1px solid #ccc}
+  .kpis{grid-template-columns:repeat(4,1fr)!important}
+  body{background:#fff;color:#000;font-size:12px}
+  @page{margin:12mm}
+}
+.print-btn{position:fixed;bottom:20px;right:20px;z-index:30;font-size:14px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
 
 /* ---------- RESPONSIVE MOBILE ---------- */
 @media(max-width:820px){
@@ -334,7 +346,18 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money = (n,d="MAD") => (n==null?"—":Number(n).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:2})+" "+d);
+const TAUX_CHANGE={EUR:0.091,USD:0.099}; // 1 MAD = x EUR/USD — configurable dans Paramètres > Financiers
+let DEVISE_SEC=null; // devise secondaire (null = pas d'affichage secondaire)
+const money = (n,d="MAD") => {
+  if(n==null)return "—";
+  const v=Number(n);
+  let s=v.toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:2})+" "+d;
+  if(DEVISE_SEC&&TAUX_CHANGE[DEVISE_SEC]&&d==='MAD'){
+    const conv=(v*TAUX_CHANGE[DEVISE_SEC]);
+    s+=` <span class="muted" style="font-size:11px">(${conv.toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0})} ${DEVISE_SEC})</span>`;
+  }
+  return s;
+};
 const fdate = d => d? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 let TT; function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(TT);TT=setTimeout(()=>t.hidden=true,2200);}
 
@@ -518,7 +541,7 @@ async function boot(){
   state.tenant=ten; state.role=membres[0].role;
   $("#tenantName").textContent=ten?ten.nom:"—";
   $("#userEmail").textContent=state.user.email;
-  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto).then(majPropreteAuto).then(chargerNotifs);
+  show("app"); buildNav(); goRub(state.rub||"apercu"); lancerDepensesAuto().then(lancerRelevesAuto).then(majPropreteAuto).then(chargerNotifs).then(initTemplatesMsg).then(initDevises);
 }
 
 /* ---------- MODULES (data screens) ---------- */
@@ -777,7 +800,8 @@ const RUBRIQUES=[
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
-    ["auto","Relevés automatiques",{relevesauto:1}]]},
+    ["auto","Relevés automatiques",{relevesauto:1}],
+    ["tbprop","Tableau de bord propriétaire",{dashprop:1}]]},
   {k:"qualite",label:"Qualité d'hébergement",icon:"◈",subs:[
     ["ann","Qualité des annonces",{qualann:1}],
     ["avis","Qualité des avis",{qualavis:1}]]},
@@ -940,10 +964,26 @@ async function renderInbox(){
     </div></div>`:'';
   $("#content").innerHTML=`<div class="panel" style="padding:0;overflow:hidden">
     <div style="display:grid;grid-template-columns:280px 1fr 300px;min-height:480px">
-      <div style="border-right:1px solid var(--line,#eee);overflow:auto;max-height:70vh">${list}</div>
+      <div style="border-right:1px solid var(--line,#eee);overflow:auto;max-height:70vh">
+        <div style="padding:8px;border-bottom:1px solid var(--line)">
+          <input id="ibxSearch" placeholder="🔍 Rechercher…" style="width:100%;font-size:12px;padding:6px 10px;border-radius:999px">
+          <div style="display:flex;gap:4px;margin-top:6px">
+            <button class="btn o sm ibx-fil ${!state.ibxFil?'on':''}" data-fil="" style="font-size:11px;flex:1">Tous</button>
+            <button class="btn o sm ibx-fil ${state.ibxFil==='nonlu'?'on':''}" data-fil="nonlu" style="font-size:11px;flex:1">Non lus</button>
+            <button class="btn o sm ibx-fil ${state.ibxFil==='brouillon'?'on':''}" data-fil="brouillon" style="font-size:11px;flex:1">Brouillons</button>
+          </div>
+        </div>
+        <div id="ibxListInner">${list}</div>
+      </div>
       <div style="display:flex;flex-direction:column;max-height:70vh"><div style="flex:1;overflow:auto;padding:12px">${thread}</div>${composer}</div>
       <div style="border-left:1px solid var(--line,#eee);overflow:auto;max-height:70vh">${resume}</div></div></div>`;
   document.querySelectorAll('.ibx-item').forEach(el=>el.onclick=()=>{state.inboxSel=el.dataset.key;renderInbox();});
+  document.querySelectorAll('.ibx-fil').forEach(b=>b.onclick=()=>{state.ibxFil=b.dataset.fil||'';renderInbox();});
+  const ibxS=document.getElementById('ibxSearch');
+  if(ibxS){ibxS.value=state.ibxQ||'';ibxS.oninput=()=>{
+    const q=(ibxS.value||'').toLowerCase();state.ibxQ=q;
+    document.querySelectorAll('.ibx-item').forEach(el=>{el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'':'none';});
+  };}
   const tpl=document.getElementById('ibxTpl');
   if(tpl) tpl.onchange=()=>{if(tpl.value!==''&&modeles&&modeles[tpl.value]){document.getElementById('ibxMsg').value=modeles[tpl.value].corps||'';document.getElementById('ibxMsg').focus();}};
   const noteBtn=document.getElementById('ibxNote');
@@ -1141,6 +1181,11 @@ function goRub(rk,sk){
   renderSubtabs(rub);
   const t=sub[2];
   $("#topAdd").hidden=true;
+  /* Bouton Print sur rapports/relevés/factures/stats */
+  const printable=t.fi||t.activite||t.occupation||t.releves||t.factures||t.statsbien||t.dashprop||t.encaissements;
+  let pb=document.getElementById("printBtn");
+  if(!pb){pb=document.createElement("button");pb.id="printBtn";pb.className="btn g print-btn no-print";pb.textContent="🖨 Imprimer / PDF";pb.onclick=()=>window.print();document.body.appendChild(pb);}
+  pb.hidden=!printable;
   if(t.d)return renderDashboard();
   if(t.c)return renderCalendar();
   if(t.cm)return renderCalMultiple();
@@ -1193,6 +1238,7 @@ function goRub(rk,sk){
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
+  if(t.dashprop)return renderDashProp();
   if(t.calTarif)return renderCalTarif();
   if(t.polannul)return renderPolAnnulation();
   if(t.champperso)return renderChampsPerso(t.champperso);
@@ -1337,6 +1383,7 @@ function paintList(k){
     const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
     return `<tr>${tds}<td><div class="act">
       ${(m.table==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
+      ${m.table==='reservation'?`<button class="btn o sm" data-contrat="${r.id}" title="Générer le contrat PDF">📄</button>`:''}
       <button class="btn o sm" data-ed="${r.id}">Modifier</button>
       <button class="btn d sm" data-del="${r.id}">×</button></div></td></tr>`;
   }).join("");
@@ -1370,6 +1417,7 @@ function paintList(k){
   document.querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>openForm(k,(state.cache[k]||[]).find(x=>x.id===b.dataset.ed)));
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delRow(k,b.dataset.del));
   document.querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>sendMessageEmail(k,b.dataset.send));
+  document.querySelectorAll("[data-contrat]").forEach(b=>b.onclick=()=>genererContrat(b.dataset.contrat));
 }
 async function sendMessageEmail(k,id){
   const msg=(state.cache[k]||[]).find(x=>x.id===id); if(!msg)return;
@@ -2906,11 +2954,19 @@ async function renderParamFinanciers(){
     <div style="padding:16px">
       <div class="phnote" style="margin-bottom:12px">Symbole de devise, paramètres de calcul et options d'affichage des rapports financiers.</div>
       <div class="row2">${f('pfDev','Symbole de devise dans les rapports',v.devise||'MAD')}${f('pfCommDef','Commission par défaut (%)',v.commission_defaut||'20')}</div>
+      <div class="fsec">Multi-devises</div>
+      <div class="row2">
+        <div class="field"><label>Devise secondaire (affichée en parallèle)</label><select id="pfDevSec"><option value="">Aucune</option><option value="EUR" ${v.devise_sec==='EUR'?'selected':''}>EUR (€)</option><option value="USD" ${v.devise_sec==='USD'?'selected':''}>USD ($)</option></select></div>
+        <div class="field"><label>Taux 1 MAD → devise secondaire</label><input id="pfTaux" type="number" step="0.001" value="${v.taux_change||'0.091'}" placeholder="0.091"></div>
+      </div>
       <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfTTC" ${v.afficher_ttc!==false?'checked':''} style="width:auto"> Afficher les montants TTC dans les rapports</label>
       <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfFraisOpt" ${v.frais_optionnels?'checked':''} style="width:auto"> Activer les frais optionnels / remises sur les réservations</label>
       <button class="btn g" id="pfSave">Enregistrer</button> <span class="ok" id="pfOk"></span>
     </div></div>`;
-  document.querySelector("#pfSave").onclick=async()=>{const val={devise:$("#pfDev").value,commission_defaut:+$("#pfCommDef").value||20,afficher_ttc:document.querySelector("#pfTTC").checked,frais_optionnels:document.querySelector("#pfFraisOpt").checked};const e=await reglSet("param_financiers",val);if(e){$("#pfOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#pfOk").textContent="Enregistré ✓";toast("Paramètres financiers enregistrés");};
+  document.querySelector("#pfSave").onclick=async()=>{const ds=$("#pfDevSec").value,tx=parseFloat($("#pfTaux").value)||0;const val={devise:$("#pfDev").value,commission_defaut:+$("#pfCommDef").value||20,afficher_ttc:document.querySelector("#pfTTC").checked,frais_optionnels:document.querySelector("#pfFraisOpt").checked,devise_sec:ds||null,taux_change:tx};
+    const e=await reglSet("param_financiers",val);if(e){$("#pfOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    DEVISE_SEC=ds||null;if(ds&&tx)TAUX_CHANGE[ds]=tx;
+    $("#pfOk").textContent="Enregistré ✓";toast("Paramètres financiers enregistrés");};
 }
 
 async function renderFormules(){
@@ -3568,6 +3624,146 @@ async function renderJournal(){
     const csv="Date;Action;Entité;Détails\n"+list.map(j=>`${j.created_at};${j.action};${j.entite||''};${(j.details||'').replace(/;/g,',')}`).join("\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="journal_activite.csv";a.click();
   };
+}
+
+/* ---------- TABLEAU DE BORD PROPRIÉTAIRE ---------- */
+async function renderDashProp(){
+  if(!document.getElementById('content'))return;
+  $("#topAdd").hidden=true;
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("proprietaire")]);
+  const props=state.opts.proprietaire||[];
+  const sel=state.dashPropSel||"";
+  const pOpts=props.map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.nom)}</option>`).join("");
+  $("#content").innerHTML=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+    <select id="dpProp" style="min-width:220px"><option value="">— Choisir un propriétaire —</option>${pOpts}</select>
+  </div><div id="dpContent"><p class="muted">Sélectionnez un propriétaire pour voir son tableau de bord.</p></div>`;
+  const load=async()=>{
+    const pid=document.getElementById("dpProp").value;state.dashPropSel=pid;
+    if(!pid){document.getElementById("dpContent").innerHTML='<p class="muted">Sélectionnez un propriétaire.</p>';return;}
+    document.getElementById("dpContent").innerHTML='<div class="center"><span class="spin"></span></div>';
+    const prop=props.find(p=>p.id===pid);
+    const biensProp=(state.opts.bien||[]).filter(b=>b.proprietaire_id===pid);
+    const bienIds=biensProp.map(b=>b.id);
+    if(!bienIds.length){document.getElementById("dpContent").innerHTML='<p class="muted">Ce propriétaire n\'a aucun bien assigné.</p>';return;}
+    const [{data:resas},{data:releves},{data:depenses}]=await Promise.all([
+      sb.from("reservation").select("*").in("bien_id",bienIds).neq("statut","annulee").order("arrivee",{ascending:false}).limit(100),
+      sb.from("releve_proprietaire").select("*").eq("proprietaire_id",pid).order("date_fin",{ascending:false}).limit(20),
+      sb.from("depense").select("montant,bien_id").in("bien_id",bienIds)
+    ]);
+    const conf=(resas||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
+    const revTotal=conf.reduce((s,r)=>s+Number(r.prix_total||0),0);
+    const commPct=Number(prop.commission_pct||20);
+    const commTotal=Math.round(revTotal*commPct/100);
+    const depTotal=(depenses||[]).reduce((s,d)=>s+Number(d.montant||0),0);
+    const netProp=revTotal-commTotal-depTotal;
+    const relRows=(releves||[]).map(r=>`<tr><td>${fdate(r.date_debut)} → ${fdate(r.date_fin)}</td><td>${money(r.total_brut)}</td><td>${money(r.commission)}</td><td>${money(r.total_depenses)}</td><td><b>${money(r.net_proprietaire)}</b></td><td>${pill(r.statut)}</td></tr>`).join("");
+    document.getElementById("dpContent").innerHTML=`
+      <div class="kpis">
+        <div class="kpi"><div class="l">Biens gérés</div><div class="v">${biensProp.length}</div></div>
+        <div class="kpi"><div class="l">Revenus bruts</div><div class="v" style="font-size:22px">${money(revTotal)}</div></div>
+        <div class="kpi"><div class="l">Commission (${commPct}%)</div><div class="v" style="font-size:22px">${money(commTotal)}</div></div>
+        <div class="kpi"><div class="l">Dépenses</div><div class="v" style="font-size:22px">${money(depTotal)}</div></div>
+        <div class="kpi"><div class="l">Net propriétaire</div><div class="v" style="font-size:22px;color:${netProp>=0?'var(--ok)':'var(--danger)'}">${money(netProp)}</div></div>
+        <div class="kpi"><div class="l">Réservations</div><div class="v">${conf.length}</div></div>
+      </div>
+      <div class="panel"><div class="phead"><h3>Biens de ${esc(prop.nom)}</h3></div><div style="overflow:auto"><table><thead><tr><th>Bien</th><th>Type</th><th>Prix/nuit</th><th>Statut</th></tr></thead><tbody>
+        ${biensProp.map(b=>`<tr><td><b>${esc(b.nom)}</b></td><td>${esc(b.type||'—')}</td><td>${money(b.prix_nuit_base)}</td><td>${pill(b.statut)}</td></tr>`).join("")}
+      </tbody></table></div></div>
+      <div class="panel"><div class="phead"><h3>Derniers relevés</h3></div><div style="overflow:auto">
+        ${(releves&&releves.length)?`<table><thead><tr><th>Période</th><th>Brut</th><th>Commission</th><th>Dépenses</th><th>Net</th><th>Statut</th></tr></thead><tbody>${relRows}</tbody></table>`:'<div class="empty">Aucun relevé.</div>'}
+      </div></div>`;
+  };
+  document.getElementById("dpProp").onchange=load;
+  if(sel)load();
+}
+
+/* ---------- INIT DEVISES ---------- */
+async function initDevises(){
+  try{const v=await reglGet("param_financiers");if(v&&v.devise_sec){DEVISE_SEC=v.devise_sec;if(v.taux_change)TAUX_CHANGE[v.devise_sec]=v.taux_change;}}catch(e){}
+}
+
+/* ---------- CONTRAT AUTOMATIQUE PDF ---------- */
+async function genererContrat(resaId){
+  const {data:r}=await sb.from("reservation").select("*").eq("id",resaId).single();
+  if(!r){toast("Réservation introuvable");return;}
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  const bien=(state.opts.bien||[]).find(b=>b.id===r.bien_id)||{};
+  const voy=(state.opts.voyageur||[]).find(v=>v.id===r.voyageur_id)||{};
+  const cfg=await reglGet("doc_modeles")||{};
+  const nuits=Math.max(1,Math.round((new Date(r.depart)-new Date(r.arrivee))/864e5));
+  const prixNuit=nuits?Math.round(Number(r.prix_total||0)/nuits):0;
+  const bg=cfg.bg||'#0f2d4a', acc=cfg.acc||'#c9a24a';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrat — ${esc(bien.nom)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:40px;max-width:800px;margin:auto;font-size:13px;line-height:1.6}
+.head{background:${bg};color:#fff;padding:24px;border-radius:10px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}
+.head h1{font-size:22px;color:${acc}}
+.head .sub{font-size:12px;opacity:.8}
+h2{color:${bg};font-size:15px;margin:20px 0 8px;border-bottom:2px solid ${acc};padding-bottom:4px}
+table{width:100%;border-collapse:collapse;margin:10px 0}
+th,td{text-align:left;padding:8px 10px;border:1px solid #ddd;font-size:12.5px}
+th{background:#f5f5f5;font-weight:700}
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+.sig div{border-top:1px solid #999;padding-top:8px;text-align:center;font-size:12px;color:#666}
+.foot{text-align:center;margin-top:30px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}
+@media print{body{padding:20px}@page{margin:15mm}}
+</style></head><body>
+<div class="head"><div><h1>Contrat de location saisonnière</h1><div class="sub">${esc(cfg.hote||'DPM Conciergerie')} ${cfg.fiscal?'· ICE : '+esc(cfg.fiscal):''}</div></div><div style="text-align:right;font-size:12px">N° ${esc(String(resaId).slice(0,8).toUpperCase())}<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
+
+<h2>Parties</h2>
+<table><tr><th style="width:50%">Bailleur (propriétaire / gestionnaire)</th><th>Locataire (voyageur)</th></tr>
+<tr><td>${esc(cfg.hote||'DPM Conciergerie')}<br>${cfg.tel?'Tél : '+esc(cfg.tel)+'<br>':''}${cfg.email?'Email : '+esc(cfg.email):''}</td>
+<td>${esc(voy.nom||'—')}<br>${voy.email?'Email : '+esc(voy.email)+'<br>':''}${voy.telephone?'Tél : '+esc(voy.telephone):''}</td></tr></table>
+
+<h2>Bien loué</h2>
+<table><tr><th>Bien</th><td>${esc(bien.nom)}</td></tr>
+<tr><th>Adresse</th><td>${esc(bien.adresse||'')} ${esc((bien.parametres||{}).ville||'')} ${esc((bien.parametres||{}).pays||'Maroc')}</td></tr>
+<tr><th>Type</th><td>${esc(bien.type||'—')}</td></tr>
+<tr><th>Capacité</th><td>${bien.capacite||'—'} personnes</td></tr></table>
+
+<h2>Séjour</h2>
+<table><tr><th>Arrivée</th><td>${fdate(r.arrivee)}</td><th>Départ</th><td>${fdate(r.depart)}</td></tr>
+<tr><th>Durée</th><td>${nuits} nuit(s)</td><th>Personnes</th><td>${r.nb_personnes||'—'}</td></tr>
+<tr><th>Canal</th><td colspan="3">${esc(r.canal||'direct')}</td></tr></table>
+
+<h2>Conditions financières</h2>
+<table><tr><th>Prix / nuit</th><td>${prixNuit.toLocaleString('fr-FR')} MAD</td></tr>
+<tr><th>Total séjour</th><td><strong>${Number(r.prix_total||0).toLocaleString('fr-FR')} MAD</strong></td></tr>
+<tr><th>Acompte versé</th><td>${Number(r.montant_paye||0).toLocaleString('fr-FR')} MAD</td></tr>
+<tr><th>Solde restant</th><td>${(Number(r.prix_total||0)-Number(r.montant_paye||0)).toLocaleString('fr-FR')} MAD</td></tr>
+${bien.frais_menage?'<tr><th>Frais de ménage</th><td>'+Number(bien.frais_menage).toLocaleString('fr-FR')+' MAD (inclus)</td></tr>':''}
+${(bien.parametres||{}).caution?'<tr><th>Caution</th><td>'+Number(bien.parametres.caution).toLocaleString('fr-FR')+' MAD</td></tr>':''}</table>
+
+<h2>Conditions générales</h2>
+<p>Le locataire s'engage à occuper les lieux en bon père de famille, à respecter le règlement intérieur et la capacité maximale du logement. Le bien est loué meublé et équipé. Tout dommage constaté sera déduit de la caution. Le bailleur s'engage à mettre le bien à disposition dans un état de propreté et d'entretien conforme.</p>
+
+<div class="sig"><div>Le bailleur<br><br><br><br>${esc(cfg.hote||'DPM Conciergerie')}</div><div>Le locataire<br><br><br><br>${esc(voy.nom||'')}</div></div>
+
+<div class="foot">${esc(cfg.infos||cfg.hote||'DPM Conciergerie')} ${cfg.tel?'· '+esc(cfg.tel):''} ${cfg.email?'· '+esc(cfg.email):''}</div>
+</body></html>`;
+  const w=window.open('','_blank','width=800,height=1000');
+  w.document.write(html);w.document.close();
+  setTimeout(()=>w.print(),500);
+  toast("Contrat généré — imprimez ou enregistrez en PDF");
+}
+
+/* ---------- TEMPLATES MESSAGES PRÉDÉFINIS ---------- */
+async function initTemplatesMsg(){
+  try{
+    const {data}=await sb.from("modele_message").select("id").limit(1);
+    if(data&&data.length)return; // déjà initialisé
+    const tpls=[
+      {nom:"Confirmation de réservation",canal:"email",sujet:"Votre réservation est confirmée !",corps:"Bonjour {{voyageur_prenom}},\n\nNous avons le plaisir de vous confirmer votre réservation à {{bien_nom}} du {{arrivee}} au {{depart}}.\n\nMontant total : {{prix_total}}\n\nNous vous enverrons les instructions d'arrivée quelques jours avant votre séjour.\n\nÀ bientôt !\n{{hote_nom}}",evenement:"reservation",delai_h:0,actif:true},
+      {nom:"Instructions d'arrivée",canal:"email",sujet:"Vos instructions d'arrivée — {{bien_nom}}",corps:"Bonjour {{voyageur_prenom}},\n\nVotre séjour approche ! Voici les informations pour votre arrivée :\n\n📍 Adresse : {{bien_adresse}}\n🕐 Check-in : à partir de {{heure_checkin}}\n🔑 Accès : {{instructions_acces}}\n📱 En cas de besoin : {{hote_tel}}\n\nWiFi : {{wifi_nom}} / {{wifi_mdp}}\n\nBon voyage !\n{{hote_nom}}",evenement:"avant_arrivee",delai_h:-48,actif:true},
+      {nom:"Bienvenue — jour d'arrivée",canal:"whatsapp",sujet:"",corps:"Bonjour {{voyageur_prenom}} 👋\n\nBienvenue à {{bien_nom}} ! J'espère que votre trajet s'est bien passé.\n\nN'hésitez pas à me contacter si vous avez la moindre question.\n\nBon séjour ! 🌴\n{{hote_prenom}}",evenement:"arrivee",delai_h:2,actif:true},
+      {nom:"Relance paiement",canal:"email",sujet:"Rappel — solde restant pour votre séjour",corps:"Bonjour {{voyageur_prenom}},\n\nNous nous permettons de vous rappeler qu'un solde de {{reste_a_payer}} reste à régler pour votre séjour à {{bien_nom}} ({{arrivee}} — {{depart}}).\n\nMerci de procéder au règlement avant votre arrivée.\n\nCordialement,\n{{hote_nom}}",evenement:"avant_arrivee",delai_h:-72,actif:true},
+      {nom:"Remerciement post-séjour",canal:"email",sujet:"Merci pour votre séjour à {{bien_nom}} !",corps:"Bonjour {{voyageur_prenom}},\n\nMerci d'avoir séjourné à {{bien_nom}} ! Nous espérons que vous avez passé un excellent moment.\n\nVotre avis compte beaucoup pour nous — si vous avez un instant, un commentaire sur Airbnb ou Google serait très apprécié. ⭐\n\nÀ très bientôt !\n{{hote_nom}}",evenement:"apres_depart",delai_h:24,actif:true},
+      {nom:"Rappel check-in en ligne",canal:"email",sujet:"Complétez votre pré-check-in — {{bien_nom}}",corps:"Bonjour {{voyageur_prenom}},\n\nPour faciliter votre accueil, merci de compléter votre fiche de pré-arrivée en cliquant sur le lien ci-dessous :\n\n{{lien_checkin}}\n\nCela ne prend que 2 minutes et nous permet de tout préparer pour votre arrivée.\n\nMerci !\n{{hote_nom}}",evenement:"avant_arrivee",delai_h:-96,actif:true}
+    ];
+    for(const t of tpls){await sb.from("modele_message").insert({tenant_id:state.tenant.id,...t});}
+    console.log("Templates messages initialisés ("+tpls.length+")");
+  }catch(e){console.warn("initTemplatesMsg",e);}
 }
 
 /* ---------- RECHERCHE GLOBALE ---------- */
