@@ -659,6 +659,8 @@ const MODULES = {
       ["decalage_heures","Décalage en heures (0 = à l'heure, 2 = 2 h après, -2 = 2 h avant)",{type:"number",req:1,def:0}],
       ["echeance","Échéance",{opts:["meme_jour","prochaine_arrivee"],def:"meme_jour"}],
       ["canal","Canal relié (vide = tous)",{opts:["direct","airbnb","booking","vrbo"]}],["bien_id","Annonce liée (vide = toutes)",{ref:"bien"}],
+      ["declencher_toujours","Déclencher toujours (même si modifié à la main)",{opts:["false","true"],def:"false"}],
+      ["condition_sup","Condition supplémentaire",{opts:["","paiement_complet","non_paye","sejour_min_3","sejour_min_7","canal_direct","canal_airbnb"]}],
       ["intervenant_id","Affecté à",{ref:"intervenant"}],["superviseur_id","Superviseur",{ref:"intervenant"}],
       ["cout","Coût",{type:"number"}],["description","Description",{long:1}]]},
   messagerie:{title:"Conversations",add:"Nouveau message",table:"message",
@@ -1914,15 +1916,19 @@ async function renderFinances(){
 function payForm(resaId){
   const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);
   const reste=(r.prix_total||0)-(r.montant_paye||0);
+  const payLink=location.origin+location.pathname+'#pay='+resaId;
   ouvrir(`<div class="h"><h3>Encaisser un paiement</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
       <p class="muted">Reste à encaisser : <b>${money(reste)}</b></p>
+      <div class="field"><label>Lien de paiement (à envoyer au voyageur)</label>
+        <div style="display:flex;gap:6px"><input id="pLink" readonly value="${esc(payLink)}" style="font-size:12px"><button class="btn o sm" id="pCopyLink">Copier</button></div></div>
       <div class="field"><label>Montant *</label><input id="pM" type="number" value="${reste>0?reste:""}"></div>
-      <div class="field"><label>Moyen</label><select id="pMoy"><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="autre">Autre</option></select></div>
+      <div class="field"><label>Moyen</label><select id="pMoy"><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="lien_paiement">Lien de paiement</option><option value="autre">Autre</option></select></div>
       <div class="field"><label>Référence</label><input id="pRef" placeholder="N° de transaction"></div>
       <div class="err" id="pErr"></div>
     </div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pSave">Enregistrer</button></div>`);
+  document.getElementById('pCopyLink').onclick=()=>{navigator.clipboard.writeText(payLink).then(()=>toast('Lien copié !')).catch(()=>toast('Copie impossible'));};
   $("#pSave").onclick=async()=>{
     const montant=Number($("#pM").value);
     if(!montant||montant<=0){$("#pErr").textContent="Montant invalide.";return;}
@@ -3016,9 +3022,11 @@ async function renderParamFinanciers(){
       </div>
       <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfTTC" ${v.afficher_ttc!==false?'checked':''} style="width:auto"> Afficher les montants TTC dans les rapports</label>
       <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfFraisOpt" ${v.frais_optionnels?'checked':''} style="width:auto"> Activer les frais optionnels / remises sur les réservations</label>
+      <div class="fsec">Annulation automatique</div>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-weight:500"><input type="checkbox" id="pfAutoAnnul" ${v.annulation_auto_10j?'checked':''} style="width:auto"> Annuler automatiquement les paiements non réalisés après 10 jours</label>
       <button class="btn g" id="pfSave">Enregistrer</button> <span class="ok" id="pfOk"></span>
     </div></div>`;
-  document.querySelector("#pfSave").onclick=async()=>{const ds=$("#pfDevSec").value,tx=parseFloat($("#pfTaux").value)||0;const val={devise:$("#pfDev").value,commission_defaut:+$("#pfCommDef").value||20,afficher_ttc:document.querySelector("#pfTTC").checked,frais_optionnels:document.querySelector("#pfFraisOpt").checked,devise_sec:ds||null,taux_change:tx};
+  document.querySelector("#pfSave").onclick=async()=>{const ds=$("#pfDevSec").value,tx=parseFloat($("#pfTaux").value)||0;const val={devise:$("#pfDev").value,commission_defaut:+$("#pfCommDef").value||20,afficher_ttc:document.querySelector("#pfTTC").checked,frais_optionnels:document.querySelector("#pfFraisOpt").checked,annulation_auto_10j:document.querySelector("#pfAutoAnnul").checked,devise_sec:ds||null,taux_change:tx};
     const e=await reglSet("param_financiers",val);if(e){$("#pfOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     DEVISE_SEC=ds||null;if(ds&&tx)TAUX_CHANGE[ds]=tx;
     $("#pfOk").textContent="Enregistré ✓";toast("Paramètres financiers enregistrés");};
@@ -3042,6 +3050,27 @@ async function renderFormules(){
       </div></div>
     <div class="panel"><div class="phead"><h3>Commission par propriétaire</h3></div>
       <div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th style="text-align:center">Commission</th></tr></thead><tbody>${rows||'<tr><td colspan="2" class="muted">Aucun propriétaire</td></tr>'}</tbody></table></div></div>`;
+  /* Surcharge formule par annonce */
+  await loadOpts("bien");
+  const biens=state.opts.bien||[];
+  const bienRows=biens.map(b=>{const p=b.parametres||{};
+    return `<tr><td><b>${esc(b.nom)}</b></td><td style="text-align:center">${p.commission_override!=null?p.commission_override+' %':'<span class="muted">hérite du propriétaire</span>'}</td>
+    <td><button class="btn o sm" data-commov="${b.id}">Modifier</button></td></tr>`;}).join("");
+  $("#content").innerHTML+=`<div class="panel"><div class="phead"><h3>Surcharge par annonce</h3><span class="sp"></span><span class="muted">Permet de fixer un taux de commission différent pour un bien précis</span></div>
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Commission</th><th></th></tr></thead><tbody>${bienRows||'<tr><td colspan="3" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>`;
+  document.querySelectorAll('[data-commov]').forEach(btn=>btn.onclick=()=>{
+    const bid=btn.dataset.commov;const b=biens.find(x=>x.id===bid);const p=b?.parametres||{};
+    ouvrir(`<div class="h"><h3>Commission — ${esc(b?.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Commission % (vide = hérite du propriétaire)</label><input id="covVal" type="number" value="${p.commission_override!=null?p.commission_override:''}"></div><div class="err" id="covErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="covSave">Enregistrer</button></div>`);
+    document.getElementById('covSave').onclick=async()=>{
+      const val=document.getElementById('covVal').value;
+      const newP={...p,commission_override:val?Number(val):null};
+      const {error}=await sb.from('bien').update({parametres:newP}).eq('id',bid);
+      if(error){document.getElementById('covErr').textContent=error.message;return;}
+      fermer();toast('Commission modifiée');invalidate('bien');renderFormules();
+    };
+  });
 }
 
 /* ---------- RELEVES PROPRIETAIRES ---------- */
