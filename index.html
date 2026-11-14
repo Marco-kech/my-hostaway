@@ -1434,6 +1434,17 @@ function paintList(k){
   document.querySelectorAll("[data-voirvoy]").forEach(b=>b.onclick=()=>ficheVoyageur(b.dataset.voirvoy));
   document.querySelectorAll("[data-voirbien]").forEach(b=>b.onclick=()=>ficheBien(b.dataset.voirbien));
 }
+async function envoyerBrevo(to, sujet, html, replyTo){
+  const cfg=await reglGet("email");
+  if(!cfg||!cfg.api_key){toast("Configurez d'abord l'e-mail dans Paramètres > E-mail");return {error:"non configuré"};}
+  const body={sender:{name:cfg.sender_name||"DPM Conciergerie",email:cfg.sender_email||"hostaway@dpmconciergerie.com"},to:[{email:to}],subject:sujet,htmlContent:html};
+  if(replyTo||cfg.reply_to)body.replyTo={email:replyTo||cfg.reply_to};
+  try{
+    const r=await fetch("https://api.brevo.com/v3/smtp/email",{method:"POST",headers:{"api-key":cfg.api_key,"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){const j=await r.json().catch(()=>({}));return {error:j.message||"Erreur Brevo "+r.status};}
+    return {data:await r.json()};
+  }catch(e){return {error:"Erreur réseau : "+e.message};}
+}
 async function sendMessageEmail(k,id){
   const msg=(state.cache[k]||[]).find(x=>x.id===id); if(!msg)return;
   const voy=(state.opts.voyageur||[]).find(x=>x.id===msg.voyageur_id);
@@ -1441,9 +1452,9 @@ async function sendMessageEmail(k,id){
   if(!to){toast("Pas d'e-mail voyageur sur ce message");return;}
   toast("Envoi en cours…");
   const html='<div style="font-family:sans-serif;white-space:pre-wrap">'+esc(msg.corps||"")+'</div>';
-  const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"DPM Conciergerie",html}});
-  if(error){ let m="Échec de l'envoi"; try{const j=await error.context.json(); if(j&&j.error)m=j.error;}catch(e){} toast(m); await sb.from("message").update({statut:"echoue"}).eq("id",id); }
-  else { toast("E-mail envoyé ✓"); await sb.from("message").update({statut:"envoye"}).eq("id",id); }
+  const res=await envoyerBrevo(to,"DPM Conciergerie",html);
+  if(res.error){ toast("Échec : "+res.error); await sb.from("message").update({statut:"echoue"}).eq("id",id); }
+  else { toast("E-mail envoyé ✓"); await sb.from("message").update({statut:"envoye"}).eq("id",id); logAction("email","Envoyé à "+to); }
   if(k==='envois'){renderEnvois();}else{renderList(k);}
 }
 async function renderEnvois(){
@@ -2226,7 +2237,7 @@ async function renderEmailConfig(){
       <div class="phnote" style="margin-top:12px">Pour envoyer depuis votre domaine (ex. reservation@dpmconciergerie.com), il faut le vérifier chez le fournisseur (enregistrements DNS). En test, Resend n'autorise l'envoi que vers votre propre adresse tant que le domaine n'est pas vérifié.</div>
     </div></div>`;
   $("#emSave").onclick=async()=>{const valeur={provider:$("#emProv").value,api_key:$("#emKey").value.trim(),sender_name:$("#emName").value.trim(),sender_email:$("#emFrom").value.trim(),reply_to:$("#emReply").value.trim()};const e=await reglSet("email",valeur);if(e){$("#emOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#emOk").textContent="Enregistré ✓";toast("Configuration e-mail enregistrée");renderEmailConfig();};
-  $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";try{const {data,error}=await sb.functions.invoke("send-email",{body:{to,sujet:"Test DPM Conciergerie",html:"<p>Ceci est un e-mail de test depuis votre application DPM.</p>"}});if(error){$("#emOk").innerHTML='<span class="err">'+esc(error.message||'echec')+'</span>';toast("Echec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}}catch(e){$("#emOk").innerHTML='<span class="err">'+esc(''+e)+'</span>';}};
+  $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";const res=await envoyerBrevo(to,"Test DPM Conciergerie","<div style='font-family:sans-serif'><h2 style='color:#14352A'>✓ Configuration e-mail réussie</h2><p>Ceci est un e-mail de test depuis votre application <b>My Hostaway — DPM Conciergerie</b>.</p><p style='color:#64756c;font-size:13px'>Envoyé via Brevo le "+new Date().toLocaleString('fr-FR')+"</p></div>");if(res.error){$("#emOk").innerHTML='<span class="err">'+esc(res.error)+'</span>';toast("Échec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}};
 
   $("#afBien").onchange=e=>{AF.bien=e.target.value;renderFinances();};
   $("#afCanal").onchange=e=>{AF.canal=e.target.value;renderFinances();};
