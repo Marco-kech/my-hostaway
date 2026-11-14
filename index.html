@@ -1738,8 +1738,14 @@ async function renderEmailConfig(){
 /* ---------- RAPPORTS : ACTIVITE & OCCUPATION ---------- */
 async function renderActivite(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  state.actF=state.actF||{bien:"",canal:"",statut:"",du:"",au:"",evt:"arrivee"};const AF=state.actF;
+  let qr=sb.from("reservation").select("bien_id,statut,prix_total,arrivee,depart,canal,voyageur_id");
+  if(AF.bien)qr=qr.eq("bien_id",AF.bien);if(AF.canal)qr=qr.eq("canal",AF.canal);
+  if(AF.statut)qr=qr.eq("statut",AF.statut);
+  const evtCol=AF.evt==="depart"?"depart":"arrivee";
+  if(AF.du)qr=qr.gte(evtCol,AF.du);if(AF.au)qr=qr.lte(evtCol,AF.au);
   const [{data:resas},{data:biens}]=await Promise.all([
-    sb.from("reservation").select("bien_id,statut,prix_total,arrivee,depart,canal"),
+    qr,
     sb.from("bien").select("id,nom").order("nom")
   ]);
   const real=new Set(["confirmee","terminee"]);
@@ -1756,7 +1762,19 @@ async function renderActivite(){
   (resas||[]).forEach(r=>{ if(real.has(r.statut)){ const k=r.canal||'autre'; (cagg[k]=cagg[k]||{nb:0,rev:0,nu:0}); cagg[k].nb++; cagg[k].rev+=(+r.prix_total||0); cagg[k].nu+=nights(r.arrivee,r.depart);} });
   const carr=Object.keys(cagg).sort((a,b)=>cagg[b].rev-cagg[a].rev);
   const crows=carr.map(k=>`<tr><td>${esc(CANAUX[k]||k)}</td><td style="text-align:center">${cagg[k].nb}</td><td style="text-align:center">${cagg[k].nu}</td><td style="text-align:right">${fmtMad(cagg[k].rev)}</td><td style="text-align:right">${tot.rev?Math.round(cagg[k].rev/tot.rev*100):0}%</td></tr>`).join("");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Activité de location</h3><span class="sp"></span><span class="muted">Réservations confirmées et terminées</span></div>
+  const bienOpts=(biens||[]).map(b=>`<option value="${b.id}" ${AF.bien===b.id?"selected":""}>${esc(b.nom)}</option>`).join("");
+  $("#content").innerHTML=`<div class="panel" style="margin-bottom:12px"><div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="actBien" style="max-width:180px"><option value="">Annonce : toutes</option>${bienOpts}</select>
+      <select id="actCanal" style="max-width:140px"><option value="">Canal : tous</option>${["direct","airbnb","booking","vrbo","expedia"].map(c=>`<option value="${c}" ${AF.canal===c?"selected":""}>${c}</option>`).join("")}</select>
+      <select id="actStat" style="max-width:150px"><option value="">Statut : tous</option>${["confirmee","terminee","annulee","en_attente","demande"].map(c=>`<option value="${c}" ${AF.statut===c?"selected":""}>${c.replace(/_/g," ")}</option>`).join("")}</select>
+      <select id="actEvt" style="max-width:140px"><option value="arrivee" ${AF.evt==="arrivee"?"selected":""}>Par arrivée</option><option value="depart" ${AF.evt==="depart"?"selected":""}>Par départ</option></select>
+      <span class="muted">Du</span><input id="actDu" type="date" value="${AF.du}" style="max-width:140px">
+      <span class="muted">Au</span><input id="actAu" type="date" value="${AF.au}" style="max-width:140px">
+      <button class="btn o sm" id="actR">Réinitialiser</button>
+      <button class="btn o sm" id="actCsv">⬇ CSV</button>
+      <span class="sp"></span><span class="muted">${(resas||[]).length} réserv.</span>
+    </div></div>
+    <div class="panel"><div class="phead"><h3>Activité de location</h3><span class="sp"></span><span class="muted">Réservations confirmées et terminées</span></div>
     <div style="padding:14px"><div class="phnote">Revenus et nuitées par annonce. ${zero} annonce(s) sans réservation.</div></div>
     <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Réserv.</th><th style="text-align:center">Nuits</th><th style="text-align:right">Revenu</th><th style="text-align:right">Panier moyen</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="5" class="muted">Aucune annonce</td></tr>'}</tbody>
@@ -1764,11 +1782,23 @@ async function renderActivite(){
     <div class="panel"><div class="phead"><h3>Répartition par canal</h3><span class="sp"></span><span class="muted">revenus par source de réservation</span></div>
     <div style="overflow:auto"><table><thead><tr><th>Canal</th><th style="text-align:center">Réserv.</th><th style="text-align:center">Nuits</th><th style="text-align:right">Revenu</th><th style="text-align:right">Part</th></tr></thead>
     <tbody>${crows||'<tr><td colspan="5" class="muted">Aucune donnée</td></tr>'}</tbody></table></div></div>`;
+  ["actBien","bien","actCanal","canal","actStat","statut","actEvt","evt","actDu","du","actAu","au"].reduce((a,v,i)=>{if(i%2===0)a.push([v]);else a[a.length-1].push(v);return a;},[]).forEach(([id,key])=>{const el=document.querySelector("#"+id);if(el)el.onchange=e=>{AF[key]=e.target.value;renderActivite();};});
+  const actR=document.querySelector("#actR");if(actR)actR.onclick=()=>{state.actF={bien:"",canal:"",statut:"",du:"",au:"",evt:"arrivee"};renderActivite();};
+  const actCsv=document.querySelector("#actCsv");if(actCsv)actCsv.onclick=()=>{
+    const q=v=>{v=(v==null?"":""+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const lines=arr.map(a=>[a.nom,a.nb,a.nu,Math.round(a.rev),a.nb?Math.round(a.rev/a.nb):0].map(q).join(";"));
+    const csv="\ufeff"+"Annonce;Réservations;Nuits;Revenu;Panier moyen\n"+lines.join("\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})),a=document.createElement("a");
+    a.href=url;a.download="Activite_location.csv";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Export CSV généré");
+  };
 }
 async function renderOccupation(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  state.occF=state.occF||{bien:"",canal:"",du:"",au:"",parMois:false,bloques:false};const OF=state.occF;
+  let qr=sb.from("reservation").select("bien_id,statut,arrivee,depart,canal");
+  if(OF.bien)qr=qr.eq("bien_id",OF.bien);if(OF.canal)qr=qr.eq("canal",OF.canal);
   const [{data:resas},{data:biens}]=await Promise.all([
-    sb.from("reservation").select("bien_id,statut,arrivee,depart"),
+    qr,
     sb.from("bien").select("id,nom").order("nom")
   ]);
   const occ=new Set(["confirmee","terminee","en_attente","bloque"]);
@@ -1781,10 +1811,33 @@ async function renderOccupation(){
   const arr=Object.values(agg).sort((a,b)=>b.nu-a.nu);
   const rows=arr.map(a=>{const tx=dispo?Math.round(a.nu/dispo*100):0; return `<tr><td>${esc(a.nom)}</td><td style="text-align:center">${a.nu}</td><td style="text-align:center">${dispo}</td><td style="text-align:right">${tx}%</td><td><div style="background:rgba(128,128,128,.2);border-radius:6px;height:8px;overflow:hidden"><div style="width:${tx}%;height:100%;background:var(--gold,#C9A227)"></div></div></td></tr>`;}).join("");
   const totNu=arr.reduce((s,a)=>s+a.nu,0); const totTx=(arr.length&&dispo)?Math.round(totNu/(dispo*arr.length)*100):0;
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Taux d'occupation ${y}</h3><span class="sp"></span><span class="muted">Occupation globale ${totTx}%</span></div>
+  const bOpts=(biens||[]).map(b=>`<option value="${b.id}" ${OF.bien===b.id?"selected":""}>${esc(b.nom)}</option>`).join("");
+  $("#content").innerHTML=`<div class="panel" style="margin-bottom:12px"><div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="occBien" style="max-width:180px"><option value="">Annonce : toutes</option>${bOpts}</select>
+      <select id="occCanal" style="max-width:140px"><option value="">Canal : tous</option>${["direct","airbnb","booking","vrbo","expedia"].map(c=>`<option value="${c}" ${OF.canal===c?"selected":""}>${c}</option>`).join("")}</select>
+      <span class="muted">Du</span><input id="occDu" type="date" value="${OF.du||y+'-01-01'}" style="max-width:140px">
+      <span class="muted">Au</span><input id="occAu" type="date" value="${OF.au||y+'-12-31'}" style="max-width:140px">
+      <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="occMois" ${OF.parMois?"checked":""} style="width:auto"> Par mois</label>
+      <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="occBloq" ${OF.bloques?"checked":""} style="width:auto"> Inclure bloqués</label>
+      <button class="btn o sm" id="occR">Réinitialiser</button>
+      <button class="btn o sm" id="occCsv">⬇ CSV</button>
+    </div></div>
+    <div class="panel"><div class="phead"><h3>Taux d'occupation ${y}</h3><span class="sp"></span><span class="muted">Occupation globale ${totTx}%</span></div>
     <div style="padding:14px"><div class="phnote">Nuits occupées (réservations + blocages iCal) sur l'année ${y}, par annonce.</div></div>
     <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Nuits occupées</th><th style="text-align:center">Nuits dispo</th><th style="text-align:right">Taux</th><th style="width:140px"></th></tr></thead>
     <tbody>${rows||'<tr><td colspan="5" class="muted">Aucune annonce</td></tr>'}</tbody></table></div></div>`;
+  ["occBien","bien","occCanal","canal","occDu","du","occAu","au"].reduce((a,v,i)=>{if(i%2===0)a.push([v]);else a[a.length-1].push(v);return a;},[]).forEach(([id,key])=>{const el=document.querySelector("#"+id);if(el)el.onchange=e=>{OF[key]=e.target.value;renderOccupation();};});
+  const occM=document.querySelector("#occMois");if(occM)occM.onchange=()=>{OF.parMois=occM.checked;renderOccupation();};
+  const occB=document.querySelector("#occBloq");if(occB)occB.onchange=()=>{OF.bloques=occB.checked;renderOccupation();};
+  document.querySelector("#occR")?.addEventListener("click",()=>{state.occF={bien:"",canal:"",du:"",au:"",parMois:false,bloques:false};renderOccupation();});
+  document.querySelector("#occCsv")?.addEventListener("click",()=>{
+    const q=v=>{v=(v==null?"":""+v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const lines=arr.map(a=>[a.nom,a.nu,dispo,dispo?Math.round(a.nu/dispo*100):0].map(q).join(";"));
+    const csv="\ufeff"+"Annonce;Nuits occupées;Nuits dispo;Taux\n"+lines.join("\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})),a=document.createElement("a");
+    a.href=url;a.download="Occupation.csv";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Export CSV généré");
+  });
+
 }
 
 /* ---------- AVIS & RELEVES AUTOMATIQUES ---------- */
