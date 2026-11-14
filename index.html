@@ -447,6 +447,49 @@ if(location.hash.includes('type=recovery')){
   }
 }
 
+/* Public check-in page (no auth needed) */
+if(location.hash.startsWith('#checkin=')){
+  const token=location.hash.split('=')[1];
+  document.getElementById('auth').innerHTML=`<div class="card" style="max-width:520px">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>Check-in</h1><div class="tag">Pré-arrivée</div></div></div>
+    <p class="muted" style="margin:8px 0 16px">Remplissez ce formulaire avant votre arrivée pour accélérer votre accueil.</p>
+    <div id="ciPub"><div class="center"><span class="spin"></span></div></div></div>`;
+  (async()=>{
+    const {data,error}=await sb.from("checkin_online").select("*").eq("token",token).single();
+    const box=document.getElementById("ciPub");
+    if(error||!data){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
+    if(data.statut==='rempli'){box.innerHTML='<p class="ok">✅ Vous avez déjà rempli ce formulaire. Merci et bon séjour !</p>';return;}
+    const f=(id,l,type,ph)=>`<div class="field"><label>${l}</label><input id="${id}" type="${type||'text'}" placeholder="${ph||''}"></div>`;
+    box.innerHTML=`${f('ci_nom','Nom *','text','Votre nom de famille')}${f('ci_prenom','Prénom *','text','Votre prénom')}
+      ${f('ci_email','Email','email','vous@exemple.com')}${f('ci_tel','Téléphone','tel','+33 6 ...')}
+      ${f('ci_nat','Nationalité','text','Française')}${f('ci_pass','N° passeport / carte d\'identité','text','')}
+      <div class="row2">${f('ci_heure','Heure d\'arrivée estimée','time','')}${f('ci_nb','Nombre de personnes','number','2')}</div>
+      <div class="row2">${f('ci_veh','Véhicule (marque, couleur)','text','Renault Clio grise')}${f('ci_plaq','Plaque d\'immatriculation','text','AB-123-CD')}</div>
+      <div class="field"><label>Demandes spéciales</label><textarea id="ci_dem" rows="3" placeholder="Lit bébé, arrivée tardive, allergies…"></textarea></div>
+      <div class="err" id="ciPubErr"></div>
+      <button class="btn g" id="ciPubSave" style="width:100%">Envoyer mes informations</button>`;
+    document.getElementById("ciPubSave").onclick=async()=>{
+      const nom=document.getElementById("ci_nom").value.trim(),prenom=document.getElementById("ci_prenom").value.trim();
+      if(!nom||!prenom){document.getElementById("ciPubErr").textContent="Nom et prénom sont obligatoires.";return;}
+      document.getElementById("ciPubSave").disabled=true;
+      const upd={nom,prenom,email:document.getElementById("ci_email").value.trim()||null,
+        telephone:document.getElementById("ci_tel").value.trim()||null,
+        nationalite:document.getElementById("ci_nat").value.trim()||null,
+        num_passeport:document.getElementById("ci_pass").value.trim()||null,
+        heure_arrivee:document.getElementById("ci_heure").value||null,
+        nb_personnes:Number(document.getElementById("ci_nb").value)||null,
+        vehicule:document.getElementById("ci_veh").value.trim()||null,
+        plaque:document.getElementById("ci_plaq").value.trim()||null,
+        demandes_speciales:document.getElementById("ci_dem").value.trim()||null,
+        statut:'rempli',rempli_le:new Date().toISOString()};
+      const {error:e2}=await sb.from("checkin_online").update(upd).eq("token",token);
+      if(e2){document.getElementById("ciPubErr").textContent=e2.message;document.getElementById("ciPubSave").disabled=false;return;}
+      box.innerHTML='<p class="ok" style="text-align:center;font-size:16px;padding:20px 0">✅ Merci ! Vos informations ont été transmises.<br>Bon voyage et à bientôt !</p>';
+    };
+  })();
+  // Stop here, don't load the app
+}
+
 $("#obOut").addEventListener("click",()=>sb.auth.signOut());
 $("#logout").addEventListener("click",()=>sb.auth.signOut());
 $("#obBtn").addEventListener("click",async()=>{
@@ -509,6 +552,7 @@ const MODULES = {
       ["frais_menage","Frais de ménage",{type:"number"}],
       ["taxe_sejour_nuit","Taxe de séjour / nuit",{type:"number"}],
       ["caution","Caution demandée",{type:"number",p:1}],
+      ["politique_annulation","Politique d'annulation",{opts:["flexible","moderee","stricte","non_remboursable"],def:"moderee",p:1}],
       ["__s5","Arrivée & accès",{section:1}],
       ["heure_arrivee","Heure d'arrivée",{type:"time",p:1}],
       ["heure_depart","Heure de départ",{type:"time",p:1}],
@@ -569,6 +613,11 @@ const MODULES = {
     cols:[["bien_id","Bien",v=>refName("bien",v)],["nom","Saison"],["debut","Début",v=>fdate(v)],["fin","Fin",v=>fdate(v)],["prix_nuit","Prix/nuit",v=>money(v)],["priorite","Priorité"]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["nom","Nom de la saison",{}],["debut","Début",{type:"date",req:1}],["fin","Fin",{type:"date",req:1}],
       ["prix_nuit","Prix / nuit",{type:"number",req:1}],["nuits_min","Nuits minimum",{type:"number"}],["priorite","Priorité (plus haut = prioritaire)",{type:"number",def:0}]]},
+  extras:{title:"Extras & frais",add:"Ajouter un extra",table:"extra",
+    cols:[["nom","Nom"],["bien_id","Bien",v=>v?refName("bien",v):'<span class="muted">Tous</span>'],["type","Facturation",v=>pill(v)],["prix","Prix",v=>money(v)],["obligatoire","Obligatoire",v=>v?pill("oui"):pill("non")],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom de l'extra",{req:1}],["bien_id","Bien (laisser vide = tous les biens)",{ref:"bien"}],
+      ["type","Mode de facturation",{opts:["par_sejour","par_nuit","par_personne","par_personne_nuit"],def:"par_sejour"}],
+      ["prix","Prix",{type:"number",req:1}],["obligatoire","Obligatoire",{opts:["false","true"],def:"false"}],["actif","Actif",{opts:["true","false"],def:"true"}]]},
   intervenants:{title:"Intervenants",add:"Ajouter un intervenant",table:"intervenant",
     cols:[["nom","Nom"],["type","Rôle",v=>pill(v)],["tel","Téléphone"],["whatsapp","WhatsApp"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["type","Rôle",{opts:["menage","chauffeur","petit_dejeuner","maintenance","accueil","autre"],def:"menage"}],
@@ -689,10 +738,12 @@ const RUBRIQUES=[
     ["coup","Coupons",{m:"coupons"}],
     ["cp","Champs personnalisés",{champperso:"reservation"}],
     ["import","Importer",{importresa:1}],
+    ["checkin","Check-in en ligne",{checkinonline:1}],
     ["livre","Livre d'or",{m:"voyageurs"}]]},
   {k:"annonces",label:"Annonces",icon:"⌂",subs:[
     ["liste","Liste",{m:"biens"}],
     ["photos","Photos",{photogalerie:1}],
+    ["stats","Statistiques par bien",{statsbien:1}],
     ["cp","Champs personnalisés",{champperso:"bien"}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
@@ -718,6 +769,7 @@ const RUBRIQUES=[
     ["cat","Catégories",{catdep:1}],
     ["auto","Automatisations",{m:"depenses_auto"}]]},
   {k:"paiements",label:"Paiements voyageurs",icon:"⟳",subs:[
+    ["encaiss","Encaissements",{encaissements:1}],
     ["frais","Factures voyageurs",{factures:1}],
     ["auto","Dépôts de garantie",{depotgar:1}],
     ["doc","Modèles de document",{docmodeles:1}],
@@ -731,6 +783,8 @@ const RUBRIQUES=[
     ["avis","Qualité des avis",{qualavis:1}]]},
   {k:"tarif",label:"Tarification",icon:"$",subs:[
     ["sais","Tarifs saisonniers",{m:"tarifs"}],
+    ["cal","Calendrier tarifaire",{calTarif:1}],
+    ["extras","Extras & frais",{m:"extras"}],
     ["dyn","Tarification dynamique",{tarifdyn:1}]]},
   {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
     ["liste","Canaux connectés",{m:"canaux"}],
@@ -759,7 +813,8 @@ const RUBRIQUES=[
     ["webhook","Webhooks",{webhooks:1}],
     ["api","API",{apikeys:1}],
     ["notif","Notifications",{notifcfg:1}],
-    ["journal","Journal d'activité",{journalact:1}]]},
+    ["journal","Journal d'activité",{journalact:1}],
+    ["annul","Politiques d'annulation",{polannul:1}]]},
 ];
 
 /* ---------- NAV ---------- */
@@ -1134,7 +1189,12 @@ function goRub(rk,sk){
   if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.photogalerie)return renderPhotosGalerie();
+  if(t.statsbien)return renderStatsBien();
   if(t.journalact)return renderJournal();
+  if(t.encaissements)return renderEncaissements();
+  if(t.checkinonline)return renderCheckinOnline();
+  if(t.calTarif)return renderCalTarif();
+  if(t.polannul)return renderPolAnnulation();
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
@@ -1382,10 +1442,9 @@ async function openForm(k,row){
       if(!bienEl||!arrEl||!depEl||!pxEl)return;
       const bid=bienEl.value,arr=arrEl.value,dep=depEl.value;
       if(!bid||!arr||!dep)return;
-      const nuits=Math.max(1,Math.round((new Date(dep)-new Date(arr))/864e5));
-      const bien=(state.opts.bien||[]).find(b=>b.id===bid);
-      if(bien&&bien.prix_nuit_base&&(!pxEl.value||pxEl.dataset.auto==='1')){
-        pxEl.value=Math.round(nuits*Number(bien.prix_nuit_base));pxEl.dataset.auto='1';
+      if(!pxEl.value||pxEl.dataset.auto==='1'){
+        const total=await calcPrixSaisonnier(bid,arr,dep);
+        if(total>0){pxEl.value=total;pxEl.dataset.auto='1';}
       }
     };
     ['f_bien_id','f_arrivee','f_depart'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',calcPrix);});
@@ -3247,6 +3306,241 @@ async function majPropreteAuto(){
       }
     }
   }catch(e){console.warn("propreté auto",e);}
+}
+
+/* ---------- STATISTIQUES PAR BIEN ---------- */
+async function renderStatsBien(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const sel=state.statsBienSel||"";
+  const biOpts=(biens||[]).map(b=>`<option value="${b.id}" ${b.id===sel?"selected":""}>${esc(b.nom)}</option>`).join("");
+  $("#content").innerHTML=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+    <select id="sbBien" style="min-width:200px"><option value="">— Choisir un bien —</option>${biOpts}</select>
+  </div><div id="sbContent"><p class="muted">Sélectionnez un bien pour voir ses statistiques.</p></div>`;
+  const load=async()=>{
+    const bid=document.getElementById("sbBien").value;state.statsBienSel=bid;
+    if(!bid){document.getElementById("sbContent").innerHTML='<p class="muted">Sélectionnez un bien.</p>';return;}
+    document.getElementById("sbContent").innerHTML='<div class="center"><span class="spin"></span></div>';
+    const bien=(biens||[]).find(b=>b.id===bid);
+    const [{data:resas},{data:avis},{data:depenses}]=await Promise.all([
+      sb.from("reservation").select("*").eq("bien_id",bid).neq("statut","annulee").order("arrivee",{ascending:false}),
+      sb.from("avis").select("note").eq("bien_id",bid),
+      sb.from("depense").select("montant").eq("bien_id",bid)
+    ]);
+    const all=resas||[];
+    const conf=all.filter(r=>r.statut==='confirmee'||r.statut==='terminee');
+    const revTotal=conf.reduce((s,r)=>s+Number(r.prix_total||0),0);
+    const nts=(a,d)=>a&&d?Math.max(0,Math.round((new Date(d)-new Date(a))/864e5)):0;
+    const nuitsTotal=conf.reduce((s,r)=>s+nts(r.arrivee,r.depart),0);
+    const prixMoyNuit=nuitsTotal?revTotal/nuitsTotal:0;
+    const totDep=(depenses||[]).reduce((s,d)=>s+Number(d.montant||0),0);
+    const net=revTotal-totDep;
+    const notes=(avis||[]).map(a=>Number(a.note)).filter(n=>n>0);
+    const noteMoy=notes.length?(notes.reduce((a,b)=>a+b,0)/notes.length).toFixed(1):'—';
+    const today=new Date();const y=today.getFullYear();
+    const MOISFR_SHORT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+    const chartData=[];
+    for(let i=5;i>=0;i--){const d=new Date(y,today.getMonth()-i,1);const ms=d.toISOString().slice(0,10);const me=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+      const rev=conf.filter(r=>r.arrivee>=ms&&r.arrivee<=me).reduce((s,r)=>s+Number(r.prix_total||0),0);
+      chartData.push({l:MOISFR_SHORT[d.getMonth()],v:Math.round(rev)});}
+    document.getElementById("sbContent").innerHTML=`
+      <div class="kpis">
+        <div class="kpi"><div class="l">Revenus totaux</div><div class="v" style="font-size:22px">${money(revTotal)}</div></div>
+        <div class="kpi"><div class="l">Dépenses</div><div class="v" style="font-size:22px">${money(totDep)}</div></div>
+        <div class="kpi"><div class="l">Résultat net</div><div class="v" style="font-size:22px;color:${net>=0?'var(--ok)':'var(--danger)'}">${money(net)}</div></div>
+        <div class="kpi"><div class="l">Nuits réservées</div><div class="v">${nuitsTotal}</div></div>
+        <div class="kpi"><div class="l">Prix moy. / nuit</div><div class="v" style="font-size:22px">${money(prixMoyNuit)}</div></div>
+        <div class="kpi"><div class="l">Réservations</div><div class="v">${conf.length}</div></div>
+        <div class="kpi"><div class="l">Note moyenne</div><div class="v">${noteMoy}${notes.length?' ★':''}</div><div class="s">${notes.length} avis</div></div>
+      </div>
+      <div class="panel"><div class="phead"><h3>Revenus mensuels</h3></div><div style="padding:12px">${svgBarChart(chartData,{color:'#C9A227',suffix:' MAD'})}</div></div>
+      <div class="panel"><div class="phead"><h3>Dernières réservations</h3></div><div style="overflow:auto">
+        ${all.length?`<table><thead><tr><th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Total</th><th>Canal</th><th>Statut</th></tr></thead><tbody>
+        ${all.slice(0,15).map(r=>`<tr><td>${refName("voyageur",r.voyageur_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${nts(r.arrivee,r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.canal)}</td><td>${pill(r.statut)}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Aucune réservation.</div>'}
+      </div></div>`;
+  };
+  document.getElementById("sbBien").onchange=load;
+  if(sel)load();
+}
+
+/* ---------- POLITIQUES D'ANNULATION ---------- */
+function renderPolAnnulation(){
+  $("#topAdd").hidden=true;
+  const pols=[
+    {k:'flexible',nom:'Flexible',desc:'Annulation gratuite jusqu\'à 24h avant l\'arrivée. Après : 1 nuit retenue.',color:'green'},
+    {k:'moderee',nom:'Modérée',desc:'Annulation gratuite jusqu\'à 5 jours avant l\'arrivée. Après : 50% du total retenu.',color:'gold'},
+    {k:'stricte',nom:'Stricte',desc:'Annulation gratuite jusqu\'à 14 jours avant l\'arrivée. Entre 7-14 jours : 50% retenu. Moins de 7 jours : 100% retenu.',color:'red'},
+    {k:'non_remboursable',nom:'Non remboursable',desc:'Aucun remboursement quelle que soit la date d\'annulation.',color:'gray'}
+  ];
+  const cards=pols.map(p=>`<div class="panel" style="margin-bottom:12px"><div class="phead"><h3><span class="pill ${p.color}">${esc(p.nom)}</span></h3></div>
+    <div style="padding:14px;font-size:13.5px">${esc(p.desc)}</div></div>`).join("");
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:14px">Chaque bien peut avoir sa propre politique d'annulation (configurable dans la fiche du bien, onglet « Tarifs & conditions »). La politique détermine les frais appliqués en cas d'annulation par le voyageur.</div>${cards}
+  <div class="panel"><div class="phead"><h3>Biens par politique</h3></div><div id="polList"><div class="center"><span class="spin"></span></div></div></div>`;
+  (async()=>{
+    const {data}=await sb.from("bien").select("id,nom,parametres");
+    const list=data||[];
+    const grouped={};pols.forEach(p=>grouped[p.k]=[]);
+    list.forEach(b=>{const pol=(b.parametres||{}).politique_annulation||'moderee';(grouped[pol]=grouped[pol]||[]).push(b);});
+    document.getElementById("polList").innerHTML=`<div style="padding:14px">${pols.map(p=>`<div style="margin-bottom:10px"><span class="pill ${p.color}">${p.nom}</span> <span class="muted">(${(grouped[p.k]||[]).length})</span>: ${(grouped[p.k]||[]).map(b=>'<b>'+esc(b.nom)+'</b>').join(', ')||'<span class="muted">Aucun</span>'}</div>`).join("")}</div>`;
+  })();
+}
+
+/* ---------- CALENDRIER TARIFAIRE ---------- */
+async function renderCalTarif(){
+  $("#topAdd").hidden=true;
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const sel=state.calTarifBien||"";
+  const biens=state.opts.bien||[];
+  const {data:tarifs}=await sb.from("tarif").select("*").order("debut");
+  const biOpts=biens.map(b=>`<option value="${b.id}" ${b.id===sel?"selected":""}>${esc(b.nom)}</option>`).join("");
+  const now=new Date();const months=[];
+  for(let i=0;i<6;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);months.push(d);}
+  const MOISFR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  function calMois(m,bid){
+    const y=m.getFullYear(),mo=m.getMonth();
+    const jours=new Date(y,mo+1,0).getDate();
+    const first=m.getDay()||7; // 1=Lun
+    const tarifsBien=(tarifs||[]).filter(t=>t.bien_id===bid);
+    let cells='';
+    for(let d=1;d<first;d++)cells+='<span></span>';
+    for(let d=1;d<=jours;d++){
+      const iso=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const t=tarifsBien.find(t=>t.debut<=iso&&t.fin>=iso);
+      const prix=t?Number(t.prix_nuit):null;
+      const bien=biens.find(b=>b.id===bid);
+      const base=bien?Number(bien.prix_nuit_base||0):0;
+      const bg=t?'background:rgba(201,162,39,.2)':'';
+      const title=t?`${t.nom}: ${prix} MAD/nuit`:(base?`Tarif de base: ${base} MAD/nuit`:'Pas de tarif');
+      cells+=`<span style="font-size:10px;${bg}" title="${esc(title)}"><b>${d}</b>${prix?`<br><span style="font-size:9px;color:var(--gold)">${prix}</span>`:''}</span>`;
+    }
+    return `<div class="calm"><div class="mo"><h4>${MOISFR[mo]} ${y}</h4><div class="mini">${['L','M','M','J','V','S','D'].map(d=>'<span style="font-weight:700">'+d+'</span>').join('')}${cells}</div></div></div>`;
+  }
+  const bid=sel;
+  const calendriers=bid?months.map(m=>calMois(m,bid)).join(''):'<p class="muted" style="padding:16px">Sélectionnez un bien pour afficher le calendrier tarifaire.</p>';
+  $("#content").innerHTML=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+    <select id="ctBien" style="min-width:200px"><option value="">— Choisir un bien —</option>${biOpts}</select>
+    <span class="muted">Les zones dorées correspondent à un tarif saisonnier. Sinon c'est le tarif de base du bien.</span>
+  </div>${calendriers}`;
+  $("#ctBien").onchange=e=>{state.calTarifBien=e.target.value;renderCalTarif();};
+}
+
+/* Calcul prix avec tarifs saisonniers */
+async function calcPrixSaisonnier(bienId,arrivee,depart){
+  const {data:tarifs}=await sb.from("tarif").select("*").eq("bien_id",bienId).order("priorite",{ascending:false});
+  const bien=(state.opts.bien||[]).find(b=>b.id===bienId);
+  const base=bien?Number(bien.prix_nuit_base||0):0;
+  let total=0;
+  const a=new Date(arrivee),d=new Date(depart);
+  for(let dt=new Date(a);dt<d;dt.setDate(dt.getDate()+1)){
+    const iso=dt.toISOString().slice(0,10);
+    const t=(tarifs||[]).find(t=>t.debut<=iso&&t.fin>=iso);
+    total+=t?Number(t.prix_nuit):base;
+  }
+  return Math.round(total);
+}
+
+/* ---------- CHECK-IN EN LIGNE ---------- */
+async function renderCheckinOnline(){
+  $("#topAdd").hidden=false;$("#topAdd").textContent="+ Créer un check-in";
+  $("#topAdd").onclick=()=>creerCheckin();
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur"),loadOpts("reservation")]);
+  const {data}=await sb.from("checkin_online").select("*").order("created_at",{ascending:false}).limit(50);
+  const list=data||[];
+  const baseUrl=location.origin+location.pathname+'#checkin=';
+  const rows=list.map(c=>{
+    const r=(state.opts.reservation||[]).find(x=>x.id===c.reservation_id);
+    return `<tr>
+      <td>${r?refName("bien",r.bien_id):'—'}</td>
+      <td>${c.nom?esc(c.nom+' '+c.prenom):(r?refName("voyageur",r.voyageur_id):'—')}</td>
+      <td>${r?fdate(r.arrivee):'—'}</td>
+      <td>${c.statut==='rempli'?'<span class="pill green">Rempli</span>':'<span class="pill gold">En attente</span>'}</td>
+      <td><div class="act">
+        <button class="btn o sm" data-copyci="${baseUrl+c.token}" title="Copier le lien">🔗</button>
+        ${c.statut==='rempli'?`<button class="btn o sm" data-viewci="${c.id}" title="Voir les réponses">👁</button>`:''}
+      </div></td>
+    </tr>`;}).join("");
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">Envoyez le lien de check-in au voyageur avant son arrivée. Il remplit ses infos (identité, heure, véhicule, demandes) et vous retrouvez tout ici.</div>
+    <div class="panel"><div class="phead"><h3>Check-ins</h3><span class="sp"></span><span class="muted">${list.length}</span></div>
+    ${list.length?`<div style="overflow:auto"><table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="empty">Aucun check-in créé. Créez-en un pour chaque réservation à venir.</div>'}
+    </div>`;
+  document.querySelectorAll("[data-copyci]").forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.copyci).then(()=>toast("Lien copié !")).catch(()=>toast("Copie impossible"));});
+  document.querySelectorAll("[data-viewci]").forEach(b=>b.onclick=()=>voirCheckin(b.dataset.viewci,list));
+}
+async function creerCheckin(){
+  await loadOpts("reservation");
+  const resas=(state.opts.reservation||[]).filter(r=>r.statut!=='annulee'&&r.statut!=='terminee');
+  const opts=resas.map(r=>`<option value="${r.id}">${refName("bien",r.bien_id)} — ${refName("voyageur",r.voyageur_id)} (${fdate(r.arrivee)})</option>`).join("");
+  ouvrir(`<div class="h"><h3>Créer un check-in en ligne</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><div class="field"><label>Réservation *</label><select id="ciResa">${opts}</select></div><div class="err" id="ciErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="ciSave">Créer</button></div>`);
+  $("#ciSave").onclick=async()=>{
+    const rid=$("#ciResa").value;if(!rid){$("#ciErr").textContent="Sélectionnez une réservation.";return;}
+    $("#ciSave").disabled=true;
+    const {error}=await sb.from("checkin_online").insert({tenant_id:state.tenant.id,reservation_id:rid});
+    if(error){$("#ciErr").textContent=error.message;$("#ciSave").disabled=false;return;}
+    fermer();toast("Check-in créé");renderCheckinOnline();
+  };
+}
+function voirCheckin(id,list){
+  const c=list.find(x=>x.id===id);if(!c)return;
+  const f=(l,v)=>v?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)"><span class="muted">${l}</span><b>${esc(v)}</b></div>`:'';
+  ouvrir(`<div class="h"><h3>Réponses check-in</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b" style="font-size:13.5px">
+      ${f('Nom',c.nom)}${f('Prénom',c.prenom)}${f('Email',c.email)}${f('Téléphone',c.telephone)}
+      ${f('Nationalité',c.nationalite)}${f('N° passeport',c.num_passeport)}
+      ${f('Heure d\'arrivée',c.heure_arrivee)}${f('Nb personnes',c.nb_personnes)}
+      ${f('Véhicule',c.vehicule)}${f('Plaque',c.plaque)}
+      ${f('Demandes spéciales',c.demandes_speciales)}
+      ${f('Rempli le',c.rempli_le?fdate(c.rempli_le):'')}
+    </div><div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+}
+
+/* ---------- ENCAISSEMENTS ---------- */
+async function renderEncaissements(){
+  $("#topAdd").hidden=true;
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  const [{data:resas},{data:pay}]=await Promise.all([
+    sb.from("reservation").select("*").neq("statut","annulee").order("arrivee",{ascending:false}).limit(200),
+    sb.from("paiement").select("*").order("paye_le",{ascending:false}).limit(50)
+  ]);
+  const list=resas||[];
+  const impayes=list.filter(r=>(Number(r.prix_total||0)-Number(r.montant_paye||0))>0);
+  const totImpaye=impayes.reduce((s,r)=>s+(Number(r.prix_total||0)-Number(r.montant_paye||0)),0);
+  const totEnc=list.reduce((s,r)=>s+Number(r.montant_paye||0),0);
+  const today=new Date().toISOString().slice(0,10);
+  const urgents=impayes.filter(r=>r.arrivee<=today);
+
+  const impRows=impayes.map(r=>{const reste=(r.prix_total||0)-(r.montant_paye||0);const urgent=r.arrivee<=today;
+    return `<tr${urgent?' style="background:rgba(163,58,42,.06)"':''}>
+      <td><b>${refName("bien",r.bien_id)}</b></td><td>${refName("voyageur",r.voyageur_id)}</td>
+      <td>${fdate(r.arrivee)}</td><td>${money(r.prix_total)}</td><td>${money(r.montant_paye||0)}</td>
+      <td><b style="color:var(--danger)">${money(reste)}</b></td>
+      <td>${urgent?'<span class="pill red">En séjour</span>':r.arrivee>today?'<span class="pill gold">À venir</span>':'<span class="pill gray">Passé</span>'}</td>
+      <td><button class="btn g sm" data-payenc="${r.id}">💳 Encaisser</button></td>
+    </tr>`;}).join("");
+
+  const payRows=(pay||[]).map(p=>`<tr>
+    <td>${fdate(p.paye_le)}</td><td>${money(p.montant)}</td><td>${pill(p.moyen)}</td><td>${pill(p.statut)}</td><td>${esc(p.reference||'—')}</td>
+  </tr>`).join("");
+
+  $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Total encaissé</div><div class="v" style="font-size:22px">${money(totEnc)}</div></div>
+      <div class="kpi"><div class="l">Reste à encaisser</div><div class="v" style="font-size:22px;color:var(--danger)">${money(totImpaye)}</div></div>
+      <div class="kpi"><div class="l">Impayés urgents</div><div class="v">${urgents.length}</div><div class="s">séjour en cours non soldé</div></div>
+      <div class="kpi"><div class="l">Réservations impayées</div><div class="v">${impayes.length}</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Réservations à encaisser</h3><span class="sp"></span><span class="muted">${impayes.length}</span></div>
+      ${impayes.length?`<div style="overflow:auto"><table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Total</th><th>Payé</th><th>Reste</th><th>Urgence</th><th></th></tr></thead><tbody>${impRows}</tbody></table></div>`:'<div class="empty">🎉 Tout est encaissé !</div>'}
+    </div>
+    <div class="panel"><div class="phead"><h3>Derniers encaissements</h3></div>
+      ${(pay&&pay.length)?`<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Statut</th><th>Réf.</th></tr></thead><tbody>${payRows}</tbody></table></div>`:'<div class="empty">Aucun paiement enregistré.</div>'}
+    </div>`;
+  state.cache=state.cache||{};state.cache.resaFin=list;
+  document.querySelectorAll("[data-payenc]").forEach(b=>b.onclick=()=>payForm(b.dataset.payenc));
 }
 
 /* ---------- JOURNAL D'ACTIVITÉ ---------- */
