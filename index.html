@@ -3080,21 +3080,16 @@ async function renderCanauxCarte(){
       const {data:fullBien}=await sb.from("bien").select("*").eq("id",bien.id).single();
       if(!fullBien){logBridge(`⏭ ${bNom} — pas trouvé en base`,false);continue;}
       const p=fullBien.parametres||{};
-      /* Construire le payload pour Host Tools setListing */
+      /* Construire le payload pour Host Tools setListing (noms de champs HT) */
       const payload={
         listingId:lien.externe_id,
-        nickname:fullBien.nom,
-        description:p.reglement_interieur||'',
+        name:fullBien.nom,
         bedrooms:fullBien.nb_chambres||0,
         bathrooms:fullBien.nb_sdb||0,
-        accommodates:fullBien.capacite||0,
+        maxGuests:fullBien.capacite||0,
         basePrice:fullBien.prix_nuit_base||0,
         minNights:fullBien.nuits_min||1,
-        checkInTime:p.heure_arrivee||'15:00',
-        checkOutTime:p.heure_depart||'11:00',
-        address:fullBien.adresse||'',
-        city:p.ville||'',
-        country:p.pays||'Maroc',
+        checkInTime:parseInt(p.heure_arrivee)||15,
       };
       logBridge(`📝 ${bNom} → ${lien.canal} (${lien.externe_id})...`,true);
       const r=await channelBridge("pushListing",payload);
