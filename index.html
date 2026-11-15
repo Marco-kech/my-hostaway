@@ -2108,35 +2108,83 @@ async function reglGet(cle){ const {data}=await sb.from("reglage").select("valeu
 async function reglSet(cle,valeur){ const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle,valeur},{onConflict:"tenant_id,cle"}); return error; }
 
 /* ---------- TARIFICATION DYNAMIQUE ---------- */
-function calcDynPrice(base,cfg,occupJ14,jourSem,joursAvant,prixMarche){
-  if(!cfg||!cfg.actif||!base) return base;
-  let prix=base;
-  /* 1. Occupation 14j : si <40% → baisse, si >75% → hausse */
-  if(occupJ14!=null){
-    if(occupJ14<0.25) prix*=0.82;
-    else if(occupJ14<0.40) prix*=0.90;
-    else if(occupJ14>0.85) prix*=1.25;
-    else if(occupJ14>0.75) prix*=1.15;
+/* ========== MOTEUR TARIFICATION DYNAMIQUE v2 — 7 FACTEURS ========== */
+function calcDynPrice(base,cfg,ctx){
+  /* ctx = {occupJ14, jourSem, joursAvant, prixMarche, coefSaison, coefEvent, isOrphan} */
+  if(!cfg||!cfg.actif||!base) return {prix:base,details:[]};
+  let prix=base; const det=[];
+
+  /* 1. Saisonnalité (coef mensuel : ex 1.30 = haute saison +30%) */
+  if(ctx.coefSaison&&ctx.coefSaison!==1){
+    prix*=ctx.coefSaison;
+    det.push({facteur:'Saisonnalité',coef:ctx.coefSaison,impact:Math.round((ctx.coefSaison-1)*100)+'%'});
   }
-  /* 2. Jour de la semaine : ven+sam = +coef */
-  if(jourSem===5||jourSem===6) prix*=(1+(cfg.coef_weekend||15)/100);
-  /* 3. Last minute : <3j → -reduc, <7j → -demi */
-  if(joursAvant!=null&&joursAvant<=3) prix*=(1-(cfg.reduc_lastmin||20)/100);
-  else if(joursAvant!=null&&joursAvant<=7) prix*=(1-(cfg.reduc_lastmin||20)/200);
-  /* 4. Analyse concurrentielle : ajuster vers le prix du marché */
-  if(prixMarche&&prixMarche>0){
-    const ecart=(prixMarche-prix)/prixMarche;
-    /* Si on est >20% au-dessus du marché → baisser de 10% */
-    if(ecart<-0.20) prix*=0.90;
-    /* Si on est >15% en-dessous du marché → monter de 8% */
-    else if(ecart>0.15) prix*=1.08;
-    /* Si dans les 15% → léger ajustement vers le marché */
-    else if(Math.abs(ecart)>0.05) prix+=(prixMarche-prix)*0.15;
+
+  /* 2. Occupation 14j : demande locale */
+  if(ctx.occupJ14!=null){
+    let c=1;
+    if(ctx.occupJ14<0.25) c=0.82;
+    else if(ctx.occupJ14<0.40) c=0.90;
+    else if(ctx.occupJ14>0.90) c=1.30;
+    else if(ctx.occupJ14>0.80) c=1.20;
+    else if(ctx.occupJ14>0.70) c=1.10;
+    if(c!==1){prix*=c;det.push({facteur:'Occupation '+Math.round(ctx.occupJ14*100)+'%',coef:c,impact:Math.round((c-1)*100)+'%'});}
   }
-  /* 5. Bornes min/max */
-  if(cfg.min&&prix<cfg.min) prix=cfg.min;
-  if(cfg.max&&prix>cfg.max) prix=cfg.max;
-  return Math.round(prix);
+
+  /* 3. Jour de la semaine : ven+sam premium, dim-jeu possible réduction */
+  const we=cfg.coef_weekend!=null?cfg.coef_weekend:15;
+  if(ctx.jourSem===5||ctx.jourSem===6){
+    const c=1+we/100;prix*=c;
+    det.push({facteur:'Week-end',coef:c,impact:'+'+we+'%'});
+  } else if(ctx.jourSem>=1&&ctx.jourSem<=4&&cfg.reduc_semaine){
+    const c=1-cfg.reduc_semaine/100;prix*=c;
+    det.push({facteur:'Semaine',coef:c,impact:'-'+cfg.reduc_semaine+'%'});
+  }
+
+  /* 4. Lead time — 5 tranches (jours avant arrivée) */
+  if(ctx.joursAvant!=null){
+    const lm=cfg.reduc_lastmin||20;const j=ctx.joursAvant;let c=1;
+    if(j<=2){c=1-lm/100;det.push({facteur:'Last min (≤2j)',coef:c,impact:'-'+lm+'%'});}
+    else if(j<=7){c=1-lm/150;det.push({facteur:'Bientôt (3-7j)',coef:c,impact:Math.round((c-1)*100)+'%'});}
+    else if(j<=14){c=1-lm/300;det.push({facteur:'Court terme (8-14j)',coef:c,impact:Math.round((c-1)*100)+'%'});}
+    else if(j>=60&&cfg.prime_anticipation){c=1+cfg.prime_anticipation/100;det.push({facteur:'Anticipation (60j+)',coef:c,impact:'+'+cfg.prime_anticipation+'%'});}
+    /* 15-59j = tarif normal, pas d'ajustement */
+    if(c!==1) prix*=c;
+  }
+
+  /* 5. Événements locaux (coef multiplicateur) */
+  if(ctx.coefEvent&&ctx.coefEvent!==1){
+    prix*=ctx.coefEvent;
+    det.push({facteur:'Événement',coef:ctx.coefEvent,impact:Math.round((ctx.coefEvent-1)*100)+'%'});
+  }
+
+  /* 6. Analyse concurrentielle — comp set médiane */
+  if(ctx.prixMarche&&ctx.prixMarche>0){
+    const ecart=(ctx.prixMarche-prix)/ctx.prixMarche;
+    let c=1;
+    if(ecart<-0.25){c=0.88;det.push({facteur:'Marché (>25% au-dessus)',coef:c,impact:'-12%'});}
+    else if(ecart<-0.15){c=0.93;det.push({facteur:'Marché (>15% au-dessus)',coef:c,impact:'-7%'});}
+    else if(ecart>0.20){c=1.12;det.push({facteur:'Marché (>20% en-dessous)',coef:c,impact:'+12%'});}
+    else if(ecart>0.10){c=1.06;det.push({facteur:'Marché (>10% en-dessous)',coef:c,impact:'+6%'});}
+    else if(Math.abs(ecart)>0.05){const adj=(ctx.prixMarche-prix)*0.15;prix+=adj;det.push({facteur:'Ajust. marché',coef:null,impact:(adj>0?'+':'')+Math.round(adj)+' MAD'});}
+    if(c!==1) prix*=c;
+  }
+
+  /* 7. Orphan nights — nuit isolée entre 2 réservations → réduction agressive */
+  if(ctx.isOrphan){
+    const c=1-(cfg.reduc_orphan||30)/100;prix*=c;
+    det.push({facteur:'Nuit orpheline',coef:c,impact:'-'+(cfg.reduc_orphan||30)+'%'});
+  }
+
+  /* Bornes min/max */
+  if(cfg.min&&prix<cfg.min){prix=cfg.min;det.push({facteur:'Plancher',coef:null,impact:'min '+cfg.min});}
+  if(cfg.max&&prix>cfg.max){prix=cfg.max;det.push({facteur:'Plafond',coef:null,impact:'max '+cfg.max});}
+
+  return {prix:Math.round(prix),details:det};
+}
+/* Compat v1 : anciens appels à 6 args */
+function calcDynPriceSimple(base,cfg,occupJ14,jourSem,joursAvant,prixMarche){
+  const r=calcDynPrice(base,cfg,{occupJ14,jourSem,joursAvant,prixMarche});return r.prix;
 }
 
 async function renderTarifDyn(){
@@ -2157,21 +2205,44 @@ async function renderTarifDyn(){
     occupParBien[b.id]=nuits/14;
   });
   const jourSem=new Date().getDay();
-  /* Calculer le prix marché moyen par bien (via le secteur) */
+  const moisActuel=new Date().getMonth()+1;
+  /* Charger saisonnalité depuis base */
+  const {data:saisonRows}=await sb.from("saisonnalite").select("secteur,mois,coef").eq("mois",moisActuel);
+  const saisonParSecteur={};
+  (saisonRows||[]).forEach(s=>{saisonParSecteur[s.secteur.toLowerCase().trim()]=Number(s.coef);});
+  /* Charger événements locaux actifs aujourd'hui */
+  const {data:evRows}=await sb.from("evenement_local").select("date_debut,date_fin,coef_prix,secteur").lte("date_debut",today).gte("date_fin",today);
+  const eventParDate={};
+  if(evRows&&evRows.length){
+    /* Prendre le coef max si plusieurs événements se chevauchent */
+    let maxCoef=1;evRows.forEach(e=>{if(Number(e.coef_prix)>maxCoef)maxCoef=Number(e.coef_prix);});
+    eventParDate[today]=maxCoef;
+  }
+  /* Charger les derniers prix marché depuis Supabase (scraping automatique) */
+  const {data:pmRows}=await sb.from("prix_marche").select("bien_id,secteur,prix_median,date_releve").order("date_releve",{ascending:false}).limit(50);
+  /* Calculer le prix marché moyen par bien (via le secteur) — fusion concurrents manuels + scraping auto */
   const prixMarcheParBien={};
   biens.forEach(b=>{
     const secteur=(b.ville||b.quartier||'').toLowerCase().trim();
+    /* Prix depuis concurrents manuels */
     const concSecteur=concurrents.filter(c=>c.bien_id===b.id||(secteur&&(c.secteur||'').toLowerCase().trim()===secteur));
-    if(concSecteur.length){
-      const prixValides=concSecteur.filter(c=>c.prix&&c.prix>0).map(c=>c.prix);
-      if(prixValides.length) prixMarcheParBien[b.id]=Math.round(prixValides.reduce((a,v)=>a+v,0)/prixValides.length);
-    }
+    const prixManuels=concSecteur.filter(c=>c.prix&&c.prix>0).map(c=>c.prix);
+    /* Prix depuis scraping auto (prix_marche table) */
+    const pmAuto=(pmRows||[]).find(p=>p.bien_id===b.id||(secteur&&(p.secteur||'').toLowerCase().trim()===secteur));
+    const prixAuto=pmAuto?Number(pmAuto.prix_median):null;
+    /* Fusion : priorité au scraping auto (plus fiable), sinon manuels */
+    if(prixAuto&&prixAuto>0) prixMarcheParBien[b.id]=Math.round(prixAuto);
+    else if(prixManuels.length) prixMarcheParBien[b.id]=Math.round(prixManuels.reduce((a,v)=>a+v,0)/prixManuels.length);
   });
   /* Construire le tableau */
   const rows=biens.map(b=>{
     const c=cfg[b.id]||{};const occ=occupParBien[b.id]||0;
     const pm=prixMarcheParBien[b.id]||null;
-    const prixDyn=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occ,jourSem,null,pm);
+    const secteur=(b.ville||b.quartier||'').toLowerCase().trim();
+    const coefS=saisonParSecteur[secteur]||saisonParSecteur['default']||1;
+    const coefE=eventParDate[today]||1;
+    const res=calcDynPrice(b.prix_nuit_base,{...c,actif:true},{occupJ14:occ,jourSem,joursAvant:null,prixMarche:pm,coefSaison:coefS,coefEvent:coefE,isOrphan:false});
+    const prixDyn=res.prix;
     const diff=b.prix_nuit_base?(prixDyn-b.prix_nuit_base):0;
     const diffPct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
     const diffStr=diff>0?`<span style="color:#2a7d2a">▲ +${diffPct}%</span>`:diff<0?`<span style="color:#c0392b">▼ ${diffPct}%</span>`:'<span class="muted">—</span>';
@@ -2245,6 +2316,23 @@ async function renderTarifDyn(){
     <div style="overflow:auto;padding:0 16px 16px"><table><thead><tr>
       <th>Nom / annonce</th><th>Bien associé</th><th>Secteur</th><th style="text-align:right">Prix/nuit</th><th>Lien</th><th>Mis à jour</th><th></th>
     </tr></thead><tbody>${concRows||'<tr><td colspan="7" class="muted">Aucun concurrent — ajoute des annonces concurrentes pour activer l\'analyse de marché</td></tr>'}</tbody></table></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>📅 Saisonnalité</h3><span class="sp"></span>
+      <button class="btn g sm" id="saisonInit">Initialiser Marrakech</button></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Coefficients mensuels par secteur. 1.00 = tarif normal, 1.30 = +30% (haute saison), 0.80 = −20% (basse saison).</p>
+    <div style="overflow:auto;padding:0 16px 16px" id="saisonGrid"></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>🎉 Événements locaux</h3><span class="sp"></span>
+      <button class="btn g sm" id="eventAdd">+ Ajouter un événement</button></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Festivals, jours fériés, événements sportifs — tout ce qui fait monter la demande. Le coefficient s'applique en plus des autres facteurs.</p>
+    <div style="overflow:auto;padding:0 16px 16px" id="eventGrid"></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>📊 Données marché automatiques</h3><span class="sp"></span></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Prix récupérés automatiquement via Apify (Airbnb + Booking). Le scraping est programmé chaque semaine.</p>
+    <div style="overflow:auto;padding:0 16px 16px" id="pmAutoGrid"></div>
   </div>`;
   /* Enregistrer réglages tarif */
   $("#tdSave").onclick=async()=>{
@@ -2319,7 +2407,12 @@ async function renderTarifDyn(){
     for(let i=0;i<30;i++){
       const d=new Date(Date.now()+i*864e5);const js=d.getDay();
       const occSim=Math.max(0,Math.min(1,(occupParBien[b.id]||0)+(Math.random()-0.5)*0.3));
-      const px=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occSim,js,i,prixMarcheParBien[b.id]||null);
+      const dISO=d.toISOString().slice(0,10);const mois=d.getMonth()+1;
+      const sectSim=(b.ville||b.quartier||'').toLowerCase().trim();
+      const cSaison=saisonParSecteur[sectSim]||saisonParSecteur['default']||1;
+      const cEvent=eventParDate[dISO]||1;
+      const resSim=calcDynPrice(b.prix_nuit_base,{...c,actif:true},{occupJ14:occSim,jourSem:js,joursAvant:i,prixMarche:prixMarcheParBien[b.id]||null,coefSaison:cSaison,coefEvent:cEvent,isOrphan:false});
+      const px=resSim.prix;
       const diff=b.prix_nuit_base?(px-b.prix_nuit_base):0;const pct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
       const cls=pct>0?'color:#2a7d2a':pct<0?'color:#c0392b':'color:#999';
       html+=`<tr><td>${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</td><td>${jours[js]}</td><td>${Math.round(occSim*100)}%</td><td>${i}j</td><td style="text-align:right;font-weight:bold">${money(px)}</td><td style="${cls}">${pct>0?'+':''}${pct}%</td></tr>`;
@@ -2327,6 +2420,94 @@ async function renderTarifDyn(){
     html+=`</tbody></table></div>`;
     document.getElementById("tdSimulResult").innerHTML=html;
   };
+  /* --- Saisonnalité grid --- */
+  const MOIS_LABELS=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+  const allSaison=await sb.from("saisonnalite").select("*").order("mois");
+  const sData=allSaison.data||[];
+  const secteurs=[...new Set(sData.map(s=>s.secteur))];
+  if(!secteurs.length) secteurs.push('default');
+  let sHtml='<table style="font-size:13px"><thead><tr><th>Secteur</th>'+MOIS_LABELS.map(m=>'<th style="text-align:center">'+m+'</th>').join('')+'<th></th></tr></thead><tbody>';
+  secteurs.forEach(sect=>{
+    sHtml+='<tr><td><strong>'+esc(sect)+'</strong></td>';
+    for(let m=1;m<=12;m++){
+      const row=sData.find(s=>s.secteur===sect&&s.mois===m);
+      const v=row?Number(row.coef):1;
+      const bg=v>1.15?'#e8f5e9':v<0.85?'#fce4ec':'';
+      sHtml+=`<td style="text-align:center;background:${bg}"><input type="number" step="0.05" min="0.5" max="2" value="${v}" style="width:50px;text-align:center" data-saisonS="${sect}" data-saisonM="${m}"></td>`;
+    }
+    sHtml+='<td><button class="btn o sm" data-saisonDel="'+esc(sect)+'" style="color:#c0392b">✕</button></td></tr>';
+  });
+  sHtml+='</tbody></table><div style="margin-top:8px"><button class="btn g sm" id="saisonSave">💾 Enregistrer saisonnalité</button> <span id="saisonOk" class="ok"></span></div>';
+  document.getElementById("saisonGrid").innerHTML=sHtml;
+  /* Initialiser Marrakech (coefficients types) */
+  document.getElementById("saisonInit").onclick=async()=>{
+    const MKH=[0.80,0.85,1.00,1.15,1.05,0.75,0.70,0.70,0.85,1.10,1.15,1.30]; /* basse été, haute hiver/printemps/Noël */
+    const tid=state.tenantId;
+    for(let m=1;m<=12;m++){
+      await sb.from("saisonnalite").upsert({tenant_id:tid,secteur:'default',mois:m,coef:MKH[m-1],label:MOIS_LABELS[m-1]},{onConflict:'tenant_id,secteur,mois'});
+    }
+    toast("Saisonnalité Marrakech initialisée");renderTarifDyn();
+  };
+  document.getElementById("saisonSave").onclick=async()=>{
+    const tid=state.tenantId;let ok=true;
+    document.querySelectorAll("[data-saisons]").forEach(async inp=>{
+      const sect=inp.dataset.saisons,m=Number(inp.dataset.saisonm),v=Number(inp.value)||1;
+      const {error}=await sb.from("saisonnalite").upsert({tenant_id:tid,secteur:sect,mois:m,coef:v},{onConflict:'tenant_id,secteur,mois'});
+      if(error) ok=false;
+    });
+    document.getElementById("saisonOk").textContent=ok?"Enregistré ✓":"Erreur";
+    if(ok) toast("Saisonnalité enregistrée");
+  };
+  /* --- Événements locaux grid --- */
+  const allEvents=await sb.from("evenement_local").select("*").order("date_debut");
+  const evts=allEvents.data||[];
+  let eHtml='<table style="font-size:13px"><thead><tr><th>Événement</th><th>Type</th><th>Début</th><th>Fin</th><th>Coef.</th><th>Récur.</th><th></th></tr></thead><tbody>';
+  evts.forEach(ev=>{
+    const typeBadge={festival:'🎵',ferie:'🏛️',sport:'⚽',conference:'🎤',mariage:'💒',autre:'📌'}[ev.type]||'📌';
+    eHtml+=`<tr><td>${typeBadge} ${esc(ev.nom)}</td><td>${esc(ev.type)}</td><td>${fdate(ev.date_debut)}</td><td>${fdate(ev.date_fin)}</td><td style="font-weight:bold">×${Number(ev.coef_prix).toFixed(2)}</td><td>${ev.recurrent?'♻️':'—'}</td><td><button class="btn o sm" data-evDel="${ev.id}" style="color:#c0392b">✕</button></td></tr>`;
+  });
+  if(!evts.length) eHtml+='<tr><td colspan="7" class="muted">Aucun événement — ajoute les festivals et jours fériés de ta région</td></tr>';
+  eHtml+='</tbody></table>';
+  document.getElementById("eventGrid").innerHTML=eHtml;
+  document.getElementById("eventAdd").onclick=()=>{
+    ouvrir(`<div class="fsec">Ajouter un événement local</div>
+      <div class="fg"><label>Nom *</label><input id="evNom" placeholder="Ex: Festival de Marrakech"></div>
+      <div class="fg"><label>Type</label><select id="evType">
+        <option value="festival">🎵 Festival</option><option value="ferie">🏛️ Jour férié</option>
+        <option value="sport">⚽ Sport</option><option value="conference">🎤 Conférence</option>
+        <option value="mariage">💒 Saison mariages</option><option value="autre">📌 Autre</option></select></div>
+      <div style="display:flex;gap:12px"><div class="fg" style="flex:1"><label>Date début *</label><input id="evDeb" type="date"></div>
+      <div class="fg" style="flex:1"><label>Date fin *</label><input id="evFin" type="date"></div></div>
+      <div class="fg"><label>Coefficient prix *</label><input id="evCoef" type="number" step="0.05" min="1" max="3" value="1.20"><span class="muted" style="font-size:12px"> (1.20 = +20%)</span></div>
+      <div class="fg"><label><input id="evRec" type="checkbox" style="width:auto"> Récurrent chaque année</label></div>
+      <div class="fg"><label>Notes</label><input id="evNotes" placeholder="Optionnel"></div>
+      <div style="margin-top:16px;display:flex;gap:8px"><button class="btn g" id="evSave">Ajouter</button><button class="btn o" onclick="fermer()">Annuler</button></div>`);
+    document.getElementById("evSave").onclick=async()=>{
+      const nom=document.getElementById("evNom").value.trim();
+      const deb=document.getElementById("evDeb").value;const fin=document.getElementById("evFin").value;
+      const coef=Number(document.getElementById("evCoef").value);
+      if(!nom||!deb||!fin){toast("Remplis nom, dates");return;}
+      const {error}=await sb.from("evenement_local").insert({tenant_id:state.tenantId,nom,type:document.getElementById("evType").value,date_debut:deb,date_fin:fin,coef_prix:coef,recurrent:document.getElementById("evRec").checked,notes:document.getElementById("evNotes").value.trim()||null});
+      if(error){toast("Erreur: "+error.message);return;}
+      fermer();toast("Événement ajouté");renderTarifDyn();
+    };
+  };
+  document.querySelectorAll("[data-evDel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Supprimer cet événement ?"))return;
+    await sb.from("evenement_local").delete().eq("id",b.dataset.evdel);
+    toast("Événement supprimé");renderTarifDyn();
+  });
+  /* --- Données marché auto (prix_marche) --- */
+  const pmRecent=(pmRows||[]).slice(0,20);
+  let pmHtml='';
+  if(pmRecent.length){
+    pmHtml='<table style="font-size:13px"><thead><tr><th>Secteur</th><th>Platform</th><th style="text-align:right">Médiane</th><th style="text-align:right">P25</th><th style="text-align:right">P75</th><th>Annonces</th><th>Date</th></tr></thead><tbody>';
+    pmRecent.forEach(p=>{pmHtml+=`<tr><td>${esc(p.secteur||'—')}</td><td>${esc(p.platform||'—')}</td><td style="text-align:right;font-weight:bold">${money(p.prix_median)}</td><td style="text-align:right">${money(p.prix_p25)}</td><td style="text-align:right">${money(p.prix_p75)}</td><td>${p.nb_annonces||'—'}</td><td>${fdate(p.date_releve)}</td></tr>`;});
+    pmHtml+='</tbody></table>';
+  } else {
+    pmHtml='<div class="muted">Aucune donnée — le scraping automatique (Edge Function + Apify) n\'est pas encore configuré. Les prix concurrents manuels sont utilisés en attendant.</div>';
+  }
+  document.getElementById("pmAutoGrid").innerHTML=pmHtml;
 }
 
 /* ---------- CARTE DES CANAUX ---------- */
