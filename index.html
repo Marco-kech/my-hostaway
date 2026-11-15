@@ -1783,11 +1783,11 @@ async function renderDashboard(){
           }
           const {error:errC}=await sb.from("canal_bien").insert({
             tenant_id:state.tenant.id, bien_id:bienId, canal:channel,
-            actif:true, externe_id:htId, url_annonce:l.airbnbUrl||l.url||null
+            actif:true, externe_id:htId
           });
           if(!errC)linked++;
         }
-        if(imported)invalidate("bien");
+        if(imported||linked)invalidate("bien");
         /* --- Auto-sync réservations --- */
         dashHT.innerHTML=`<span style="color:#e67e22">⏳ Synchro réservations...</span>`;
         const rr=await channelBridge("getReservations");
@@ -2921,7 +2921,7 @@ async function renderCanauxCarte(){
       /* Créer le lien canal_bien */
       const {error:errC}=await sb.from("canal_bien").insert({
         tenant_id:state.tenant.id, bien_id:bienId, canal:channel,
-        actif:true, externe_id:htId, url_annonce:l.airbnbUrl||l.url||null
+        actif:true, externe_id:htId
       });
       if(errC){logBridge(`⚠️ ${nom} — lien canal: ${errC.message}`,false);}
       else{linked++;logBridge(`🔗 ${nom} → canal ${channel} lié (externe_id: ${htId})`,true);}
