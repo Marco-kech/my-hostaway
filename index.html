@@ -2608,7 +2608,7 @@ async function renderTarifDyn(){
         return {id:b.id,nom:b.nom,ville:p.ville||'Marrakech',secteur:(p.ville||b.ville||'marrakech-gueliz').toLowerCase(),lat:p.latitude||31.6302,lng:p.longitude||-8.0062};
       });
       const res=await fetch(SUPABASE_URL+"/functions/v1/market-scan",{
-        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_ANON},
+        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_KEY},
         body:JSON.stringify({tenant_id:state.tenant.id,biens:biensData})
       });
       const data=await res.json();
