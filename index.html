@@ -1413,7 +1413,7 @@ function paintList(k){
     const tds=m.cols.map(c=>{const v=r[c[0]];return `<td>${c[2]?c[2](v,r):esc(v==null?"—":v)}</td>`;}).join("");
     return `<tr>${tds}<td><div class="act">
       ${(m.table==='message'&&r.canal==='email')?`<button class="btn g sm" data-send="${r.id}">Envoyer</button>`:''}
-      ${m.table==='reservation'?`<button class="btn o sm" data-voir="${r.id}" title="Fiche complète">👁</button><button class="btn o sm" data-contrat="${r.id}" title="Contrat PDF">📄</button>`:''}
+      ${m.table==='reservation'?`${(r.statut==='demande'||r.statut==='en_attente')?`<button class="btn g sm" data-accept="${r.id}" title="Valider la réservation">✅ Accepter</button><button class="btn d sm" data-refuse="${r.id}" title="Refuser la demande">❌ Refuser</button>`:`${r.statut==='confirmee'?`<span class="pill green" style="font-size:11px">✅ Confirmée</span>`:''}`}<button class="btn o sm" data-voir="${r.id}" title="Fiche complète">👁</button><button class="btn o sm" data-contrat="${r.id}" title="Contrat PDF">📄</button>`:''}
       ${m.table==='voyageur'?`<button class="btn o sm" data-voirvoy="${r.id}" title="Fiche voyageur">👁</button>`:''}
       ${m.table==='bien'?`<button class="btn o sm" data-voirbien="${r.id}" title="Fiche bien">👁</button>`:''}
       <button class="btn o sm" data-ed="${r.id}">Modifier</button>
@@ -1453,6 +1453,46 @@ function paintList(k){
   document.querySelectorAll("[data-voir]").forEach(b=>b.onclick=()=>ficheReservation(b.dataset.voir));
   document.querySelectorAll("[data-voirvoy]").forEach(b=>b.onclick=()=>ficheVoyageur(b.dataset.voirvoy));
   document.querySelectorAll("[data-voirbien]").forEach(b=>b.onclick=()=>ficheBien(b.dataset.voirbien));
+  /* --- Accepter / Refuser une demande --- */
+  document.querySelectorAll("[data-accept]").forEach(b=>b.onclick=async()=>{
+    const rid=b.dataset.accept;
+    const resa=(state.cache[k]||[]).find(x=>x.id===rid);
+    if(!resa)return;
+    const voyNom=refName("voyageur",resa.voyageur_id);
+    const bienNom=refName("bien",resa.bien_id);
+    if(!confirm(`Valider la réservation de ${voyNom} pour ${bienNom} ?\n${resa.arrivee} → ${resa.depart}\n\nLes dates seront bloquées et la réservation synchronisée vers les plateformes.`))return;
+    b.disabled=true;b.textContent="⏳...";
+    const {error}=await sb.from("reservation").update({statut:'confirmee'}).eq("id",rid);
+    if(error){toast("Erreur: "+error.message);b.disabled=false;b.textContent="✅ Accepter";return;}
+    toast(`✅ Réservation de ${voyNom} confirmée — dates bloquées`);
+    /* Refuser automatiquement les autres demandes qui chevauchent sur le même bien */
+    const overlap=(state.cache[k]||[]).filter(x=>x.id!==rid&&x.bien_id===resa.bien_id&&(x.statut==='demande'||x.statut==='en_attente')&&x.arrivee<resa.depart&&x.depart>resa.arrivee);
+    if(overlap.length){
+      const refuserAuto=confirm(`${overlap.length} autre(s) demande(s) chevauchent ces dates.\nVoulez-vous les refuser automatiquement ?`);
+      if(refuserAuto){
+        for(const ov of overlap){
+          await sb.from("reservation").update({statut:'annulee',notes:(ov.notes||'')+'\n[Auto-refusé : chevauchement avec résa confirmée '+resa.arrivee+'→'+resa.depart+']'}).eq("id",ov.id);
+        }
+        toast(`${overlap.length} demande(s) chevauchantes refusée(s)`);
+      }
+    }
+    /* TODO: push vers Host Tools pour accepter/refuser côté plateforme */
+    invalidate("reservation");renderList(k);
+  });
+  document.querySelectorAll("[data-refuse]").forEach(b=>b.onclick=async()=>{
+    const rid=b.dataset.refuse;
+    const resa=(state.cache[k]||[]).find(x=>x.id===rid);
+    if(!resa)return;
+    const voyNom=refName("voyageur",resa.voyageur_id);
+    const raison=prompt(`Refuser la demande de ${voyNom} ?\nMotif (optionnel) :`);
+    if(raison===null)return; /* annulation du prompt */
+    b.disabled=true;b.textContent="⏳...";
+    const notes=(resa.notes||'')+(raison?'\n[Refusé : '+raison+']':'\n[Refusé]');
+    const {error}=await sb.from("reservation").update({statut:'annulee',notes}).eq("id",rid);
+    if(error){toast("Erreur: "+error.message);b.disabled=false;b.textContent="❌ Refuser";return;}
+    toast(`❌ Demande de ${voyNom} refusée`);
+    invalidate("reservation");renderList(k);
+  });
 }
 async function envoyerBrevo(to, sujet, html, replyTo){
   const cfg=await reglGet("email");
