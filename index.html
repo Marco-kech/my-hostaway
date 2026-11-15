@@ -2108,26 +2108,117 @@ async function reglGet(cle){ const {data}=await sb.from("reglage").select("valeu
 async function reglSet(cle,valeur){ const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle,valeur},{onConflict:"tenant_id,cle"}); return error; }
 
 /* ---------- TARIFICATION DYNAMIQUE ---------- */
+function calcDynPrice(base,cfg,occupJ14,jourSem,joursAvant){
+  if(!cfg||!cfg.actif||!base) return base;
+  let prix=base;
+  /* 1. Occupation 14j : si <40% → baisse, si >75% → hausse */
+  if(occupJ14!=null){
+    if(occupJ14<0.25) prix*=0.82;
+    else if(occupJ14<0.40) prix*=0.90;
+    else if(occupJ14>0.85) prix*=1.25;
+    else if(occupJ14>0.75) prix*=1.15;
+  }
+  /* 2. Jour de la semaine : ven+sam = +15% */
+  if(jourSem===5||jourSem===6) prix*=(1+(cfg.coef_weekend||15)/100);
+  /* 3. Last minute : <3j et pas réservé → -20%, <7j → -10% */
+  if(joursAvant!=null&&joursAvant<=3) prix*=(1-(cfg.reduc_lastmin||20)/100);
+  else if(joursAvant!=null&&joursAvant<=7) prix*=(1-(cfg.reduc_lastmin||20)/200);
+  /* 4. Bornes min/max */
+  if(cfg.min&&prix<cfg.min) prix=cfg.min;
+  if(cfg.max&&prix>cfg.max) prix=cfg.max;
+  return Math.round(prix);
+}
+
 async function renderTarifDyn(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
-  const cfg=await reglGet("tarif_dyn");
+  const cfg=await reglGet("tarif_dyn")||{};
   const biens=state.opts.bien||[];
-  const rows=biens.map(b=>{const c=cfg[b.id]||{};return `<tr><td>${esc(b.nom)}</td><td style="text-align:right">${money(b.prix_nuit_base)}</td>
-    <td><input id="tdmin_${b.id}" type="number" value="${c.min!=null?c.min:''}" style="width:110px"></td>
-    <td><input id="tdmax_${b.id}" type="number" value="${c.max!=null?c.max:''}" style="width:110px"></td>
-    <td style="text-align:center"><input id="tdact_${b.id}" type="checkbox" ${c.actif?'checked':''} style="width:auto"></td></tr>`;}).join("");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Tarification dynamique</h3></div>
-    <div style="overflow:auto"><table><thead><tr><th>Bien</th><th style="text-align:right">Prix de base</th><th>Prix min</th><th>Prix max</th><th style="text-align:center">Actif</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="muted">Aucun bien</td></tr>'}</tbody></table></div>
-    <div style="padding:16px"><div class="phnote">Définis une fourchette de prix (min / max) par bien. La synchronisation des prix de marché en temps réel (PriceLabs) est une extension payante — à brancher sur ton accord. En attendant, ces bornes servent de garde-fous.</div>
-      <div style="margin-top:12px"><button class="btn g" id="tdSave">Enregistrer</button> <span class="ok" id="tdOk"></span></div></div></div>`;
+  const today=new Date().toISOString().slice(0,10);
+  const j14=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
+  /* Charger les réservations pour calculer occupation 14j */
+  const {data:resas}=await sb.from("reservation").select("bien_id,arrivee,depart,statut").gte("depart",today).lte("arrivee",j14);
+  const occupParBien={};
+  biens.forEach(b=>{
+    const resB=(resas||[]).filter(r=>r.bien_id===b.id&&(r.statut==='confirmee'||r.statut==='en_attente'));
+    let nuits=0;
+    resB.forEach(r=>{const a=Math.max(new Date(r.arrivee),new Date(today));const d=Math.min(new Date(r.depart),new Date(j14));nuits+=Math.max(0,Math.round((d-a)/864e5));});
+    occupParBien[b.id]=nuits/14;
+  });
+  const jourSem=new Date().getDay();
+  /* Construire le tableau */
+  const rows=biens.map(b=>{
+    const c=cfg[b.id]||{};const occ=occupParBien[b.id]||0;
+    const prixDyn=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occ,jourSem,null);
+    const diff=b.prix_nuit_base?(prixDyn-b.prix_nuit_base):0;
+    const diffPct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
+    const diffStr=diff>0?`<span style="color:#2a7d2a">▲ +${diffPct}%</span>`:diff<0?`<span style="color:#c0392b">▼ ${diffPct}%</span>`:'<span class="muted">—</span>';
+    return `<tr>
+      <td><strong>${esc(b.nom)}</strong></td>
+      <td style="text-align:right">${money(b.prix_nuit_base)}</td>
+      <td style="text-align:right;font-weight:bold;color:var(--dpm-vert)">${money(prixDyn)}</td>
+      <td style="text-align:center">${diffStr}</td>
+      <td style="text-align:center">${Math.round(occ*100)}%</td>
+      <td><input id="tdmin_${b.id}" type="number" value="${c.min!=null?c.min:''}" placeholder="—" style="width:90px"></td>
+      <td><input id="tdmax_${b.id}" type="number" value="${c.max!=null?c.max:''}" placeholder="—" style="width:90px"></td>
+      <td><input id="tdwe_${b.id}" type="number" value="${c.coef_weekend!=null?c.coef_weekend:15}" style="width:60px" min="0" max="100">%</td>
+      <td><input id="tdlm_${b.id}" type="number" value="${c.reduc_lastmin!=null?c.reduc_lastmin:20}" style="width:60px" min="0" max="50">%</td>
+      <td style="text-align:center"><input id="tdact_${b.id}" type="checkbox" ${c.actif?'checked':''} style="width:auto"></td>
+    </tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>🎯 Tarification dynamique</h3><span class="sp"></span>
+      <button class="btn o sm" id="tdSimul">📊 Simuler 30 jours</button></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">L'algorithme ajuste automatiquement les prix en fonction du taux d'occupation (14 jours), du jour de la semaine (week-end), et du délai avant arrivée (last minute). Les prix restent dans la fourchette min/max que tu définis.</p>
+    <div style="overflow:auto;padding:0 16px"><table><thead><tr>
+      <th>Bien</th><th style="text-align:right">Prix base</th><th style="text-align:right">Prix dynamique</th><th style="text-align:center">Variation</th><th style="text-align:center">Occup. 14j</th>
+      <th>Prix min</th><th>Prix max</th><th>Week-end +</th><th>Last min. −</th><th style="text-align:center">Actif</th>
+    </tr></thead><tbody>${rows||'<tr><td colspan="10" class="muted">Aucun bien — ajoute d\'abord un bien dans Annonces</td></tr>'}</tbody></table></div>
+    <div style="padding:16px">
+      <div class="fsec" style="margin-bottom:8px">Règles de l'algorithme</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;color:#555">
+        <div>📉 Occupation &lt;25% → <strong>−18%</strong></div>
+        <div>📉 Occupation &lt;40% → <strong>−10%</strong></div>
+        <div>📈 Occupation &gt;75% → <strong>+15%</strong></div>
+        <div>📈 Occupation &gt;85% → <strong>+25%</strong></div>
+        <div>🗓️ Ven + Sam → <strong>+coef week-end</strong></div>
+        <div>⚡ Last minute (&lt;3j) → <strong>−réduction</strong></div>
+        <div>⚡ Bientôt (&lt;7j) → <strong>−demi-réduction</strong></div>
+        <div>🔒 Prix toujours entre <strong>min et max</strong></div>
+      </div>
+      <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <span class="ok" id="tdOk"></span></div>
+    </div>
+    <div id="tdSimulResult" style="padding:0 16px 16px"></div>
+  </div>`;
+  /* Enregistrer */
   $("#tdSave").onclick=async()=>{
     const out={};
-    biens.forEach(b=>{const mn=document.getElementById('tdmin_'+b.id).value,mx=document.getElementById('tdmax_'+b.id).value,ac=document.getElementById('tdact_'+b.id).checked;
-      if(mn||mx||ac) out[b.id]={min:mn?Number(mn):null,max:mx?Number(mx):null,actif:ac};});
+    biens.forEach(b=>{
+      const mn=document.getElementById('tdmin_'+b.id).value,mx=document.getElementById('tdmax_'+b.id).value;
+      const we=document.getElementById('tdwe_'+b.id).value,lm=document.getElementById('tdlm_'+b.id).value;
+      const ac=document.getElementById('tdact_'+b.id).checked;
+      out[b.id]={min:mn?Number(mn):null,max:mx?Number(mx):null,coef_weekend:we?Number(we):15,reduc_lastmin:lm?Number(lm):20,actif:ac};
+    });
     const e=await reglSet("tarif_dyn",out);
     if(e){$("#tdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
-    $("#tdOk").textContent="Enregistré ✓"; toast("Tarification enregistrée");
+    $("#tdOk").textContent="Enregistré ✓"; toast("Tarification dynamique enregistrée");
+  };
+  /* Simulation 30 jours */
+  const simulBtn=document.getElementById("tdSimul");
+  if(simulBtn) simulBtn.onclick=()=>{
+    if(!biens.length){toast("Ajoute d'abord un bien");return;}
+    const b=biens[0];const c=cfg[b.id]||{coef_weekend:15,reduc_lastmin:20,actif:true};
+    let html=`<div class="fsec" style="margin-bottom:8px">Simulation 30 jours — ${esc(b.nom)} (base : ${money(b.prix_nuit_base)})</div>`;
+    html+=`<div style="overflow-x:auto"><table style="font-size:12px"><thead><tr><th>Date</th><th>Jour</th><th>Occup.</th><th>Délai</th><th style="text-align:right">Prix</th><th>Var.</th></tr></thead><tbody>`;
+    const jours=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+    for(let i=0;i<30;i++){
+      const d=new Date(Date.now()+i*864e5);const js=d.getDay();
+      const occSim=Math.max(0,Math.min(1,(occupParBien[b.id]||0)+(Math.random()-0.5)*0.3));
+      const px=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occSim,js,i);
+      const diff=b.prix_nuit_base?(px-b.prix_nuit_base):0;const pct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
+      const cls=pct>0?'color:#2a7d2a':pct<0?'color:#c0392b':'color:#999';
+      html+=`<tr><td>${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</td><td>${jours[js]}</td><td>${Math.round(occSim*100)}%</td><td>${i}j</td><td style="text-align:right;font-weight:bold">${money(px)}</td><td style="${cls}">${pct>0?'+':''}${pct}%</td></tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    document.getElementById("tdSimulResult").innerHTML=html;
   };
 }
 
