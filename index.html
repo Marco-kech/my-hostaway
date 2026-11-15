@@ -2397,7 +2397,8 @@ async function renderTarifDyn(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
   const cfg=await reglGet("tarif_dyn")||{};
-  const concurrents=await reglGet("concurrents")||[];
+  const concRaw=await reglGet("concurrents");
+  const concurrents=Array.isArray(concRaw)?concRaw:(concRaw?Object.values(concRaw):[]);
   const biens=state.opts.bien||[];
   const today=new Date().toISOString().slice(0,10);
   const j14=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
