@@ -2510,6 +2510,20 @@ async function renderTarifDyn(){
   document.getElementById("pmAutoGrid").innerHTML=pmHtml;
 }
 
+/* ---------- CHANNEL BRIDGE — helper front ---------- */
+async function channelBridge(action,params){
+  const BRIDGE_URL=window.location.hostname==='localhost'
+    ?'http://localhost:54321/functions/v1/channel-bridge'
+    :'https://eztwwzzjzwmhfzmcafyu.supabase.co/functions/v1/channel-bridge';
+  try{
+    const res=await fetch(BRIDGE_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action,tenant_id:state.tenantId,params})
+    });
+    return await res.json();
+  }catch(e){return {ok:false,error:e.message,provider:'none'};}
+}
+
 /* ---------- CARTE DES CANAUX ---------- */
 async function renderCanauxCarte(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -2528,7 +2542,18 @@ async function renderCanauxCarte(){
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Mappage de l'annonce</h3><span class="sp"></span>
       <button class="btn o sm" id="cmCsv">⬇ Exporter CSV</button>
       <button class="btn o sm" id="cmFilt">Filtres</button></div>
-    <div style="overflow:auto"><table><thead><tr><th>Annonce</th>${CANAUX.map(c=>`<th style="text-align:center">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows||'<tr><td colspan="'+(1+CANAUX.length)+'" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>`;
+    <div style="overflow:auto"><table><thead><tr><th>Annonce</th>${CANAUX.map(c=>`<th style="text-align:center">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows||'<tr><td colspan="'+(1+CANAUX.length)+'" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>🔌 Bridge API — Channel Manager</h3><span class="sp"></span>
+      <span id="bridgeStatus" style="font-size:13px;color:#999">Non connecté</span></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Connexion API vers Host Tools (Airbnb, Booking, VRBO). Notre app est le PMS — Host Tools est le pont transparent vers les plateformes. Changeable sans toucher à l'app.</p>
+    <div style="padding:0 16px 16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn o sm" id="bridgeTest">🔍 Tester la connexion</button>
+      <button class="btn g sm" id="bridgeSyncResa">📥 Synchro réservations</button>
+      <button class="btn o sm" id="bridgePushPrices">💰 Pousser prix dynamiques</button>
+    </div>
+    <div id="bridgeLog" style="padding:0 16px 16px;font-family:monospace;font-size:12px;max-height:200px;overflow:auto"></div>
+  </div>`;
   document.querySelectorAll("[data-cbT]").forEach(b=>b.onclick=async()=>{const l=(liens||[]).find(x=>x.id===b.dataset.cbT);if(!l)return;
     const {error:e}=await sb.from("canal_bien").update({actif:!l.actif}).eq("id",l.id);if(e){toast("Erreur : "+e.message);return;}renderCanauxCarte();});
   document.querySelectorAll("[data-cbA]").forEach(b=>b.onclick=async()=>{
@@ -2540,6 +2565,57 @@ async function renderCanauxCarte(){
     const csv='﻿'+["Annonce;"+CANAUX.join(';'),...lines].join('\n');
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
     a.href=url;a.download='Canaux_annonces.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
+  /* --- Bridge API handlers --- */
+  const bLog=document.getElementById("bridgeLog");
+  const bStatus=document.getElementById("bridgeStatus");
+  function logBridge(msg,ok){bLog.innerHTML+=`<div style="color:${ok?'#2a7d2a':'#c0392b'}">[${new Date().toLocaleTimeString('fr-FR')}] ${esc(msg)}</div>`;bLog.scrollTop=bLog.scrollHeight;}
+  document.getElementById("bridgeTest").onclick=async()=>{
+    logBridge("Test connexion Host Tools...",true);
+    bStatus.textContent="⏳ Test...";bStatus.style.color="#e67e22";
+    const r=await channelBridge("getListings");
+    if(r.ok){
+      const nb=(r.data?.listings||r.data?.result||[]).length;
+      logBridge(`✅ Connecté — ${nb} annonce(s) trouvée(s) via ${r.provider}`,true);
+      bStatus.textContent=`✅ Connecté (${r.provider})`;bStatus.style.color="#2a7d2a";
+    }else{
+      logBridge(`❌ Erreur : ${r.error}`,false);
+      bStatus.textContent="❌ Non connecté";bStatus.style.color="#c0392b";
+    }
+  };
+  document.getElementById("bridgeSyncResa").onclick=async()=>{
+    logBridge("Synchro réservations...",true);
+    const r=await channelBridge("getReservations");
+    if(r.ok){
+      logBridge(`✅ ${r.data?._synced||0} réservation(s) synchronisées`,true);
+      toast("Réservations synchronisées");
+    }else{logBridge(`❌ ${r.error}`,false);}
+  };
+  document.getElementById("bridgePushPrices").onclick=async()=>{
+    if(!biens.length){toast("Aucun bien");return;}
+    logBridge("Calcul et push des prix dynamiques...",true);
+    const cfg2=await reglGet("tarif_dyn")||{};
+    let pushed=0;
+    for(const b of biens){
+      const lien=Object.values(byBien[b.id]||{}).find(l=>l&&l.externe_id);
+      if(!lien||!lien.externe_id){logBridge(`⏭ ${b.nom} — pas de listing externe lié`,false);continue;}
+      /* Calculer les prix pour les 30 prochains jours */
+      const prices=[];
+      for(let i=0;i<30;i++){
+        const d=new Date(Date.now()+i*864e5);
+        const dISO=d.toISOString().slice(0,10);
+        const js=d.getDay();
+        const occ=occupParBien?.[b.id]||0;
+        const c=cfg2[b.id]||{coef_weekend:15,reduc_lastmin:20,actif:true};
+        const res=calcDynPrice(b.prix_nuit_base,{...c,actif:true},{occupJ14:occ,jourSem:js,joursAvant:i,prixMarche:null,coefSaison:1,coefEvent:1,isOrphan:false});
+        prices.push({date:dISO,price:res.prix});
+      }
+      const r=await channelBridge("pushPrices",{listingId:lien.externe_id,prices});
+      if(r.ok){logBridge(`✅ ${b.nom} — 30 jours poussés`,true);pushed++;}
+      else{logBridge(`❌ ${b.nom} — ${r.error}`,false);}
+    }
+    logBridge(`Terminé : ${pushed}/${biens.length} bien(s) mis à jour`,pushed>0);
+    if(pushed) toast(`Prix dynamiques poussés (${pushed} bien${pushed>1?'s':''})`);
+  };
 }
 
 /* ---------- SYNCHRO ICAL ---------- */
