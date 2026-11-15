@@ -2508,8 +2508,10 @@ async function renderTarifDyn(){
   </div>
   <div class="panel" style="margin-top:16px">
     <div class="phead"><h3>🏪 Analyse concurrentielle</h3><span class="sp"></span>
+      <button class="btn sm" id="marketScan" style="margin-right:8px">🔍 Scanner Airbnb & Booking</button>
       <button class="btn g sm" id="concAdd">+ Ajouter un concurrent</button></div>
-    <p style="padding:0 16px;color:#666;font-size:13px">Ajoute les annonces concurrentes de ton secteur pour que l'algorithme ajuste tes prix vers le prix moyen du marché. Tu peux associer un concurrent à un bien spécifique ou à un secteur géographique.</p>
+    <div id="marketScanResult" style="padding:0 16px"></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Le scanner récupère automatiquement les prix des annonces concurrentes sur Airbnb et Booking dans ta zone. L'algorithme ajuste ensuite tes prix vers le prix médian du marché.</p>
     ${nbConc?`<div style="padding:0 16px 8px;display:flex;gap:24px">
       <div style="background:#f0f7f0;border-radius:8px;padding:12px 20px;flex:1;text-align:center">
         <div style="font-size:24px;font-weight:bold;color:var(--dpm-vert)">${nbConc}</div>
@@ -2594,6 +2596,55 @@ async function renderTarifDyn(){
       fermer();toast(isEdit?"Concurrent modifié":"Concurrent ajouté");renderTarifDyn();
     };
   }
+  /* --- Scanner de marché automatique --- */
+  document.getElementById("marketScan").onclick=async()=>{
+    const scanDiv=document.getElementById("marketScanResult");
+    scanDiv.innerHTML=`<div style="padding:12px;background:#fff8e1;border-radius:8px;margin-bottom:12px">
+      <span class="spin" style="width:16px;height:16px;border-width:2px;vertical-align:middle;margin-right:8px"></span>
+      <strong>Scan en cours...</strong> Récupération des prix sur Airbnb et Booking pour ta zone...</div>`;
+    try{
+      const biensData=biens.map(b=>{
+        const p=b.parametres||{};
+        return {id:b.id,nom:b.nom,ville:p.ville||'Marrakech',secteur:(p.ville||b.ville||'marrakech-gueliz').toLowerCase(),lat:p.latitude||31.6302,lng:p.longitude||-8.0062};
+      });
+      const res=await fetch(SUPABASE_URL+"/functions/v1/market-scan",{
+        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_ANON},
+        body:JSON.stringify({tenant_id:state.tenant.id,biens:biensData})
+      });
+      const data=await res.json();
+      if(!data.ok){scanDiv.innerHTML=`<div style="padding:12px;background:#ffeaea;border-radius:8px;margin-bottom:12px">❌ Erreur: ${esc(data.error)}</div>`;return;}
+      let html='';
+      for(const r of data.results||[]){
+        html+=`<div style="padding:12px;background:#f0f7f0;border-radius:8px;margin-bottom:12px">
+          <strong>📊 ${esc(r.bien||'')}</strong> — ${esc(r.secteur||'')} — Scanné le ${new Date().toLocaleDateString('fr-FR')}
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px">
+            <div style="text-align:center;padding:8px;background:rgba(255,255,255,.7);border-radius:6px">
+              <div style="font-size:11px;color:#666">🏠 Airbnb</div>
+              <div style="font-size:18px;font-weight:bold">${r.airbnb.count?money(r.airbnb.median):'—'}</div>
+              <div style="font-size:11px;color:#999">${r.airbnb.count} annonces (${r.airbnb.min?money(r.airbnb.min):'—'} — ${r.airbnb.max?money(r.airbnb.max):'—'})</div>
+            </div>
+            <div style="text-align:center;padding:8px;background:rgba(255,255,255,.7);border-radius:6px">
+              <div style="font-size:11px;color:#666">🅱️ Booking</div>
+              <div style="font-size:18px;font-weight:bold">${r.booking.count?money(r.booking.median):'—'}</div>
+              <div style="font-size:11px;color:#999">${r.booking.count} annonces (${r.booking.min?money(r.booking.min):'—'} — ${r.booking.max?money(r.booking.max):'—'})</div>
+            </div>
+            <div style="text-align:center;padding:8px;background:rgba(255,255,255,.7);border-radius:6px">
+              <div style="font-size:11px;color:#666">🎯 Médiane marché</div>
+              <div style="font-size:22px;font-weight:bold;color:#2a7d2a">${r.global.count?money(r.global.median):'Aucune donnée'}</div>
+              <div style="font-size:11px;color:#999">${r.global.count} annonces au total</div>
+            </div>
+          </div>
+        </div>`;
+      }
+      if(!html)html='<div style="padding:12px;background:#fff3cd;border-radius:8px;margin-bottom:12px">⚠️ Aucun prix trouvé — les plateformes ont peut-être bloqué la requête. Réessaye dans quelques minutes.</div>';
+      scanDiv.innerHTML=html;
+      toast("Scan du marché terminé — prix stockés");
+      /* Recharger la page pour intégrer les nouveaux prix marché */
+      setTimeout(()=>renderTarifDyn(),2000);
+    }catch(e){
+      scanDiv.innerHTML=`<div style="padding:12px;background:#ffeaea;border-radius:8px;margin-bottom:12px">❌ ${esc(e.message)}</div>`;
+    }
+  };
   document.getElementById("concAdd").onclick=()=>openConcForm(null);
   document.querySelectorAll("[data-concEdit]").forEach(b=>b.onclick=()=>openConcForm(Number(b.dataset.concedit)));
   document.querySelectorAll("[data-concDel]").forEach(b=>b.onclick=async()=>{
