@@ -144,6 +144,7 @@ td .act{display:flex;gap:6px}
 .cal .d{background:#fbfaf6;border:1px solid var(--line);border-radius:7px;min-height:64px;padding:5px 6px;font-size:12px}
 .cal .d .n{font-weight:700;color:var(--muted)}
 .cal .ev{margin-top:3px;background:var(--brand);color:#fff;border-radius:5px;padding:2px 5px;font-size:10.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cal .ev.dem{background:#e67e22;opacity:0.7;border:1px dashed #c0392b}
 .cal .ev.b{background:var(--danger)}
 .cal .hd{text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;padding:4px}
 .calm{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
@@ -1591,6 +1592,8 @@ async function renderDashboard(){
   const first=new Date();first.setDate(1);const monthStart=first.toISOString().slice(0,10);
   const d30ago=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   await loadOpts("bien");await loadOpts("voyageur");
+  /* Statuts qui bloquent les dates et comptent dans les KPIs financiers */
+  const STATUT_VALIDE=['confirmee','terminee'];
   const [biensAll,resaFut,resaMonth,pay,activeResas,msgs,checkins]=await Promise.all([
     sb.from("bien").select("id,statut,prix_nuit_base,capacite"),
     sb.from("reservation").select("id,arrivee,depart,statut",{count:"exact"}).gte("depart",today).neq("statut","annulee"),
@@ -1598,7 +1601,7 @@ async function renderDashboard(){
     sb.from("paiement").select("montant,paye_le,statut").eq("statut","reussi").gte("paye_le",monthStart),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,nb_personnes").gte("depart",today).neq("statut","annulee"),
     sb.from("message").select("sens,statut"),
-    sb.from("reservation").select("id",{count:"exact",head:true}).gte("arrivee",d30ago).lte("arrivee",today).neq("statut","annulee"),
+    sb.from("reservation").select("id",{count:"exact",head:true}).gte("arrivee",d30ago).lte("arrivee",today).in("statut",STATUT_VALIDE),
   ]);
   const bAll=biensAll.data||[];
   const nbBiens=bAll.length;
@@ -1638,7 +1641,7 @@ async function renderDashboard(){
   const revConfirmes=confRows.reduce((s,r)=>s+Number(r.prix_total||0),0);
   const revMoyen=confRows.length?revConfirmes/confRows.length:0;
   const in30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
-  const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
+  const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).in("statut",STATUT_VALIDE);
   let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
   const capacity=nbBiens*30; const taux=capacity?Math.round(nights/capacity*100):0;
   /* --- KPI PRO STR --- */
@@ -1718,7 +1721,7 @@ async function renderDashboard(){
     </div>
     <div class="panel"><div class="phead"><h3>Prochaines arrivées</h3></div><div id="dashNext" style="overflow:auto"><div class="center"><span class="spin"></span></div></div></div>`;
   await loadOpts("bien");await loadOpts("voyageur");
-  const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).neq("statut","annulee").order("arrivee").limit(8);
+  const {data:next}=await sb.from("reservation").select("*").gte("arrivee",today).in("statut",STATUT_VALIDE).order("arrivee").limit(8);
   const _dn=$("#dashNext"); if(!_dn) return;
   /* Graphiques historiques */
   const MOISFR_SHORT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
@@ -1728,7 +1731,7 @@ async function renderDashboard(){
     const rev=(mr||[]).reduce((s,r)=>s+Number(r.prix_total||0),0);
     chartData.push({l:MOISFR_SHORT[d.getMonth()],v:Math.round(rev)});
     const daysInMonth=(new Date(d.getFullYear(),d.getMonth()+1,0)).getDate();
-    const {data:oc}=await sb.from("reservation").select("arrivee,depart").lte("arrivee",mEnd).gte("depart",mStart).neq("statut","annulee");
+    const {data:oc}=await sb.from("reservation").select("arrivee,depart").lte("arrivee",mEnd).gte("depart",mStart).in("statut",STATUT_VALIDE);
     let nts=0;(oc||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),d));const dd=new Date(Math.min(new Date(r.depart),new Date(mEnd)));nts+=Math.max(0,(dd-a)/864e5);});
     const cap=nbBiens*daysInMonth;occData.push({l:MOISFR_SHORT[d.getMonth()],v:cap?Math.round(nts/cap*100):0});
   }
@@ -1842,7 +1845,12 @@ async function renderCalendar(){
   for(let i=0;i<firstDow;i++)cells+=`<div></div>`;
   for(let d=1;d<=days;d++){
     const date=new Date(y,mo,d),iso=date.toISOString().slice(0,10);
-    const evs=(resa||[]).filter(r=>iso>=r.arrivee&&iso<r.depart).map(r=>`<div class="ev">${esc(refName("bien",r.bien_id))}</div>`).join("");
+    const evs=(resa||[]).filter(r=>iso>=r.arrivee&&iso<r.depart).map(r=>{
+      const isConfirm=r.statut==='confirmee'||r.statut==='terminee';
+      const cls=isConfirm?'ev':'ev dem';
+      const prefix=isConfirm?'':'⏳ ';
+      return `<div class="${cls}">${prefix}${esc(refName("bien",r.bien_id))}</div>`;
+    }).join("");
     const bl=(blos||[]).filter(b=>iso>=b.debut&&iso<b.fin).map(b=>`<div class="ev b">Bloqué</div>`).join("");
     cells+=`<div class="d"><div class="n">${d}</div>${evs}${bl}</div>`;
   }
@@ -1876,8 +1884,9 @@ async function renderCalMultiple(){
   await loadOpts("voyageur");
   const dayISO=d=>new Date(y,mo,d).toISOString().slice(0,10);
   const cf=state.calF||(state.calF={q:"",ville:"",pays:"",dispo:""});
+  const resaConf=(resa||[]).filter(x=>x.statut==='confirmee'||x.statut==='terminee');
   const nuitsLibres=b=>{let n=0;for(let d=1;d<=days;d++){const iso=dayISO(d);
-    if(!(resa||[]).some(x=>x.bien_id===b.id&&iso>=x.arrivee&&iso<x.depart)&&!(blos||[]).some(x=>x.bien_id===b.id&&iso>=x.debut&&iso<x.fin))n++;}return n;};
+    if(!resaConf.some(x=>x.bien_id===b.id&&iso>=x.arrivee&&iso<x.depart)&&!(blos||[]).some(x=>x.bien_id===b.id&&iso>=x.debut&&iso<x.fin))n++;}return n;};
   const villes=[...new Set(allB.map(b=>(b.parametres||{}).ville).filter(Boolean))].sort();
   const paysL=[...new Set(allB.map(b=>(b.parametres||{}).pays).filter(Boolean))].sort();
   const okB=b=>{const pr=b.parametres||{};
@@ -1985,14 +1994,14 @@ async function renderCalAnnuel(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const sISO=calYear+"-01-01",eISO=calYear+"-12-31";
   const {data:resa}=await sb.from("reservation").select("arrivee,depart,statut").neq("statut","annulee").lte("arrivee",eISO).gte("depart",sISO);
-  const booked=new Set();
-  (resa||[]).forEach(r=>{let d=new Date(r.arrivee);const end=new Date(r.depart);while(d<end){if(d.getFullYear()===calYear)booked.add(d.toISOString().slice(0,10));d=new Date(d.getTime()+864e5);}});
+  const booked=new Set();const pending=new Set();
+  (resa||[]).forEach(r=>{const isConf=r.statut==='confirmee'||r.statut==='terminee';let d=new Date(r.arrivee);const end=new Date(r.depart);while(d<end){if(d.getFullYear()===calYear){const iso=d.toISOString().slice(0,10);if(isConf)booked.add(iso);else pending.add(iso);}d=new Date(d.getTime()+864e5);}});
   const moNames=["janv.","févr.","mars","avril","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
   let months="";
   for(let mo=0;mo<12;mo++){
     const first=new Date(calYear,mo,1);const days=new Date(calYear,mo+1,0).getDate();const fdow=(first.getDay()+6)%7;
     let cells="";for(let i=0;i<fdow;i++)cells+=`<span></span>`;
-    for(let d=1;d<=days;d++){const iso=new Date(calYear,mo,d).toISOString().slice(0,10);cells+=`<span class="${booked.has(iso)?'bk':''}">${d}</span>`;}
+    for(let d=1;d<=days;d++){const iso=new Date(calYear,mo,d).toISOString().slice(0,10);cells+=`<span class="${booked.has(iso)?'bk':pending.has(iso)?'bky':''}">${d}</span>`;}
     months+=`<div class="mo"><h4>${moNames[mo]}</h4><div class="mini">${cells}</div></div>`;
   }
   $("#content").innerHTML=`<div class="panel"><div class="phead">
