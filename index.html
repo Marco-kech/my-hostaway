@@ -1457,29 +1457,50 @@ function paintList(k){
   document.querySelectorAll("[data-voirvoy]").forEach(b=>b.onclick=()=>ficheVoyageur(b.dataset.voirvoy));
   document.querySelectorAll("[data-voirbien]").forEach(b=>b.onclick=()=>ficheBien(b.dataset.voirbien));
   /* --- Accepter / Refuser une demande --- */
+  /* Récupérer l'ID Host Tools depuis donnees_source */
+  function htResaId(resa){return resa?.donnees_source?._id||resa?.donnees_source?.id||resa?.source_id?.replace('ht_','')||null;}
   document.querySelectorAll("[data-accept]").forEach(b=>b.onclick=async()=>{
     const rid=b.dataset.accept;
     const resa=(state.cache[k]||[]).find(x=>x.id===rid);
     if(!resa)return;
     const voyNom=refName("voyageur",resa.voyageur_id);
     const bienNom=refName("bien",resa.bien_id);
-    if(!confirm(`Valider la réservation de ${voyNom} pour ${bienNom} ?\n${resa.arrivee} → ${resa.depart}\n\nLes dates seront bloquées et la réservation synchronisée vers les plateformes.`))return;
-    b.disabled=true;b.textContent="⏳...";
-    const {error}=await sb.from("reservation").update({statut:'confirmee'}).eq("id",rid);
-    if(error){toast("Erreur: "+error.message);b.disabled=false;b.textContent="✅ Accepter";return;}
-    toast(`✅ Réservation de ${voyNom} confirmée — dates bloquées`);
-    /* Refuser automatiquement les autres demandes qui chevauchent sur le même bien */
-    const overlap=(state.cache[k]||[]).filter(x=>x.id!==rid&&x.bien_id===resa.bien_id&&(x.statut==='demande'||x.statut==='en_attente')&&x.arrivee<resa.depart&&x.depart>resa.arrivee);
-    if(overlap.length){
-      const refuserAuto=confirm(`${overlap.length} autre(s) demande(s) chevauchent ces dates.\nVoulez-vous les refuser automatiquement ?`);
-      if(refuserAuto){
-        for(const ov of overlap){
-          await sb.from("reservation").update({statut:'annulee',notes:(ov.notes||'')+'\n[Auto-refusé : chevauchement avec résa confirmée '+resa.arrivee+'→'+resa.depart+']'}).eq("id",ov.id);
-        }
-        toast(`${overlap.length} demande(s) chevauchantes refusée(s)`);
+    const isInquiry=resa.statut==='demande';
+    const actionLabel=isInquiry?'pré-approuver (inquiry)':'accepter (booking request)';
+    if(!confirm(`Valider la réservation de ${voyNom} pour ${bienNom} ?\n${resa.arrivee} → ${resa.depart}\n\nAction: ${actionLabel}\nLes dates seront bloquées et la réservation synchronisée vers la plateforme.`))return;
+    b.disabled=true;b.textContent="⏳ Sync...";
+    /* 1. Push vers Host Tools (accepter/pré-approuver sur la plateforme) */
+    const htId=htResaId(resa);
+    if(htId&&resa.canal!=='direct'){
+      const bridgeAction=isInquiry?'preapproveReservation':'acceptReservation';
+      const res=await channelBridge(bridgeAction,{reservationId:htId});
+      if(!res.ok){
+        toast(`⚠️ Sync plateforme: ${res.error||'erreur'} — la résa est validée localement`);
+      } else {
+        toast(`🔄 ${isInquiry?'Pré-approbation':'Acceptation'} envoyée à ${resa.canal}`);
       }
     }
-    /* TODO: push vers Host Tools pour accepter/refuser côté plateforme */
+    /* 2. Mettre à jour en base locale */
+    const newStatut=isInquiry?'en_attente':'confirmee';
+    const {error}=await sb.from("reservation").update({statut:newStatut}).eq("id",rid);
+    if(error){toast("Erreur locale: "+error.message);b.disabled=false;b.textContent="✅ Accepter";return;}
+    toast(`✅ Réservation de ${voyNom} ${isInquiry?'pré-approuvée — en attente de confirmation du voyageur':'confirmée — dates bloquées'}`);
+    /* 3. Refuser automatiquement les demandes qui chevauchent (seulement si confirmée) */
+    if(newStatut==='confirmee'){
+      const overlap=(state.cache[k]||[]).filter(x=>x.id!==rid&&x.bien_id===resa.bien_id&&(x.statut==='demande'||x.statut==='en_attente')&&x.arrivee<resa.depart&&x.depart>resa.arrivee);
+      if(overlap.length){
+        const refuserAuto=confirm(`${overlap.length} autre(s) demande(s) chevauchent ces dates.\nVoulez-vous les refuser automatiquement ?`);
+        if(refuserAuto){
+          for(const ov of overlap){
+            await sb.from("reservation").update({statut:'annulee',notes:(ov.notes||'')+'\n[Auto-refusé : chevauchement avec résa confirmée '+resa.arrivee+'→'+resa.depart+']'}).eq("id",ov.id);
+            /* Refuser aussi côté plateforme */
+            const ovHtId=htResaId(ov);
+            if(ovHtId&&ov.canal!=='direct'){await channelBridge('declineReservation',{reservationId:ovHtId,reason:'dates_not_available'});}
+          }
+          toast(`${overlap.length} demande(s) chevauchantes refusée(s) (plateformes notifiées)`);
+        }
+      }
+    }
     invalidate("reservation");renderList(k);
   });
   document.querySelectorAll("[data-refuse]").forEach(b=>b.onclick=async()=>{
@@ -1489,10 +1510,18 @@ function paintList(k){
     const voyNom=refName("voyageur",resa.voyageur_id);
     const raison=prompt(`Refuser la demande de ${voyNom} ?\nMotif (optionnel) :`);
     if(raison===null)return; /* annulation du prompt */
-    b.disabled=true;b.textContent="⏳...";
+    b.disabled=true;b.textContent="⏳ Sync...";
+    /* 1. Refuser côté plateforme via Host Tools */
+    const htId=htResaId(resa);
+    if(htId&&resa.canal!=='direct'){
+      const res=await channelBridge('declineReservation',{reservationId:htId,reason:raison||undefined});
+      if(!res.ok){toast(`⚠️ Sync plateforme: ${res.error||'erreur'} — refusée localement`);}
+      else{toast(`🔄 Refus envoyé à ${resa.canal}`);}
+    }
+    /* 2. Mettre à jour en base locale */
     const notes=(resa.notes||'')+(raison?'\n[Refusé : '+raison+']':'\n[Refusé]');
     const {error}=await sb.from("reservation").update({statut:'annulee',notes}).eq("id",rid);
-    if(error){toast("Erreur: "+error.message);b.disabled=false;b.textContent="❌ Refuser";return;}
+    if(error){toast("Erreur locale: "+error.message);b.disabled=false;b.textContent="❌ Refuser";return;}
     toast(`❌ Demande de ${voyNom} refusée`);
     invalidate("reservation");renderList(k);
   });
