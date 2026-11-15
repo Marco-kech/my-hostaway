@@ -2108,7 +2108,7 @@ async function reglGet(cle){ const {data}=await sb.from("reglage").select("valeu
 async function reglSet(cle,valeur){ const {error}=await sb.from("reglage").upsert({tenant_id:state.tenant.id,cle,valeur},{onConflict:"tenant_id,cle"}); return error; }
 
 /* ---------- TARIFICATION DYNAMIQUE ---------- */
-function calcDynPrice(base,cfg,occupJ14,jourSem,joursAvant){
+function calcDynPrice(base,cfg,occupJ14,jourSem,joursAvant,prixMarche){
   if(!cfg||!cfg.actif||!base) return base;
   let prix=base;
   /* 1. Occupation 14j : si <40% → baisse, si >75% → hausse */
@@ -2118,12 +2118,22 @@ function calcDynPrice(base,cfg,occupJ14,jourSem,joursAvant){
     else if(occupJ14>0.85) prix*=1.25;
     else if(occupJ14>0.75) prix*=1.15;
   }
-  /* 2. Jour de la semaine : ven+sam = +15% */
+  /* 2. Jour de la semaine : ven+sam = +coef */
   if(jourSem===5||jourSem===6) prix*=(1+(cfg.coef_weekend||15)/100);
-  /* 3. Last minute : <3j et pas réservé → -20%, <7j → -10% */
+  /* 3. Last minute : <3j → -reduc, <7j → -demi */
   if(joursAvant!=null&&joursAvant<=3) prix*=(1-(cfg.reduc_lastmin||20)/100);
   else if(joursAvant!=null&&joursAvant<=7) prix*=(1-(cfg.reduc_lastmin||20)/200);
-  /* 4. Bornes min/max */
+  /* 4. Analyse concurrentielle : ajuster vers le prix du marché */
+  if(prixMarche&&prixMarche>0){
+    const ecart=(prixMarche-prix)/prixMarche;
+    /* Si on est >20% au-dessus du marché → baisser de 10% */
+    if(ecart<-0.20) prix*=0.90;
+    /* Si on est >15% en-dessous du marché → monter de 8% */
+    else if(ecart>0.15) prix*=1.08;
+    /* Si dans les 15% → léger ajustement vers le marché */
+    else if(Math.abs(ecart)>0.05) prix+=(prixMarche-prix)*0.15;
+  }
+  /* 5. Bornes min/max */
   if(cfg.min&&prix<cfg.min) prix=cfg.min;
   if(cfg.max&&prix>cfg.max) prix=cfg.max;
   return Math.round(prix);
@@ -2133,6 +2143,7 @@ async function renderTarifDyn(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
   const cfg=await reglGet("tarif_dyn")||{};
+  const concurrents=await reglGet("concurrents")||[];
   const biens=state.opts.bien||[];
   const today=new Date().toISOString().slice(0,10);
   const j14=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
@@ -2146,32 +2157,59 @@ async function renderTarifDyn(){
     occupParBien[b.id]=nuits/14;
   });
   const jourSem=new Date().getDay();
+  /* Calculer le prix marché moyen par bien (via le secteur) */
+  const prixMarcheParBien={};
+  biens.forEach(b=>{
+    const secteur=(b.ville||b.quartier||'').toLowerCase().trim();
+    const concSecteur=concurrents.filter(c=>c.bien_id===b.id||(secteur&&(c.secteur||'').toLowerCase().trim()===secteur));
+    if(concSecteur.length){
+      const prixValides=concSecteur.filter(c=>c.prix&&c.prix>0).map(c=>c.prix);
+      if(prixValides.length) prixMarcheParBien[b.id]=Math.round(prixValides.reduce((a,v)=>a+v,0)/prixValides.length);
+    }
+  });
   /* Construire le tableau */
   const rows=biens.map(b=>{
     const c=cfg[b.id]||{};const occ=occupParBien[b.id]||0;
-    const prixDyn=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occ,jourSem,null);
+    const pm=prixMarcheParBien[b.id]||null;
+    const prixDyn=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occ,jourSem,null,pm);
     const diff=b.prix_nuit_base?(prixDyn-b.prix_nuit_base):0;
     const diffPct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
     const diffStr=diff>0?`<span style="color:#2a7d2a">▲ +${diffPct}%</span>`:diff<0?`<span style="color:#c0392b">▼ ${diffPct}%</span>`:'<span class="muted">—</span>';
+    const pmStr=pm?money(pm):'<span class="muted">—</span>';
     return `<tr>
       <td><strong>${esc(b.nom)}</strong></td>
       <td style="text-align:right">${money(b.prix_nuit_base)}</td>
       <td style="text-align:right;font-weight:bold;color:var(--dpm-vert)">${money(prixDyn)}</td>
       <td style="text-align:center">${diffStr}</td>
+      <td style="text-align:center">${pmStr}</td>
       <td style="text-align:center">${Math.round(occ*100)}%</td>
-      <td><input id="tdmin_${b.id}" type="number" value="${c.min!=null?c.min:''}" placeholder="—" style="width:90px"></td>
-      <td><input id="tdmax_${b.id}" type="number" value="${c.max!=null?c.max:''}" placeholder="—" style="width:90px"></td>
-      <td><input id="tdwe_${b.id}" type="number" value="${c.coef_weekend!=null?c.coef_weekend:15}" style="width:60px" min="0" max="100">%</td>
-      <td><input id="tdlm_${b.id}" type="number" value="${c.reduc_lastmin!=null?c.reduc_lastmin:20}" style="width:60px" min="0" max="50">%</td>
+      <td><input id="tdmin_${b.id}" type="number" value="${c.min!=null?c.min:''}" placeholder="—" style="width:80px"></td>
+      <td><input id="tdmax_${b.id}" type="number" value="${c.max!=null?c.max:''}" placeholder="—" style="width:80px"></td>
+      <td><input id="tdwe_${b.id}" type="number" value="${c.coef_weekend!=null?c.coef_weekend:15}" style="width:55px" min="0" max="100">%</td>
+      <td><input id="tdlm_${b.id}" type="number" value="${c.reduc_lastmin!=null?c.reduc_lastmin:20}" style="width:55px" min="0" max="50">%</td>
       <td style="text-align:center"><input id="tdact_${b.id}" type="checkbox" ${c.actif?'checked':''} style="width:auto"></td>
     </tr>`;}).join("");
+  /* Section concurrents */
+  const concRows=concurrents.map((c,i)=>{
+    const bNom=c.bien_id?refName('bien',c.bien_id):('<span class="muted">'+esc(c.secteur||'—')+'</span>');
+    return `<tr>
+      <td>${esc(c.nom||'—')}</td>
+      <td>${bNom}</td>
+      <td>${esc(c.secteur||'—')}</td>
+      <td style="text-align:right;font-weight:bold">${c.prix?money(c.prix):'—'}</td>
+      <td>${c.url?`<a href="${esc(c.url)}" target="_blank" style="font-size:12px">🔗 lien</a>`:'—'}</td>
+      <td style="font-size:11px;color:#999">${c.maj||'—'}</td>
+      <td><button class="btn o sm" data-concEdit="${i}">✏️</button> <button class="btn o sm" data-concDel="${i}" style="color:#c0392b">✕</button></td>
+    </tr>`;}).join("");
+  const nbConc=concurrents.length;
+  const moyGlob=nbConc?Math.round(concurrents.filter(c=>c.prix>0).reduce((a,c)=>a+c.prix,0)/Math.max(1,concurrents.filter(c=>c.prix>0).length)):0;
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>🎯 Tarification dynamique</h3><span class="sp"></span>
       <button class="btn o sm" id="tdSimul">📊 Simuler 30 jours</button></div>
-    <p style="padding:0 16px;color:#666;font-size:13px">L'algorithme ajuste automatiquement les prix en fonction du taux d'occupation (14 jours), du jour de la semaine (week-end), et du délai avant arrivée (last minute). Les prix restent dans la fourchette min/max que tu définis.</p>
+    <p style="padding:0 16px;color:#666;font-size:13px">L'algorithme ajuste automatiquement les prix en fonction du taux d'occupation (14 jours), du jour de la semaine (week-end), du délai avant arrivée (last minute) et de <strong>l'analyse concurrentielle</strong> du marché. Les prix restent dans la fourchette min/max que tu définis.</p>
     <div style="overflow:auto;padding:0 16px"><table><thead><tr>
-      <th>Bien</th><th style="text-align:right">Prix base</th><th style="text-align:right">Prix dynamique</th><th style="text-align:center">Variation</th><th style="text-align:center">Occup. 14j</th>
-      <th>Prix min</th><th>Prix max</th><th>Week-end +</th><th>Last min. −</th><th style="text-align:center">Actif</th>
-    </tr></thead><tbody>${rows||'<tr><td colspan="10" class="muted">Aucun bien — ajoute d\'abord un bien dans Annonces</td></tr>'}</tbody></table></div>
+      <th>Bien</th><th style="text-align:right">Prix base</th><th style="text-align:right">Prix dynamique</th><th style="text-align:center">Variation</th><th style="text-align:center">Prix marché</th><th style="text-align:center">Occup. 14j</th>
+      <th>Prix min</th><th>Prix max</th><th>WE +</th><th>LM −</th><th style="text-align:center">Actif</th>
+    </tr></thead><tbody>${rows||'<tr><td colspan="11" class="muted">Aucun bien — ajoute d\'abord un bien dans Annonces</td></tr>'}</tbody></table></div>
     <div style="padding:16px">
       <div class="fsec" style="margin-bottom:8px">Règles de l'algorithme</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;color:#555">
@@ -2182,13 +2220,33 @@ async function renderTarifDyn(){
         <div>🗓️ Ven + Sam → <strong>+coef week-end</strong></div>
         <div>⚡ Last minute (&lt;3j) → <strong>−réduction</strong></div>
         <div>⚡ Bientôt (&lt;7j) → <strong>−demi-réduction</strong></div>
+        <div>🏪 Prix &gt;20% au-dessus marché → <strong>−10%</strong></div>
+        <div>🏪 Prix &gt;15% sous marché → <strong>+8%</strong></div>
         <div>🔒 Prix toujours entre <strong>min et max</strong></div>
       </div>
       <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <span class="ok" id="tdOk"></span></div>
     </div>
     <div id="tdSimulResult" style="padding:0 16px 16px"></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>🏪 Analyse concurrentielle</h3><span class="sp"></span>
+      <button class="btn g sm" id="concAdd">+ Ajouter un concurrent</button></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Ajoute les annonces concurrentes de ton secteur pour que l'algorithme ajuste tes prix vers le prix moyen du marché. Tu peux associer un concurrent à un bien spécifique ou à un secteur géographique.</p>
+    ${nbConc?`<div style="padding:0 16px 8px;display:flex;gap:24px">
+      <div style="background:#f0f7f0;border-radius:8px;padding:12px 20px;flex:1;text-align:center">
+        <div style="font-size:24px;font-weight:bold;color:var(--dpm-vert)">${nbConc}</div>
+        <div style="font-size:12px;color:#666">Concurrents suivis</div>
+      </div>
+      <div style="background:#f0f4ff;border-radius:8px;padding:12px 20px;flex:1;text-align:center">
+        <div style="font-size:24px;font-weight:bold;color:#2a5db0">${moyGlob?money(moyGlob):'—'}</div>
+        <div style="font-size:12px;color:#666">Prix moyen marché</div>
+      </div>
+    </div>`:''}
+    <div style="overflow:auto;padding:0 16px 16px"><table><thead><tr>
+      <th>Nom / annonce</th><th>Bien associé</th><th>Secteur</th><th style="text-align:right">Prix/nuit</th><th>Lien</th><th>Mis à jour</th><th></th>
+    </tr></thead><tbody>${concRows||'<tr><td colspan="7" class="muted">Aucun concurrent — ajoute des annonces concurrentes pour activer l\'analyse de marché</td></tr>'}</tbody></table></div>
   </div>`;
-  /* Enregistrer */
+  /* Enregistrer réglages tarif */
   $("#tdSave").onclick=async()=>{
     const out={};
     biens.forEach(b=>{
@@ -2201,6 +2259,55 @@ async function renderTarifDyn(){
     if(e){$("#tdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#tdOk").textContent="Enregistré ✓"; toast("Tarification dynamique enregistrée");
   };
+  /* --- CRUD Concurrents --- */
+  const biensOpts=biens.map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("");
+  function openConcForm(idx){
+    const c=idx!=null?concurrents[idx]:{};
+    const isEdit=idx!=null;
+    ouvrir(`<div class="fsec">${isEdit?'Modifier le':'Ajouter un'} concurrent</div>
+      <div class="fg"><label>Nom de l'annonce *</label><input id="cfNom" value="${esc(c.nom||'')}" placeholder="Ex: Appart Gueliz 2ch"></div>
+      <div class="fg"><label>Bien associé <span class="muted">(optionnel)</span></label><select id="cfBien"><option value="">— Aucun —</option>${biensOpts}</select></div>
+      <div class="fg"><label>Secteur / quartier *</label><input id="cfSecteur" value="${esc(c.secteur||'')}" placeholder="Ex: Gueliz, Marrakech"></div>
+      <div class="fg"><label>Prix par nuit (MAD) *</label><input id="cfPrix" type="number" min="0" value="${c.prix||''}"></div>
+      <div class="fg"><label>URL de l'annonce <span class="muted">(optionnel)</span></label><input id="cfUrl" value="${esc(c.url||'')}" placeholder="https://airbnb.com/rooms/..."></div>
+      <div class="fg"><label>Plateforme</label><select id="cfPlatform">
+        <option value="airbnb" ${c.platform==='airbnb'?'selected':''}>Airbnb</option>
+        <option value="booking" ${c.platform==='booking'?'selected':''}>Booking</option>
+        <option value="vrbo" ${c.platform==='vrbo'?'selected':''}>VRBO</option>
+        <option value="autre" ${c.platform==='autre'?'selected':''}>Autre</option>
+      </select></div>
+      <div class="fg"><label>Notes <span class="muted">(optionnel)</span></label><input id="cfNotes" value="${esc(c.notes||'')}" placeholder="Ex: Très bien noté, piscine, rénové récemment"></div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn g" id="cfSave">${isEdit?'Modifier':'Ajouter'}</button>
+        <button class="btn o" onclick="fermer()">Annuler</button>
+      </div>`);
+    if(c.bien_id) document.getElementById("cfBien").value=c.bien_id;
+    document.getElementById("cfSave").onclick=async()=>{
+      const nom=document.getElementById("cfNom").value.trim();
+      const secteur=document.getElementById("cfSecteur").value.trim();
+      const prix=Number(document.getElementById("cfPrix").value);
+      if(!nom){toast("Nom requis");return;} if(!secteur){toast("Secteur requis");return;} if(!prix||prix<=0){toast("Prix requis");return;}
+      const entry={nom,bien_id:document.getElementById("cfBien").value||null,secteur,prix,
+        url:document.getElementById("cfUrl").value.trim()||null,
+        platform:document.getElementById("cfPlatform").value,
+        notes:document.getElementById("cfNotes").value.trim()||null,
+        maj:new Date().toISOString().slice(0,10)};
+      const arr=[...concurrents];
+      if(isEdit) arr[idx]=entry; else arr.push(entry);
+      const e=await reglSet("concurrents",arr);
+      if(e){toast("Erreur: "+e.message);return;}
+      fermer();toast(isEdit?"Concurrent modifié":"Concurrent ajouté");renderTarifDyn();
+    };
+  }
+  document.getElementById("concAdd").onclick=()=>openConcForm(null);
+  document.querySelectorAll("[data-concEdit]").forEach(b=>b.onclick=()=>openConcForm(Number(b.dataset.concedit)));
+  document.querySelectorAll("[data-concDel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Supprimer ce concurrent ?"))return;
+    const arr=[...concurrents];arr.splice(Number(b.dataset.concdel),1);
+    const e=await reglSet("concurrents",arr);
+    if(e){toast("Erreur: "+e.message);return;}
+    toast("Concurrent supprimé");renderTarifDyn();
+  });
   /* Simulation 30 jours */
   const simulBtn=document.getElementById("tdSimul");
   if(simulBtn) simulBtn.onclick=()=>{
@@ -2212,7 +2319,7 @@ async function renderTarifDyn(){
     for(let i=0;i<30;i++){
       const d=new Date(Date.now()+i*864e5);const js=d.getDay();
       const occSim=Math.max(0,Math.min(1,(occupParBien[b.id]||0)+(Math.random()-0.5)*0.3));
-      const px=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occSim,js,i);
+      const px=calcDynPrice(b.prix_nuit_base,{...c,actif:true},occSim,js,i,prixMarcheParBien[b.id]||null);
       const diff=b.prix_nuit_base?(px-b.prix_nuit_base):0;const pct=b.prix_nuit_base?Math.round(diff/b.prix_nuit_base*100):0;
       const cls=pct>0?'color:#2a7d2a':pct<0?'color:#c0392b':'color:#999';
       html+=`<tr><td>${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</td><td>${jours[js]}</td><td>${Math.round(occSim*100)}%</td><td>${i}j</td><td style="text-align:right;font-weight:bold">${money(px)}</td><td style="${cls}">${pct>0?'+':''}${pct}%</td></tr>`;
