@@ -1772,13 +1772,10 @@ async function renderDashboard(){
           else{
             const {data:newBien,error:errB}=await sb.from("bien").insert({
               tenant_id:state.tenant.id, nom,
-              adresse:typeof l.address==='string'?l.address:l.apartment||'',
-              ville:l.city||null, pays:l.country||'Maroc',
+              adresse:typeof l.address==='string'?l.address:(l.apartment||''),
               prix_nuit_base:l.basePrice||l.price||0,
-              chambres:l.bedrooms||0, couchages:l.accommodates||l.maxGuests||0,
-              salles_de_bain:l.bathrooms||0,
-              description:l.description||l.publicDescription||'',
-              nb_photos:(l.images||l.photos||[]).length,
+              nb_chambres:l.bedrooms||0, capacite:l.accommodates||l.maxGuests||0,
+              nb_sdb:l.bathrooms||0,
               statut:'actif'
             }).select("id").single();
             if(errB)continue;
@@ -2913,8 +2910,7 @@ async function renderCanauxCarte(){
         const {data:newBien,error:errB}=await sb.from("bien").insert({
           tenant_id:state.tenant.id, nom, adresse:typeof addr==='string'?addr:JSON.stringify(addr),
           ville:ville||null, pays:pays||null,
-          prix_nuit_base:prix, chambres, couchages, salles_de_bain:sdb,
-          description:desc, nb_photos:nbPhotos,
+          prix_nuit_base:prix, nb_chambres:chambres, capacite:couchages, nb_sdb:sdb,
           statut:'actif'
         }).select("id").single();
         if(errB){logBridge(`❌ ${nom} — erreur création: ${errB.message}`,false);continue;}
