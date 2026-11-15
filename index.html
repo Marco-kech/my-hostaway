@@ -2923,6 +2923,7 @@ async function renderCanauxCarte(){
       <button class="btn g sm" id="bridgeSyncResa">📥 Synchro réservations</button>
       <button class="btn o sm" id="bridgePushPrices">💰 Pousser prix dynamiques</button>
       <button class="btn o sm" id="bridgeSyncCal">📅 Synchro calendrier</button>
+      <button class="btn sm" id="bridgePushContent">📝 Pousser contenu annonces</button>
     </div>
     <div id="bridgeLog" style="padding:0 16px 16px;font-family:monospace;font-size:12px;max-height:300px;overflow:auto"></div>
   </div>`;
@@ -3065,6 +3066,55 @@ async function renderCanauxCarte(){
     logBridge(`Terminé : ${pushed}/${biens.length} bien(s) mis à jour`,pushed>0);
     if(pushed) toast(`Prix dynamiques poussés (${pushed} bien${pushed>1?'s':''})`);
   };
+  /* --- Pousser contenu annonces vers plateformes --- */
+  document.getElementById("bridgePushContent").onclick=async()=>{
+    logBridge("Push du contenu des annonces vers les plateformes...",true);
+    const liensAvecExt=(liens||[]).filter(l=>l.externe_id);
+    if(!liensAvecExt.length){logBridge("Aucun bien lié. Importe d'abord les annonces.",false);return;}
+    let pushed=0;
+    for(const lien of liensAvecExt){
+      const bien=biens.find(b=>b.id===lien.bien_id);
+      if(!bien){continue;}
+      const bNom=bien.nom||'?';
+      /* Récupérer les données complètes du bien */
+      const {data:fullBien}=await sb.from("bien").select("*").eq("id",bien.id).single();
+      if(!fullBien){logBridge(`⏭ ${bNom} — pas trouvé en base`,false);continue;}
+      const p=fullBien.parametres||{};
+      /* Construire le payload pour Host Tools setListing */
+      const payload={
+        listingId:lien.externe_id,
+        nickname:fullBien.nom,
+        description:p.reglement_interieur||'',
+        bedrooms:fullBien.nb_chambres||0,
+        bathrooms:fullBien.nb_sdb||0,
+        accommodates:fullBien.capacite||0,
+        basePrice:fullBien.prix_nuit_base||0,
+        minNights:fullBien.nuits_min||1,
+        checkInTime:p.heure_arrivee||'15:00',
+        checkOutTime:p.heure_depart||'11:00',
+        address:fullBien.adresse||'',
+        city:p.ville||'',
+        country:p.pays||'Maroc',
+      };
+      logBridge(`📝 ${bNom} → ${lien.canal} (${lien.externe_id})...`,true);
+      const r=await channelBridge("pushListing",payload);
+      if(r.ok){logBridge(`✅ ${bNom} — contenu poussé vers ${lien.canal}`,true);pushed++;}
+      else{logBridge(`❌ ${bNom} — ${r.error}`,false);}
+    }
+    logBridge(`Terminé : ${pushed} annonce(s) mises à jour`,pushed>0);
+    if(pushed)toast(`Contenu poussé (${pushed} annonce${pushed>1?'s':''})`);
+  };
+  /* --- Auto-test bridge au chargement --- */
+  setTimeout(async()=>{
+    bStatus.textContent="⏳ Test...";bStatus.style.color="#e67e22";
+    try{
+      const r=await channelBridge("getListings");
+      if(r.ok){
+        const nb=(r.data?.listings||r.data||[]).length;
+        bStatus.textContent=`✅ Connecté (${r.provider}) — ${nb} annonce(s)`;bStatus.style.color="#2a7d2a";
+      }else{bStatus.textContent="❌ "+r.error;bStatus.style.color="#c0392b";}
+    }catch(e){bStatus.textContent="❌ Bridge hors ligne";bStatus.style.color="#c0392b";}
+  },500);
 }
 
 /* ---------- SYNCHRO ICAL ---------- */
