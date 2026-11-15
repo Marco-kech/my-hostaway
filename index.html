@@ -775,7 +775,8 @@ const RUBRIQUES=[
     ["liste","Liste",{m:"biens"}],
     ["photos","Photos",{photogalerie:1}],
     ["stats","Statistiques par bien",{statsbien:1}],
-    ["cp","Champs personnalisés",{champperso:"bien"}]]},
+    ["cp","Champs personnalisés",{champperso:"bien"}],
+    ["aso","Score ASO",{scoreaso:1}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["agenda","Agenda",{agendataches:1}],
@@ -1262,6 +1263,7 @@ function goRub(rk,sk){
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.photogalerie)return renderPhotosGalerie();
   if(t.statsbien)return renderStatsBien();
+  if(t.scoreaso)return renderScoreASO();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -2508,6 +2510,152 @@ async function renderTarifDyn(){
     pmHtml='<div class="muted">Aucune donnée — le scraping automatique (Edge Function + Apify) n\'est pas encore configuré. Les prix concurrents manuels sont utilisés en attendant.</div>';
   }
   document.getElementById("pmAutoGrid").innerHTML=pmHtml;
+}
+
+/* ========== SCORE ASO — Optimisation annonces plateformes ========== */
+async function renderScoreASO(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const biens=state.opts.bien||[];
+  if(!biens.length){$("#content").innerHTML=`<div class="panel"><div class="empty">Aucun bien — ajoute d'abord un bien dans Annonces → Liste</div></div>`;return;}
+  /* Charger les réservations et avis pour les métriques */
+  const today=new Date().toISOString().slice(0,10);
+  const j90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const {data:resas}=await sb.from("reservation").select("bien_id,arrivee,depart,statut,created_at");
+  const {data:avisData}=await sb.from("avis").select("bien_id,note,created_at");
+  const {data:msgs}=await sb.from("message").select("bien_id,created_at,expediteur");
+  const {data:canaux}=await sb.from("canal_bien").select("bien_id,canal,actif");
+
+  const cards=biens.map(b=>{
+    const checks=[];let score=0;const max=100;
+    /* 1. Titre (10pts) */
+    const titreLen=(b.nom||'').length;
+    if(titreLen>=30&&titreLen<=50){checks.push({label:'Titre',pts:10,max:10,ok:true,tip:'✅ Titre optimal ('+titreLen+'/50 caractères)'});score+=10;}
+    else if(titreLen>=20){checks.push({label:'Titre',pts:6,max:10,ok:false,tip:'⚠️ Titre court ('+titreLen+'/50) — ajoute des mots-clés (piscine, vue, quartier)'});score+=6;}
+    else{checks.push({label:'Titre',pts:2,max:10,ok:false,tip:'❌ Titre trop court ('+titreLen+'/50) — utilise les 50 caractères avec mots-clés pertinents'});score+=2;}
+
+    /* 2. Description (10pts) */
+    const descLen=(b.description||'').length;
+    const descMots=(b.description||'').split(/\s+/).filter(w=>w).length;
+    if(descMots>=300){checks.push({label:'Description',pts:10,max:10,ok:true,tip:'✅ Description riche ('+descMots+' mots)'});score+=10;}
+    else if(descMots>=150){checks.push({label:'Description',pts:6,max:10,ok:false,tip:'⚠️ Description correcte ('+descMots+'/300 mots min.) — enrichis avec le quartier, transports, activités'});score+=6;}
+    else{checks.push({label:'Description',pts:2,max:10,ok:false,tip:'❌ Description trop courte ('+descMots+' mots) — vise 300+ mots avec hook, espaces, quartier, transport, règles, présentation'});score+=2;}
+
+    /* 3. Photos (15pts — le plus impactant sur le CTR) */
+    const nbPhotos=b.nb_photos||b.photos_count||0;
+    if(nbPhotos>=20){checks.push({label:'Photos',pts:15,max:15,ok:true,tip:'✅ '+nbPhotos+' photos — excellent'});score+=15;}
+    else if(nbPhotos>=10){checks.push({label:'Photos',pts:8,max:15,ok:false,tip:'⚠️ '+nbPhotos+' photos — vise 20+ (les 5 premières sont cruciales pour la recherche)'});score+=8;}
+    else{checks.push({label:'Photos',pts:3,max:15,ok:false,tip:'❌ Seulement '+nbPhotos+' photos — minimum 20, idéal 30-40. Photos pro recommandées.'});score+=3;}
+
+    /* 4. Équipements essentiels (10pts) */
+    const equips=(b.equipements||b.amenities||'').toLowerCase();
+    const mustHave=['wifi','climatisation','cuisine','parking','machine à laver','fer','sèche-cheveux','télévision'];
+    const found=mustHave.filter(e=>equips.includes(e.toLowerCase()));
+    const eqPts=Math.min(10,Math.round(found.length/mustHave.length*10));
+    const missing=mustHave.filter(e=>!equips.includes(e.toLowerCase()));
+    if(eqPts>=8){checks.push({label:'Équipements',pts:eqPts,max:10,ok:true,tip:'✅ '+found.length+'/'+mustHave.length+' essentiels cochés'});score+=eqPts;}
+    else{checks.push({label:'Équipements',pts:eqPts,max:10,ok:false,tip:'⚠️ '+found.length+'/'+mustHave.length+' — manque : '+missing.join(', ')});score+=eqPts;}
+
+    /* 5. Prix compétitif (10pts) */
+    const pBase=b.prix_nuit_base||0;
+    if(pBase>0){checks.push({label:'Prix défini',pts:10,max:10,ok:true,tip:'✅ Prix base '+money(pBase)+'/nuit — l\'algo dynamique ajuste automatiquement'});score+=10;}
+    else{checks.push({label:'Prix défini',pts:0,max:10,ok:false,tip:'❌ Aucun prix de base — définis-le pour activer la tarification dynamique'});}
+
+    /* 6. Avis (15pts) */
+    const bAvis=(avisData||[]).filter(a=>a.bien_id===b.id);
+    const nbAvis=bAvis.length;
+    const moyNote=nbAvis?Math.round(bAvis.reduce((s,a)=>s+(a.note||0),0)/nbAvis*10)/10:0;
+    if(nbAvis>=25&&moyNote>=4.5){checks.push({label:'Avis',pts:15,max:15,ok:true,tip:'✅ '+nbAvis+' avis, note '+moyNote+'/5 — éligible Guest Favorites'});score+=15;}
+    else if(nbAvis>=10&&moyNote>=4.0){checks.push({label:'Avis',pts:10,max:15,ok:false,tip:'⚠️ '+nbAvis+' avis, note '+moyNote+'/5 — vise 25 avis et 4.8+ pour Guest Favorites (25% du classement)'});score+=10;}
+    else if(nbAvis>=1){checks.push({label:'Avis',pts:5,max:15,ok:false,tip:'⚠️ '+nbAvis+' avis seulement — demande un avis après chaque séjour, vise 25+'});score+=5;}
+    else{checks.push({label:'Avis',pts:0,max:15,ok:false,tip:'❌ Aucun avis — priorité absolue : les premiers avis font toute la différence'});}
+
+    /* 7. Réservation instantanée (5pts) */
+    const instantBook=b.instant_book||b.reservation_instantanee||false;
+    if(instantBook){checks.push({label:'Instant Book',pts:5,max:5,ok:true,tip:'✅ Réservation instantanée activée — boost de classement'});score+=5;}
+    else{checks.push({label:'Instant Book',pts:0,max:5,ok:false,tip:'⚠️ Active la réservation instantanée — Airbnb favorise fortement les annonces Instant Book'});}
+
+    /* 8. Canaux connectés (10pts) */
+    const bCanaux=(canaux||[]).filter(c=>c.bien_id===b.id&&c.actif);
+    const nbCanaux=bCanaux.length;
+    if(nbCanaux>=3){checks.push({label:'Multi-canal',pts:10,max:10,ok:true,tip:'✅ Présent sur '+nbCanaux+' plateformes'});score+=10;}
+    else if(nbCanaux>=1){checks.push({label:'Multi-canal',pts:5,max:10,ok:false,tip:'⚠️ Seulement '+nbCanaux+' plateforme(s) — vise Airbnb + Booking + VRBO minimum'});score+=5;}
+    else{checks.push({label:'Multi-canal',pts:0,max:10,ok:false,tip:'❌ Aucune plateforme connectée — va dans Canaux pour activer'});}
+
+    /* 9. Temps de réponse (10pts) */
+    const bMsgs=(msgs||[]).filter(m=>m.bien_id===b.id&&m.expediteur==='hote');
+    if(bMsgs.length>=5){checks.push({label:'Réactivité',pts:10,max:10,ok:true,tip:'✅ Messagerie active — les réponses rapides boostent le classement'});score+=10;}
+    else if(bMsgs.length>=1){checks.push({label:'Réactivité',pts:5,max:10,ok:false,tip:'⚠️ Peu de messages envoyés — active les réponses automatiques IA pour un temps de réponse <1h'});score+=5;}
+    else{checks.push({label:'Réactivité',pts:2,max:10,ok:false,tip:'⚠️ Aucun message envoyé — configure les messages auto dans Boîte de réception → IA'});score+=2;}
+
+    /* 10. Calendrier à jour (5pts) */
+    const bResas=(resas||[]).filter(r=>r.bien_id===b.id);
+    const hasRecent=bResas.some(r=>r.created_at>=j90);
+    if(hasRecent||bResas.length>0){checks.push({label:'Calendrier',pts:5,max:5,ok:true,tip:'✅ Calendrier actif — activité récente détectée'});score+=5;}
+    else{checks.push({label:'Calendrier',pts:1,max:5,ok:false,tip:'⚠️ Aucune activité récente — mets à jour le calendrier régulièrement, Airbnb pénalise les calendriers inactifs'});score+=1;}
+
+    /* Couleur du score */
+    const pct=Math.round(score);
+    const color=pct>=80?'#2a7d2a':pct>=60?'#e67e22':'#c0392b';
+    const grade=pct>=90?'A+':pct>=80?'A':pct>=70?'B':pct>=60?'C':pct>=50?'D':'F';
+
+    const checkRows=checks.map(c=>`<tr>
+      <td>${c.ok?'✅':'⚠️'}</td>
+      <td><strong>${esc(c.label)}</strong></td>
+      <td style="text-align:center"><strong>${c.pts}</strong>/${c.max}</td>
+      <td style="font-size:12px;color:#555">${c.tip}</td>
+    </tr>`).join('');
+
+    return `<div class="panel" style="margin-bottom:16px">
+      <div class="phead">
+        <h3>${esc(b.nom)}</h3><span class="sp"></span>
+        <div style="text-align:center">
+          <div style="font-size:36px;font-weight:bold;color:${color}">${pct}<span style="font-size:16px;color:#999">/100</span></div>
+          <div style="font-size:14px;font-weight:bold;color:${color}">Grade ${grade}</div>
+        </div>
+      </div>
+      <div style="padding:0 16px">
+        <div style="background:#eee;border-radius:8px;height:10px;margin-bottom:12px">
+          <div style="background:${color};width:${pct}%;height:100%;border-radius:8px;transition:width 0.5s"></div>
+        </div>
+      </div>
+      <div style="overflow:auto;padding:0 16px 16px"><table style="font-size:13px"><thead><tr><th></th><th>Facteur</th><th style="text-align:center">Score</th><th>Recommandation</th></tr></thead><tbody>${checkRows}</tbody></table></div>
+    </div>`;
+  }).join('');
+
+  /* Score moyen du portefeuille */
+  const allScores=biens.map(b=>{
+    /* Recalculer vite le score pour le résumé */
+    let s=0;
+    s+=(b.nom||'').length>=30?10:(b.nom||'').length>=20?6:2;
+    s+=(b.description||'').split(/\s+/).filter(w=>w).length>=300?10:(b.description||'').split(/\s+/).filter(w=>w).length>=150?6:2;
+    s+=(b.nb_photos||0)>=20?15:(b.nb_photos||0)>=10?8:3;
+    s+=b.prix_nuit_base?10:0;
+    const ba=(avisData||[]).filter(a=>a.bien_id===b.id);s+=ba.length>=25?15:ba.length>=10?10:ba.length>=1?5:0;
+    s+=b.instant_book?5:0;
+    const bc=(canaux||[]).filter(c=>c.bien_id===b.id&&c.actif).length;s+=bc>=3?10:bc>=1?5:0;
+    return s;
+  });
+  const avg=allScores.length?Math.round(allScores.reduce((a,v)=>a+v,0)/allScores.length):0;
+  const avgColor=avg>=70?'#2a7d2a':avg>=50?'#e67e22':'#c0392b';
+
+  $("#content").innerHTML=`<div class="panel" style="margin-bottom:16px">
+    <div class="phead"><h3>🎯 Score ASO — Optimisation des annonces</h3></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Le score ASO (Airbnb Search Optimization) mesure la qualité de chaque annonce selon les 10 facteurs de l'algorithme Airbnb 2026. Plus le score est élevé, mieux l'annonce se classe dans les résultats de recherche.</p>
+    <div style="padding:0 16px 16px;display:flex;gap:24px;align-items:center">
+      <div style="background:#f0f7f0;border-radius:12px;padding:16px 24px;text-align:center">
+        <div style="font-size:32px;font-weight:bold;color:${avgColor}">${avg}<span style="font-size:14px;color:#999">/100</span></div>
+        <div style="font-size:12px;color:#666">Score moyen portefeuille</div>
+      </div>
+      <div style="font-size:13px;color:#555;line-height:1.6">
+        <div>📊 <strong>${biens.length}</strong> bien(s) analysé(s)</div>
+        <div>🏆 Objectif : <strong>80+</strong> pour un classement optimal</div>
+        <div>⭐ Le badge <strong>Guest Favorites</strong> vaut ~25% du classement</div>
+        <div>💡 Le facteur n°1 en 2026 : le <strong>taux de conversion</strong></div>
+      </div>
+    </div>
+  </div>
+  ${cards}`;
 }
 
 /* ---------- CHANNEL BRIDGE — helper front ---------- */
