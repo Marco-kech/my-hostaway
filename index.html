@@ -1641,17 +1641,41 @@ async function renderDashboard(){
   const {data:occ}=await sb.from("reservation").select("arrivee,depart,statut").lte("arrivee",in30).gte("depart",today).neq("statut","annulee");
   let nights=0;(occ||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),Date.now()));const d=new Date(Math.min(new Date(r.depart),Date.now()+30*864e5));nights+=Math.max(0,(d-a)/864e5);});
   const capacity=nbBiens*30; const taux=capacity?Math.round(nights/capacity*100):0;
+  /* --- KPI PRO STR --- */
+  /* ADR = Average Daily Rate = revenu total / nuits réservées */
+  const nightsMonth=(resaMonth.data||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee').reduce((s,r)=>{
+    const a=new Date(Math.max(new Date(r.arrivee),new Date(monthStart)));
+    const d=new Date(r.depart||r.arrivee);return s+Math.max(1,Math.round((d-a)/864e5));},0);
+  const adr=nightsMonth?Math.round(revConfirmes/nightsMonth):0;
+  /* RevPAR = Revenue Per Available Room = revenu total / nuits disponibles */
+  const daysInMonth=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+  const availableNights=nbBiens*daysInMonth;
+  const revpar=availableNights?Math.round(revConfirmes/availableNights):0;
+  /* ADR mois précédent */
+  const nightsPrev=(prevResa||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee').reduce((s,r)=>{
+    const a=new Date(Math.max(new Date(r.arrivee),new Date(prevStart)));
+    const d=new Date(r.depart||r.arrivee);return s+Math.max(1,Math.round((d-a)/864e5));},0);
+  const adrPrev=nightsPrev?Math.round(revPrev/nightsPrev):0;
+  const prevDays=new Date(first.getFullYear(),first.getMonth(),0).getDate();
+  const revparPrev=(nbBiens*prevDays)?Math.round(revPrev/(nbBiens*prevDays)):0;
+  /* Score ASO moyen rapide */
+  const asoQuick=bAll.map(b=>{let s=0;
+    s+=(b.prix_nuit_base?10:0);s+=(b.capacite?5:0);return s;});
+  const asoAvg=asoQuick.length?Math.round(asoQuick.reduce((a,v)=>a+v,0)/asoQuick.length):0;
+
   $("#content").innerHTML=`
     <div class="kpis">
+      <div class="kpi" style="border-left:3px solid var(--dpm-vert)"><div class="l">💰 RevPAR</div><div class="v" style="font-size:24px;color:var(--dpm-vert)">${money(revpar)}</div><div class="s">revenu / nuit dispo ${trend(revpar,revparPrev)}</div></div>
+      <div class="kpi" style="border-left:3px solid #2a5db0"><div class="l">📊 ADR</div><div class="v" style="font-size:24px;color:#2a5db0">${money(adr)}</div><div class="s">prix moyen / nuit réservée ${trend(adr,adrPrev)}</div></div>
+      <div class="kpi" style="border-left:3px solid #e67e22"><div class="l">📈 Occupation 30j</div><div class="v" style="font-size:24px;color:#e67e22">${taux}%</div><div class="s">${Math.round(nights)} nuits / ${capacity} disponibles</div></div>
+      <div class="kpi" style="border-left:3px solid #8e44ad"><div class="l">🏠 CA du mois</div><div class="v" style="font-size:22px">${money(caMonth)}</div><div class="s">vs mois précédent ${trend(caMonth,caPrev)}</div></div>
+      <div class="kpi"><div class="l">Encaissé (mois)</div><div class="v" style="font-size:22px">${money(encMonth)}</div><div class="s">vs mois précédent ${trend(encMonth,encPrev)}</div></div>
       <div class="kpi"><div class="l">Biens gérés</div><div class="v">${nbBiens}</div><div class="s">propriétés actives</div></div>
       <div class="kpi"><div class="l">Réservations à venir</div><div class="v">${nbFut}</div><div class="s">séjours en cours/futurs</div></div>
-      <div class="kpi"><div class="l">Enregistrement (30j)</div><div class="v">${enregistrement}</div><div class="s">arrivées de voyageurs</div></div>
-      <div class="kpi"><div class="l">Revenu moyen / voyageur</div><div class="v" style="font-size:22px">${money(revMoyen)}</div><div class="s">réservations confirmées</div></div>
-      <div class="kpi"><div class="l">CA du mois</div><div class="v" style="font-size:24px">${money(caMonth)}</div><div class="s">vs mois précédent ${trend(caMonth,caPrev)}</div></div>
-      <div class="kpi"><div class="l">Encaissé (mois)</div><div class="v" style="font-size:24px">${money(encMonth)}</div><div class="s">vs mois précédent ${trend(encMonth,encPrev)}</div></div>
-      <div class="kpi"><div class="l">Occupation 30j</div><div class="v">${taux}%</div><div class="s">nuits réservées / capacité</div></div>
     </div>
     <div class="kpis">
+      <div class="kpi"><div class="l">Enregistrement (30j)</div><div class="v">${enregistrement}</div><div class="s">arrivées de voyageurs</div></div>
+      <div class="kpi"><div class="l">Revenu moyen / résa</div><div class="v" style="font-size:20px">${money(revMoyen)}</div><div class="s">réservations confirmées</div></div>
       <div class="kpi"><div class="l">Voyageurs séjournant</div><div class="v">${sejournant}</div><div class="s">actuellement sur place</div></div>
       <div class="kpi"><div class="l">À approuver</div><div class="v">${aApprouver}</div><div class="s">réservations en attente</div></div>
       <div class="kpi"><div class="l">Demandes en attente</div><div class="v">${demandes}</div><div class="s">à traiter</div></div>
