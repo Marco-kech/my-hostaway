@@ -2726,77 +2726,32 @@ async function renderScoreASO(){
   ${cards}`;
 }
 
-/* ---------- CHANNEL BRIDGE — helper front ---------- */
-/* ===== Channel Bridge — appel direct API Host Tools ===== */
-const HT_API='https://api.hosttools.com';
+/* ===== CHANNEL BRIDGE — via Edge Function Supabase (côté serveur, pas de CORS) ===== */
+const BRIDGE_URL=SUPABASE_URL+'/functions/v1/channel-bridge';
 let _htToken=null;
 async function htToken(){
   if(_htToken)return _htToken;
-  /* Lire le secret depuis la table reglages ou fallback Edge secret */
   const r=await reglGet('hosttools_token');
   if(r)_htToken=r;
   return _htToken;
 }
-async function htFetch(path,method='GET',body=null){
-  const token=await htToken();
-  if(!token)return {ok:false,error:'Clé API Host Tools non configurée. Va dans Réglages > Intégrations et saisis ton jeton.',provider:'hosttools'};
-  const opts={method,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'}};
-  if(body)opts.body=JSON.stringify(body);
-  try{
-    const res=await fetch(HT_API+path,opts);
-    if(!res.ok){const t=await res.text();return {ok:false,error:`HTTP ${res.status}: ${t}`,provider:'hosttools'};}
-    const data=await res.json();
-    return {ok:true,data,provider:'hosttools'};
-  }catch(e){return {ok:false,error:e.message,provider:'hosttools'};}
-}
 async function channelBridge(action,params){
   try{
-    switch(action){
-      case 'getListings': return await htFetch('/api/getListings');
-      case 'getListing': return await htFetch('/api/getListing/'+params.listingId);
-      case 'getReservations': {
-        if(params?.listingId) return await htFetch('/api/getReservations/'+params.listingId);
-        /* Synchro toutes réservations depuis Host Tools vers notre base */
-        const lr=await htFetch('/api/getListings');
-        if(!lr.ok)return lr;
-        const listings=lr.data?.listings||lr.data||[];
-        let synced=0;
-        for(const l of listings){
-          const rr=await htFetch('/api/getReservations/'+l._id);
-          if(!rr.ok)continue;
-          const resas=rr.data?.reservations||rr.data||[];
-          for(const r of resas){
-            const mapped={
-              tenant_id:state.tenantId,
-              source_id:'ht_'+r._id,
-              source_platform:r.channel||'airbnb',
-              voyageur_nom:(r.guest?.name||r.guestName||'Voyageur'),
-              voyageur_email:r.guest?.email||r.guestEmail||null,
-              voyageur_tel:r.guest?.phone||r.guestPhone||null,
-              arrivee:r.checkIn||r.startDate,
-              depart:r.checkOut||r.endDate,
-              nb_voyageurs:r.guests||r.numberOfGuests||1,
-              montant_total:r.totalPrice||r.total||0,
-              statut:mapHTStatus(r.status),
-              donnees_source:r
-            };
-            /* trouver le bien_id local via externe_id */
-            const lienLocal=await sb.from("canal_bien").select("bien_id").eq("externe_id",l._id).maybeSingle();
-            if(lienLocal?.data)mapped.bien_id=lienLocal.data.bien_id;
-            const {error}=await sb.from("reservation").upsert(mapped,{onConflict:'tenant_id,source_id',ignoreDuplicates:false});
-            if(!error)synced++;
-          }
-        }
-        return {ok:true,data:{_synced:synced},provider:'hosttools'};
-      }
-      case 'getCalendar': return await htFetch('/api/getCalendar/'+params.listingId);
-      case 'setCalendar': return await htFetch('/api/setCalendar/'+params.listingId,'POST',params.dates);
-      case 'pushPrices': return await htFetch('/api/setCalendar/'+params.listingId,'POST',{dates:params.prices.map(p=>({date:p.date,price:p.price}))});
-      case 'getMessages': return await htFetch('/api/getReservation/'+params.reservationId);
-      case 'sendMessage': return await htFetch('/api/sendMessage/'+params.reservationId,'POST',{message:params.message});
-      default: return {ok:false,error:'Action inconnue: '+action,provider:'hosttools'};
+    const res=await fetch(BRIDGE_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY},
+      body:JSON.stringify({action,tenant_id:state.tenantId,params})
+    });
+    const data=await res.json();
+    /* L'Edge Function renvoie {ok, action, data, error, provider, timestamp} */
+    if(data.ok===false&&action==='getReservations'&&!params?.listingId){
+      /* Si le bridge a renvoyé les résas mais pas la synchro locale, on la fait côté front */
+      return data;
     }
-  }catch(e){return {ok:false,error:e.message,provider:'hosttools'};}
+    /* Pour getReservations sans listingId, la synchro est faite côté serveur (Edge Function) */
+    /* Pour l'import des annonces, on doit traiter côté front (création bien + canal_bien) */
+    return data;
+  }catch(e){return {ok:false,error:'Edge Function inaccessible : '+e.message,provider:'none'};}
 }
 function mapHTStatus(s){
   const m={'confirmed':'confirmée','pending':'en_attente','cancelled':'annulée','checked_in':'en_cours','checked_out':'terminée','inquiry':'demande'};
