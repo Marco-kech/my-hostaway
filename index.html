@@ -2506,6 +2506,29 @@ async function renderTarifDyn(){
     </div>
     <div id="tdSimulResult" style="padding:0 16px 16px"></div>
   </div>
+  <div class="panel" style="margin-top:16px;border:2px solid var(--dpm-or,#d4a843)">
+    <div class="phead"><h3>🔥 Last-minute pricing</h3><span class="sp"></span>
+      <button class="btn sm" id="lmRunNow" style="margin-right:8px">▶️ Lancer maintenant</button></div>
+    <p style="padding:0 16px;color:#666;font-size:13px">Mode agressif : scrape le marché Airbnb <strong>chaque jour</strong> et recalcule les prix sur la période choisie. Passe en priorité sur la tarification standard. Coefficients plus agressifs (mode survie si occupation basse, premium si forte).</p>
+    <div style="padding:8px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="lmActif" style="width:18px;height:18px">
+        <span style="font-weight:600" id="lmActifLabel">Désactivé</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+        Horizon :
+        <input type="number" id="lmHorizon" value="7" min="1" max="30" style="width:60px;padding:4px 8px;border:1px solid #ccc;border-radius:4px">
+        <span>jours</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+        <input type="checkbox" id="lmPush" checked>
+        Push vers plateformes
+      </label>
+      <button class="btn g sm" id="lmSave">💾 Enregistrer</button>
+      <span class="ok" id="lmOk"></span>
+    </div>
+    <div id="lmResult" style="padding:0 16px 12px"></div>
+  </div>
   <div class="panel" style="margin-top:16px">
     <div class="phead"><h3>🏪 Analyse concurrentielle</h3><span class="sp"></span>
       <button class="btn sm" id="marketScan" style="margin-right:8px">🔍 Scanner Airbnb & Booking</button>
@@ -2596,6 +2619,59 @@ async function renderTarifDyn(){
       fermer();toast(isEdit?"Concurrent modifié":"Concurrent ajouté");renderTarifDyn();
     };
   }
+  /* --- Last-minute pricing : charger réglage + handlers --- */
+  {
+    const lmData=await reglGet("last_minute");
+    const lm=typeof lmData==='object'&&lmData?lmData:{};
+    const lmActif=document.getElementById("lmActif");
+    const lmLabel=document.getElementById("lmActifLabel");
+    const lmHorizon=document.getElementById("lmHorizon");
+    const lmPush=document.getElementById("lmPush");
+    if(lmActif){
+      lmActif.checked=!!lm.actif;
+      lmLabel.textContent=lm.actif?"✅ Activé":"Désactivé";
+      lmLabel.style.color=lm.actif?"#16a34a":"#888";
+      lmActif.onchange=()=>{lmLabel.textContent=lmActif.checked?"✅ Activé":"Désactivé";lmLabel.style.color=lmActif.checked?"#16a34a":"#888";};
+    }
+    if(lmHorizon) lmHorizon.value=lm.horizon_days||7;
+    if(lmPush) lmPush.checked=lm.push_to_platforms!==false;
+
+    document.getElementById("lmSave").onclick=async()=>{
+      const val={actif:lmActif.checked,horizon_days:parseInt(lmHorizon.value)||7,max_listings:lm.max_listings||20,push_to_platforms:lmPush.checked};
+      const e=await reglSet("last_minute",val);
+      if(e){toast("Erreur: "+e.message);return;}
+      document.getElementById("lmOk").textContent="✓ Enregistré";setTimeout(()=>{document.getElementById("lmOk").textContent="";},2000);
+    };
+
+    document.getElementById("lmRunNow").onclick=async()=>{
+      const resDiv=document.getElementById("lmResult");
+      resDiv.innerHTML=`<div style="padding:12px;background:#fff8e1;border-radius:8px;margin-bottom:8px">
+        <span class="spin" style="width:16px;height:16px;border-width:2px;vertical-align:middle;margin-right:8px"></span>
+        <strong>Scan last-minute en cours...</strong> Scraping Airbnb + calcul prix agressif sur ${lmHorizon.value}j...</div>`;
+      try{
+        const r=await fetch("https://eztwwzzjzwmhfzmcafyu.supabase.co/functions/v1/last-minute-pricing",{
+          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_KEY},
+          body:JSON.stringify({tenant_id:state.tenant.id,force:true,horizon_days:parseInt(lmHorizon.value)||7,push_to_platforms:lmPush.checked,max_listings:20})
+        });
+        const d=await r.json();
+        if(!d.ok){resDiv.innerHTML=`<div style="padding:12px;background:#fee;border-radius:8px;color:#c00">${d.error||d.message}</div>`;return;}
+        let html=`<div style="background:#f0fff0;border-radius:8px;padding:12px;margin-bottom:8px">
+          <strong>✅ Last-minute calculé</strong> — ${d.horizon_jours} jours, ${d.biens_traites} bien(s)</div>`;
+        for(const res of (d.results||[])){
+          html+=`<div style="margin-bottom:8px"><strong>${res.bien}</strong> (base ${res.prix_base} MAD)`;
+          if(res.marche_airbnb) html+=` | Marché: médiane ${res.marche_airbnb.median}, P25 ${res.marche_airbnb.p25}, P75 ${res.marche_airbnb.p75} (${res.marche_airbnb.annonces} annonces)`;
+          html+=` | Occup: ${res.occupation_14j}</div>`;
+          html+=`<table style="font-size:12px;margin-bottom:8px"><thead><tr><th>Date</th><th style="text-align:right">Prix</th><th>Facteurs</th></tr></thead><tbody>`;
+          for(const p of (res.prix_semaine||[])){
+            html+=`<tr><td>${p.date}</td><td style="text-align:right;font-weight:600">${p.prix} MAD</td><td style="font-size:11px;color:#666">${(p.facteurs||[]).join(' • ')}</td></tr>`;
+          }
+          html+=`</tbody></table>`;
+        }
+        resDiv.innerHTML=html;
+      }catch(err){resDiv.innerHTML=`<div style="padding:12px;background:#fee;border-radius:8px;color:#c00">${err.message}</div>`;}
+    };
+  }
+
   /* --- Scanner de marché automatique --- */
   document.getElementById("marketScan").onclick=async()=>{
     const scanDiv=document.getElementById("marketScanResult");
