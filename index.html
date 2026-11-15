@@ -1747,7 +1747,7 @@ async function renderDashboard(){
         const res=await fetch(BRIDGE_URL,{
           method:'POST',signal:ctrl.signal,
           headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY},
-          body:JSON.stringify({action:'getListings',tenant_id:state.tenantId,params:{}})
+          body:JSON.stringify({action:'getListings',tenant_id:state.tenant.id,params:{}})
         });
         clearTimeout(timer);
         const r=await res.json();
@@ -2523,14 +2523,14 @@ async function renderTarifDyn(){
   /* Initialiser Marrakech (coefficients types) */
   document.getElementById("saisonInit").onclick=async()=>{
     const MKH=[0.80,0.85,1.00,1.15,1.05,0.75,0.70,0.70,0.85,1.10,1.15,1.30]; /* basse été, haute hiver/printemps/Noël */
-    const tid=state.tenantId;
+    const tid=state.tenant.id;
     for(let m=1;m<=12;m++){
       await sb.from("saisonnalite").upsert({tenant_id:tid,secteur:'default',mois:m,coef:MKH[m-1],label:MOIS_LABELS[m-1]},{onConflict:'tenant_id,secteur,mois'});
     }
     toast("Saisonnalité Marrakech initialisée");renderTarifDyn();
   };
   document.getElementById("saisonSave").onclick=async()=>{
-    const tid=state.tenantId;let ok=true;
+    const tid=state.tenant.id;let ok=true;
     document.querySelectorAll("[data-saisons]").forEach(async inp=>{
       const sect=inp.dataset.saisons,m=Number(inp.dataset.saisonm),v=Number(inp.value)||1;
       const {error}=await sb.from("saisonnalite").upsert({tenant_id:tid,secteur:sect,mois:m,coef:v},{onConflict:'tenant_id,secteur,mois'});
@@ -2568,7 +2568,7 @@ async function renderTarifDyn(){
       const deb=document.getElementById("evDeb").value;const fin=document.getElementById("evFin").value;
       const coef=Number(document.getElementById("evCoef").value);
       if(!nom||!deb||!fin){toast("Remplis nom, dates");return;}
-      const {error}=await sb.from("evenement_local").insert({tenant_id:state.tenantId,nom,type:document.getElementById("evType").value,date_debut:deb,date_fin:fin,coef_prix:coef,recurrent:document.getElementById("evRec").checked,notes:document.getElementById("evNotes").value.trim()||null});
+      const {error}=await sb.from("evenement_local").insert({tenant_id:state.tenant.id,nom,type:document.getElementById("evType").value,date_debut:deb,date_fin:fin,coef_prix:coef,recurrent:document.getElementById("evRec").checked,notes:document.getElementById("evNotes").value.trim()||null});
       if(error){toast("Erreur: "+error.message);return;}
       fermer();toast("Événement ajouté");renderTarifDyn();
     };
@@ -2751,7 +2751,7 @@ async function channelBridge(action,params){
     const res=await fetch(BRIDGE_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY},
-      body:JSON.stringify({action,tenant_id:state.tenantId,params})
+      body:JSON.stringify({action,tenant_id:state.tenant.id,params})
     });
     const data=await res.json();
     /* L'Edge Function renvoie {ok, action, data, error, provider, timestamp} */
@@ -2853,10 +2853,10 @@ async function renderCanauxCarte(){
       const desc=l.description||l.publicDescription||'';
       const nbPhotos=l.photos?.length||0;
       /* Vérifier si déjà lié via externe_id */
-      const {data:existing}=await sb.from("canal_bien").select("id,bien_id").eq("externe_id",htId).eq("tenant_id",state.tenantId).maybeSingle();
+      const {data:existing}=await sb.from("canal_bien").select("id,bien_id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).maybeSingle();
       if(existing){logBridge(`⏭ ${nom} — déjà importé`,true);skipped++;continue;}
       /* Chercher un bien avec le même nom pour éviter les doublons */
-      const {data:bienExist}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenantId).maybeSingle();
+      const {data:bienExist}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).maybeSingle();
       let bienId;
       if(bienExist){
         bienId=bienExist.id;
@@ -2864,7 +2864,7 @@ async function renderCanauxCarte(){
       }else{
         /* Créer le bien */
         const {data:newBien,error:errB}=await sb.from("bien").insert({
-          tenant_id:state.tenantId, nom, adresse:typeof addr==='string'?addr:JSON.stringify(addr),
+          tenant_id:state.tenant.id, nom, adresse:typeof addr==='string'?addr:JSON.stringify(addr),
           ville:ville||null, pays:pays||null,
           prix_nuit_base:prix, chambres, couchages, salles_de_bain:sdb,
           description:desc, nb_photos:nbPhotos,
@@ -2877,7 +2877,7 @@ async function renderCanauxCarte(){
       }
       /* Créer le lien canal_bien */
       const {error:errC}=await sb.from("canal_bien").insert({
-        tenant_id:state.tenantId, bien_id:bienId, canal:channel,
+        tenant_id:state.tenant.id, bien_id:bienId, canal:channel,
         actif:true, externe_id:htId, url_annonce:l.airbnbUrl||l.url||null
       });
       if(errC){logBridge(`⚠️ ${nom} — lien canal: ${errC.message}`,false);}
