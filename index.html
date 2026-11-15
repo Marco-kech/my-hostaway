@@ -2683,17 +2683,80 @@ async function renderScoreASO(){
 }
 
 /* ---------- CHANNEL BRIDGE — helper front ---------- */
-async function channelBridge(action,params){
-  const BRIDGE_URL=window.location.hostname==='localhost'
-    ?'http://localhost:54321/functions/v1/channel-bridge'
-    :'https://eztwwzzjzwmhfzmcafyu.supabase.co/functions/v1/channel-bridge';
+/* ===== Channel Bridge — appel direct API Host Tools ===== */
+const HT_API='https://api.hosttools.com';
+let _htToken=null;
+async function htToken(){
+  if(_htToken)return _htToken;
+  /* Lire le secret depuis la table reglages ou fallback Edge secret */
+  const r=await reglGet('hosttools_token');
+  if(r)_htToken=r;
+  return _htToken;
+}
+async function htFetch(path,method='GET',body=null){
+  const token=await htToken();
+  if(!token)return {ok:false,error:'Clé API Host Tools non configurée. Va dans Réglages > Intégrations et saisis ton jeton.',provider:'hosttools'};
+  const opts={method,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
   try{
-    const res=await fetch(BRIDGE_URL,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action,tenant_id:state.tenantId,params})
-    });
-    return await res.json();
-  }catch(e){return {ok:false,error:e.message,provider:'none'};}
+    const res=await fetch(HT_API+path,opts);
+    if(!res.ok){const t=await res.text();return {ok:false,error:`HTTP ${res.status}: ${t}`,provider:'hosttools'};}
+    const data=await res.json();
+    return {ok:true,data,provider:'hosttools'};
+  }catch(e){return {ok:false,error:e.message,provider:'hosttools'};}
+}
+async function channelBridge(action,params){
+  try{
+    switch(action){
+      case 'getListings': return await htFetch('/api/getListings');
+      case 'getListing': return await htFetch('/api/getListing/'+params.listingId);
+      case 'getReservations': {
+        if(params?.listingId) return await htFetch('/api/getReservations/'+params.listingId);
+        /* Synchro toutes réservations depuis Host Tools vers notre base */
+        const lr=await htFetch('/api/getListings');
+        if(!lr.ok)return lr;
+        const listings=lr.data?.listings||lr.data||[];
+        let synced=0;
+        for(const l of listings){
+          const rr=await htFetch('/api/getReservations/'+l._id);
+          if(!rr.ok)continue;
+          const resas=rr.data?.reservations||rr.data||[];
+          for(const r of resas){
+            const mapped={
+              tenant_id:state.tenantId,
+              source_id:'ht_'+r._id,
+              source_platform:r.channel||'airbnb',
+              voyageur_nom:(r.guest?.name||r.guestName||'Voyageur'),
+              voyageur_email:r.guest?.email||r.guestEmail||null,
+              voyageur_tel:r.guest?.phone||r.guestPhone||null,
+              arrivee:r.checkIn||r.startDate,
+              depart:r.checkOut||r.endDate,
+              nb_voyageurs:r.guests||r.numberOfGuests||1,
+              montant_total:r.totalPrice||r.total||0,
+              statut:mapHTStatus(r.status),
+              donnees_source:r
+            };
+            /* trouver le bien_id local via externe_id */
+            const lienLocal=await sb.from("canal_bien").select("bien_id").eq("externe_id",l._id).maybeSingle();
+            if(lienLocal?.data)mapped.bien_id=lienLocal.data.bien_id;
+            const {error}=await sb.from("reservation").upsert(mapped,{onConflict:'tenant_id,source_id',ignoreDuplicates:false});
+            if(!error)synced++;
+          }
+        }
+        return {ok:true,data:{_synced:synced},provider:'hosttools'};
+      }
+      case 'getCalendar': return await htFetch('/api/getCalendar/'+params.listingId);
+      case 'setCalendar': return await htFetch('/api/setCalendar/'+params.listingId,'POST',params.dates);
+      case 'pushPrices': return await htFetch('/api/setCalendar/'+params.listingId,'POST',{dates:params.prices.map(p=>({date:p.date,price:p.price}))});
+      case 'getMessages': return await htFetch('/api/getReservation/'+params.reservationId);
+      case 'sendMessage': return await htFetch('/api/sendMessage/'+params.reservationId,'POST',{message:params.message});
+      default: return {ok:false,error:'Action inconnue: '+action,provider:'hosttools'};
+    }
+  }catch(e){return {ok:false,error:e.message,provider:'hosttools'};}
+}
+function mapHTStatus(s){
+  const m={'confirmed':'confirmée','pending':'en_attente','cancelled':'annulée','checked_in':'en_cours','checked_out':'terminée','inquiry':'demande'};
+  return m[s]||m[(s||'').toLowerCase()]||'confirmée';
 }
 
 /* ---------- CARTE DES CANAUX ---------- */
@@ -2859,7 +2922,7 @@ async function renderIcalSync(){
 /* ---------- CONFIG E-MAIL ---------- */
 async function renderEmailConfig(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const v=await reglGet("email");
+  const [v,htv]=await Promise.all([reglGet("email"),reglGet("hosttools_token").then(t=>({token:t||''}))]);
   const prov=v.provider||'resend';
   const opt=(val,lab)=>`<option value="${val}" ${prov===val?'selected':''}>${lab}</option>`;
   const etat=(v.api_key&&v.sender_email)?'<span class="pill green">configuré</span>':'<span class="pill gold">à compléter</span>';
@@ -2879,7 +2942,32 @@ async function renderEmailConfig(){
         <button class="btn o" id="emTest" style="margin-left:8px">Envoyer un e-mail de test</button>
         <span class="ok" id="emOk" style="margin-left:8px"></span></div>
       <div class="phnote" style="margin-top:12px">Pour envoyer depuis votre domaine (ex. reservation@dpmconciergerie.com), il faut le vérifier chez le fournisseur (enregistrements DNS). En test, Resend n'autorise l'envoi que vers votre propre adresse tant que le domaine n'est pas vérifié.</div>
+    </div></div>
+  <!-- Host Tools API -->
+  <div class="panel" style="margin-top:16px"><div class="phead"><h3>🔌 Host Tools — Channel Manager API</h3>
+    <span id="htStatus" style="font-size:13px;color:#999">Non vérifié</span></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Connectez votre compte Host Tools pour synchroniser automatiquement les annonces Airbnb/Booking/VRBO, les réservations, les calendriers et les prix dynamiques. Notre app est le PMS — Host Tools sert uniquement de pont API vers les plateformes.</div>
+      <div class="field"><label>Jeton API Host Tools</label><input id="htKey" type="password" value="${esc(htv.token||'')}" placeholder="Collez le jeton généré depuis app.hosttools.com > API et intégrations">
+        <span class="muted" style="font-size:12px;display:block;margin-top:4px">Générez le jeton sur <a href="https://app.hosttools.com/settings/integrations" target="_blank">Host Tools → Paramètres → API et intégrations</a></span></div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn g" id="htSave">Enregistrer</button>
+        <button class="btn o" id="htTest">🔍 Tester la connexion</button>
+        <span id="htOk" style="margin-left:8px"></span>
+      </div>
     </div></div>`;
+  /* --- Host Tools handlers --- */
+  $("#htSave").onclick=async()=>{const token=$("#htKey").value.trim();if(!token){toast("Saisis le jeton API");return;}const e=await reglSet("hosttools_token",token);if(e){$("#htOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}_htToken=token;$("#htOk").textContent="Enregistré ✓";toast("Jeton Host Tools enregistré");};
+  $("#htTest").onclick=async()=>{
+    const token=$("#htKey").value.trim();if(token)_htToken=token;
+    $("#htStatus").textContent="⏳ Test...";$("#htStatus").style.color="#e67e22";
+    const r=await channelBridge("getListings");
+    if(r.ok){const nb=(r.data?.listings||r.data||[]).length;
+      $("#htStatus").textContent="✅ Connecté ("+nb+" annonce"+(nb>1?"s":"")+")";$("#htStatus").style.color="#2a7d2a";
+      toast("Host Tools connecté — "+nb+" annonce(s)");}
+    else{$("#htStatus").textContent="❌ "+r.error;$("#htStatus").style.color="#c0392b";toast("Erreur Host Tools");}
+  };
+  /* --- Email handlers --- */
   $("#emSave").onclick=async()=>{const valeur={provider:$("#emProv").value,api_key:$("#emKey").value.trim(),sender_name:$("#emName").value.trim(),sender_email:$("#emFrom").value.trim(),reply_to:$("#emReply").value.trim()};const e=await reglSet("email",valeur);if(e){$("#emOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#emOk").textContent="Enregistré ✓";toast("Configuration e-mail enregistrée");renderEmailConfig();};
   $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";const res=await envoyerBrevo(to,"Test DPM Conciergerie","<div style='font-family:sans-serif'><h2 style='color:#14352A'>✓ Configuration e-mail réussie</h2><p>Ceci est un e-mail de test depuis votre application <b>My Hostaway — DPM Conciergerie</b>.</p><p style='color:#64756c;font-size:13px'>Envoyé via Brevo le "+new Date().toLocaleString('fr-FR')+"</p></div>");if(res.error){$("#emOk").innerHTML='<span class="err">'+esc(res.error)+'</span>';toast("Échec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}};
 
