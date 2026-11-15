@@ -1739,11 +1739,12 @@ async function renderDashboard(){
   const dashHT=document.getElementById("dashHTStatus");
   const dashHTSync=document.getElementById("dashHTSync");
   if(dashHT){
-    /* Différé pour ne pas bloquer le rendu du dashboard */
+    /* === AUTO-SYNC au chargement du dashboard === */
     setTimeout(async()=>{
       try{
+        dashHT.innerHTML='<span style="color:#e67e22">⏳ Connexion Host Tools...</span>';
         const ctrl=new AbortController();
-        const timer=setTimeout(()=>ctrl.abort(),8000);
+        const timer=setTimeout(()=>ctrl.abort(),12000);
         const res=await fetch(BRIDGE_URL,{
           method:'POST',signal:ctrl.signal,
           headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY},
@@ -1751,17 +1752,63 @@ async function renderDashboard(){
         });
         clearTimeout(timer);
         const r=await res.json();
-        if(r.ok){
-          const nb=(r.data?.listings||r.data||[]).length;
-          const {count:resaCount}=await sb.from("reservation").select("id",{count:"exact",head:true}).not("source_id","is",null);
-          dashHT.innerHTML=`<span style="color:#2a7d2a">✅ Connecté — ${nb} annonce(s) · ${resaCount||0} résa(s) importée(s)</span>`;
-        }else{
-          dashHT.innerHTML=`<span style="color:#c0392b">❌ ${esc((r.error||'').slice(0,60))}</span>`;
+        if(!r.ok){dashHT.innerHTML=`<span style="color:#c0392b">❌ ${esc((r.error||'').slice(0,60))}</span>`;return;}
+        const htListings=r.data?.listings||r.data||[];
+        const nb=htListings.length;
+        if(!nb){dashHT.innerHTML='<span style="color:#2a7d2a">✅ Connecté — aucune annonce sur Host Tools</span>';return;}
+        /* --- Auto-import des annonces manquantes --- */
+        dashHT.innerHTML=`<span style="color:#e67e22">⏳ ${nb} annonce(s) trouvée(s) — import auto...</span>`;
+        let imported=0,linked=0;
+        for(const l of htListings){
+          const htId=l._id;
+          const {data:existing}=await sb.from("canal_bien").select("id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).maybeSingle();
+          if(existing)continue; /* déjà importé */
+          const nom=l.nickname||l.name||l.title||'Annonce Host Tools';
+          const channel=l.channel||'airbnb';
+          /* Chercher un bien existant avec le même nom */
+          const {data:bienExist}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).maybeSingle();
+          let bienId;
+          if(bienExist){bienId=bienExist.id;}
+          else{
+            const {data:newBien,error:errB}=await sb.from("bien").insert({
+              tenant_id:state.tenant.id, nom,
+              adresse:typeof l.address==='string'?l.address:l.apartment||'',
+              ville:l.city||null, pays:l.country||'Maroc',
+              prix_nuit_base:l.basePrice||l.price||0,
+              chambres:l.bedrooms||0, couchages:l.accommodates||l.maxGuests||0,
+              salles_de_bain:l.bathrooms||0,
+              description:l.description||l.publicDescription||'',
+              nb_photos:(l.images||l.photos||[]).length,
+              statut:'actif'
+            }).select("id").single();
+            if(errB)continue;
+            bienId=newBien.id;imported++;
+          }
+          const {error:errC}=await sb.from("canal_bien").insert({
+            tenant_id:state.tenant.id, bien_id:bienId, canal:channel,
+            actif:true, externe_id:htId, url_annonce:l.airbnbUrl||l.url||null
+          });
+          if(!errC)linked++;
         }
+        if(imported)invalidate("bien");
+        /* --- Auto-sync réservations --- */
+        dashHT.innerHTML=`<span style="color:#e67e22">⏳ Synchro réservations...</span>`;
+        const rr=await channelBridge("getReservations");
+        const synced=rr.ok?(rr.data?._synced||0):0;
+        /* --- Résultat final --- */
+        const {count:resaCount}=await sb.from("reservation").select("id",{count:"exact",head:true}).not("source_id","is",null);
+        const {count:bienCount}=await sb.from("bien").select("id",{count:"exact",head:true}).eq("tenant_id",state.tenant.id);
+        const parts=[];
+        parts.push(`${bienCount||0} bien(s)`);
+        parts.push(`${resaCount||0} résa(s)`);
+        if(imported)parts.push(`${imported} importé(s)`);
+        if(synced)parts.push(`${synced} synchro`);
+        dashHT.innerHTML=`<span style="color:#2a7d2a">✅ Connecté — ${parts.join(' · ')}</span>`;
+        if(imported||synced)toast(`Auto-sync Host Tools : ${imported?imported+' bien(s) importé(s)':''} ${synced?synced+' résa(s)':''}`);
       }catch(e){
         dashHT.innerHTML=`<span style="color:#e67e22">⏳ Bridge hors ligne — <a href="#" onclick="goRub('canaux','canauxcarte');return false" style="color:#2a5db0">tester</a></span>`;
       }
-    },500);
+    },300);
   }
   if(dashHTSync){
     dashHTSync.onclick=async()=>{
