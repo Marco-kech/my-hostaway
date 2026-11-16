@@ -2667,7 +2667,7 @@ async function renderTarifDyn(){
     const lmFreq=document.getElementById("lmFreq");
     if(lmFreq) lmFreq.value=lm.scan_frequency||"1x";
 
-    document.getElementById("lmSave").onclick=async()=>{
+    const lmSaveBtn=document.getElementById("lmSave"); if(lmSaveBtn) lmSaveBtn.onclick=async()=>{
       const freq=lmFreq?lmFreq.value:"1x";
       const val={actif:lmActif.checked,horizon_days:parseInt(lmHorizon.value)||7,max_listings:lm.max_listings||20,push_to_platforms:lmPush.checked,scan_frequency:freq};
       const e=await reglSet("last_minute",val);
@@ -2685,7 +2685,7 @@ async function renderTarifDyn(){
       setTimeout(()=>{document.getElementById("lmOk").textContent="";},3000);
     };
 
-    document.getElementById("lmRunNow").onclick=async()=>{
+    const lmRunBtn=document.getElementById("lmRunNow"); if(lmRunBtn) lmRunBtn.onclick=async()=>{
       const resDiv=document.getElementById("lmResult");
       resDiv.innerHTML=`<div style="padding:12px;background:#fff8e1;border-radius:8px;margin-bottom:8px">
         <span class="spin" style="width:16px;height:16px;border-width:2px;vertical-align:middle;margin-right:8px"></span>
@@ -3485,8 +3485,9 @@ async function renderCronHist(){
     <div id="cronTable" style="padding:0 16px 16px"><span class="muted">Chargement...</span></div>
   </div>`;
   async function loadCronLog(){
+    const el=document.getElementById("cronTable"); if(!el) return;
     const {data,error}=await sb.from("cron_log").select("*").order("started_at",{ascending:false}).limit(50);
-    if(error){$("#cronTable").innerHTML=`<span style="color:red">Erreur : ${esc(error.message)}</span>`;return;}
+    if(error){el.innerHTML=`<span style="color:red">Erreur : ${esc(error.message)}</span>`;return;}
     if(!data||!data.length){$("#cronTable").innerHTML=`<span class="muted">Aucun historique pour l'instant. Les tâches se loggueront ici dès leur prochaine exécution.</span>`;return;}
     const colorMap={
       "sync-listing-content":"#27ae60","last-minute-pricing":"#2980b9",
