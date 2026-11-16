@@ -2541,6 +2541,15 @@ async function renderTarifDyn(){
         <span>jours</span>
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+        Fréquence scan :
+        <select id="lmFreq" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px">
+          <option value="1x">1x / jour</option>
+          <option value="2x">2x / jour</option>
+          <option value="3x">3x / jour</option>
+          <option value="4x">4x / jour (6h)</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px">
         <input type="checkbox" id="lmPush" checked>
         Push vers plateformes
       </label>
@@ -2655,12 +2664,25 @@ async function renderTarifDyn(){
     }
     if(lmHorizon) lmHorizon.value=lm.horizon_days||7;
     if(lmPush) lmPush.checked=lm.push_to_platforms!==false;
+    const lmFreq=document.getElementById("lmFreq");
+    if(lmFreq) lmFreq.value=lm.scan_frequency||"1x";
 
     document.getElementById("lmSave").onclick=async()=>{
-      const val={actif:lmActif.checked,horizon_days:parseInt(lmHorizon.value)||7,max_listings:lm.max_listings||20,push_to_platforms:lmPush.checked};
+      const freq=lmFreq?lmFreq.value:"1x";
+      const val={actif:lmActif.checked,horizon_days:parseInt(lmHorizon.value)||7,max_listings:lm.max_listings||20,push_to_platforms:lmPush.checked,scan_frequency:freq};
       const e=await reglSet("last_minute",val);
       if(e){toast("Erreur: "+e.message);return;}
-      document.getElementById("lmOk").textContent="✓ Enregistré";setTimeout(()=>{document.getElementById("lmOk").textContent="";},2000);
+      /* Mettre à jour le cron Supabase */
+      try{
+        const cr=await fetch("https://eztwwzzjzwmhfzmcafyu.supabase.co/functions/v1/update-cron-schedule",{
+          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_KEY},
+          body:JSON.stringify({job_name:"last-minute-pricing-daily",frequency:freq})
+        });
+        const crd=await cr.json();
+        if(crd.ok){document.getElementById("lmOk").textContent="✓ Enregistré (cron: "+freq+")";}
+        else{document.getElementById("lmOk").textContent="✓ Config OK — cron: "+crd.error;}
+      }catch(ce){document.getElementById("lmOk").textContent="✓ Config OK";}
+      setTimeout(()=>{document.getElementById("lmOk").textContent="";},3000);
     };
 
     document.getElementById("lmRunNow").onclick=async()=>{
