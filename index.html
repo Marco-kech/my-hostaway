@@ -5259,7 +5259,7 @@ async function ficheReservation(id){
         </div>
         <div>
           <div class="fsec">Voyageur</div>
-          ${f('Nom',esc(voy.nom||'—'))}${f('Email',esc(voy.email||'—'))}${f('Tél.',esc(voy.telephone||'—'))}
+          ${f('Nom',esc(voy.nom||'—'))}${f('Email',esc(voy.email||'—'))}${f('Tél.',esc(voy.tel||'—'))}
           ${f('Pays',esc(voy.pays||'—'))}
           <div class="fsec" style="margin-top:12px">Paiement</div>
           ${f('Total',money(r.prix_total))}${f('Payé',money(r.montant_paye||0))}
@@ -5297,7 +5297,7 @@ async function ficheVoyageur(id){
   ouvrir(`<div class="h"><h3>Voyageur — ${esc(v.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b" style="max-height:70vh;overflow:auto">
       <div class="fsec">Informations</div>
-      ${f('Nom',esc(v.nom))}${f('Email',esc(v.email||'—'))}${f('Téléphone',esc(v.telephone||'—'))}
+      ${f('Nom',esc(v.nom))}${f('Email',esc(v.email||'—'))}${f('Téléphone',esc(v.tel||'—'))}
       ${f('Pays',esc(v.pays||'—'))}${f('Ville',esc(v.ville||'—'))}${f('Langue',esc(v.langue||'—'))}
       <div class="fsec" style="margin-top:12px">Résumé</div>
       ${f('Séjours',nbSejours)}${f('Total dépensé',money(totalDepense))}${f('Moyenne par séjour',money(nbSejours?totalDepense/nbSejours:0))}
@@ -5379,7 +5379,7 @@ th{background:#f5f5f5;font-weight:700}
 <h2>Parties</h2>
 <table><tr><th style="width:50%">Bailleur (propriétaire / gestionnaire)</th><th>Locataire (voyageur)</th></tr>
 <tr><td>${esc(cfg.hote||'DPM Conciergerie')}<br>${cfg.tel?'Tél : '+esc(cfg.tel)+'<br>':''}${cfg.email?'Email : '+esc(cfg.email):''}</td>
-<td>${esc(voy.nom||'—')}<br>${voy.email?'Email : '+esc(voy.email)+'<br>':''}${voy.telephone?'Tél : '+esc(voy.telephone):''}</td></tr></table>
+<td>${esc(voy.nom||'—')}<br>${voy.email?'Email : '+esc(voy.email)+'<br>':''}${voy.tel?'Tél : '+esc(voy.tel):''}</td></tr></table>
 
 <h2>Bien loué</h2>
 <table><tr><th>Bien</th><td>${esc(bien.nom)}</td></tr>
@@ -5448,7 +5448,7 @@ async function doSearch(){
   const [biens,resas,voyageurs]=await Promise.all([
     sb.from("bien").select("id,nom,parametres").ilike("nom",like).limit(5),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,canal").or(`canal.ilike.${like}`).limit(5),
-    sb.from("voyageur").select("id,nom,email,telephone").or(`nom.ilike.${like},email.ilike.${like},telephone.ilike.${like}`).limit(5)
+    sb.from("voyageur").select("id,nom,email,tel").or(`nom.ilike.${like},email.ilike.${like},tel.ilike.${like}`).limit(5)
   ]);
   let html='';
   const bList=biens.data||[];
@@ -5468,7 +5468,7 @@ async function doSearch(){
   }
   if(vList.length){
     html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);padding:4px 8px;text-transform:uppercase;margin-top:4px">Voyageurs</div>`;
-    html+=vList.map(v=>`<div class="search-item" onclick="fermerSearch();goRub('resa','voyageurs')" style="padding:8px 10px;cursor:pointer;border-radius:8px;font-size:13px"><b>${esc(v.nom)}</b> <span class="muted">${esc(v.email||'')} ${esc(v.telephone||'')}</span></div>`).join("");
+    html+=vList.map(v=>`<div class="search-item" onclick="fermerSearch();goRub('resa','voyageurs')" style="padding:8px 10px;cursor:pointer;border-radius:8px;font-size:13px"><b>${esc(v.nom)}</b> <span class="muted">${esc(v.email||'')} ${esc(v.tel||'')}</span></div>`).join("");
   }
   if(rAll.length){
     html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);padding:4px 8px;text-transform:uppercase;margin-top:4px">Réservations</div>`;
