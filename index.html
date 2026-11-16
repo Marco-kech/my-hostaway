@@ -625,7 +625,12 @@ const MODULES = {
       const ph=voy.tel?`<br><span class="muted" style="font-size:11px">📱 ${esc(voy.tel)}</span>`:'';
       return`<a href="#" onclick="event.preventDefault();event.stopPropagation();ficheVoyageur('${v}')" style="color:var(--dpm-vert);font-weight:600;text-decoration:none" title="Voir la fiche voyageur">${nm}</a>${em}${ph}`;}],
       ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
-      ["statut","Statut",v=>pill(v)],["prix_total","Total",v=>money(v)],["statut_paiement","Paiement",v=>pill(v)]],
+      ["statut","Statut",v=>pill(v)],["prix_total","Total",(v,r)=>{
+        const t=money(v);if(!v||!r)return t;
+        const a=r.arrivee?new Date(r.arrivee):null,d=r.depart?new Date(r.depart):null;
+        if(a&&d){const nuits=Math.max(1,Math.round((d-a)/(86400000)));const pn=Math.round(v/nuits);
+          return t+'<br><span class="muted" style="font-size:11px">'+pn+' /nuit · '+nuits+' n.</span>';}
+        return t;}],["statut_paiement","Paiement",v=>pill(v)]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["voyageur_id","Voyageur",{ref:"voyageur"}],
       ["arrivee","Arrivée",{type:"date",req:1}],["depart","Départ",{type:"date",req:1}],
       ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
