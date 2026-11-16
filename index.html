@@ -2895,8 +2895,8 @@ async function renderScoreASO(){
   /* Charger les réservations et avis pour les métriques */
   const today=new Date().toISOString().slice(0,10);
   const j90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
-  const {data:resas}=await sb.from("reservation").select("bien_id,arrivee,depart,statut,created_at");
-  const {data:avisData}=await sb.from("avis").select("bien_id,note,created_at");
+  const {data:resas}=await sb.from("reservation").select("bien_id,arrivee,depart,statut,cree_le");
+  const {data:avisData}=await sb.from("avis").select("bien_id,note_globale,cree_le");
   const {data:msgs}=await sb.from("message").select("bien_id,created_at,expediteur");
   const {data:canaux}=await sb.from("canal_bien").select("bien_id,canal,actif");
 
@@ -2938,7 +2938,7 @@ async function renderScoreASO(){
     /* 6. Avis (15pts) */
     const bAvis=(avisData||[]).filter(a=>a.bien_id===b.id);
     const nbAvis=bAvis.length;
-    const moyNote=nbAvis?Math.round(bAvis.reduce((s,a)=>s+(a.note||0),0)/nbAvis*10)/10:0;
+    const moyNote=nbAvis?Math.round(bAvis.reduce((s,a)=>s+(a.note_globale||0),0)/nbAvis*10)/10:0;
     if(nbAvis>=25&&moyNote>=4.5){checks.push({label:'Avis',pts:15,max:15,ok:true,tip:'✅ '+nbAvis+' avis, note '+moyNote+'/5 — éligible Guest Favorites'});score+=15;}
     else if(nbAvis>=10&&moyNote>=4.0){checks.push({label:'Avis',pts:10,max:15,ok:false,tip:'⚠️ '+nbAvis+' avis, note '+moyNote+'/5 — vise 25 avis et 4.8+ pour Guest Favorites (25% du classement)'});score+=10;}
     else if(nbAvis>=1){checks.push({label:'Avis',pts:5,max:15,ok:false,tip:'⚠️ '+nbAvis+' avis seulement — demande un avis après chaque séjour, vise 25+'});score+=5;}
@@ -2964,7 +2964,7 @@ async function renderScoreASO(){
 
     /* 10. Calendrier à jour (5pts) */
     const bResas=(resas||[]).filter(r=>r.bien_id===b.id);
-    const hasRecent=bResas.some(r=>r.created_at>=j90);
+    const hasRecent=bResas.some(r=>r.cree_le>=j90);
     if(hasRecent||bResas.length>0){checks.push({label:'Calendrier',pts:5,max:5,ok:true,tip:'✅ Calendrier actif — activité récente détectée'});score+=5;}
     else{checks.push({label:'Calendrier',pts:1,max:5,ok:false,tip:'⚠️ Aucune activité récente — mets à jour le calendrier régulièrement, Airbnb pénalise les calendriers inactifs'});score+=1;}
 
@@ -4141,7 +4141,7 @@ async function renderSiteDesign(){
 }
 async function renderSiteAnnonces(){
   const biens=(await loadOpts("bien"))||[];
-  const {data:all}=await sb.from("bien").select("id,nom,ville,afficher_site,type_unite").order("nom");
+  const {data:all}=await sb.from("bien").select("id,nom,parametres,type_unite").order("nom");
   const list=all||[];
   const rows=list.map(b=>`<tr>
     <td><b>${esc(b.nom)}</b></td><td>${esc(b.ville||'—')}</td><td>${pill(b.type_unite||'autre')}</td>
@@ -4184,7 +4184,7 @@ async function renderSitePages(){
 async function renderSitePreview(){
   const design=await reglGet("site_design")||{};
   const pages=await reglGet("site_pages")||{};
-  const {data:biens}=await sb.from("bien").select("id,nom,ville,type_unite,description").eq("afficher_site",true).order("nom");
+  const {data:biens}=await sb.from("bien").select("id,nom,parametres,type_unite").order("nom");
   const list=biens||[];
   const bg=design.bg_color||'#14352A';const accent=design.accent||'#C9A227';const txt=design.text_color||'#ffffff';
   const cards=list.map(b=>`<div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
@@ -4925,7 +4925,7 @@ async function renderStatsBien(){
     const bien=(biens||[]).find(b=>b.id===bid);
     const [{data:resas},{data:avis},{data:depenses}]=await Promise.all([
       sb.from("reservation").select("*").eq("bien_id",bid).neq("statut","annulee").order("arrivee",{ascending:false}),
-      sb.from("avis").select("note").eq("bien_id",bid),
+      sb.from("avis").select("note_globale").eq("bien_id",bid),
       sb.from("depense").select("montant").eq("bien_id",bid)
     ]);
     const all=resas||[];
@@ -5286,7 +5286,7 @@ async function ficheVoyageur(id){
   await loadOpts("bien");
   const [{data:resas},{data:avis},{data:msgs}]=await Promise.all([
     sb.from("reservation").select("*").eq("voyageur_id",id).order("arrivee",{ascending:false}).limit(20),
-    sb.from("avis").select("note,commentaire,cree_le").eq("voyageur_id",id).order("cree_le",{ascending:false}).limit(5),
+    sb.from("avis").select("note_globale,commentaire,cree_le").eq("voyageur_id",id).order("cree_le",{ascending:false}).limit(5),
     sb.from("message").select("corps,canal,cree_le").eq("voyageur_id",id).order("cree_le",{ascending:false}).limit(5)
   ]);
   const all=resas||[];
@@ -5301,7 +5301,7 @@ async function ficheVoyageur(id){
       <div class="fsec" style="margin-top:12px">Résumé</div>
       ${f('Séjours',nbSejours)}${f('Total dépensé',money(totalDepense))}${f('Moyenne par séjour',money(nbSejours?totalDepense/nbSejours:0))}
       ${all.length?`<div class="fsec" style="margin-top:12px">Réservations</div>${all.map(r=>`<div style="font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)">${refName("bien",r.bien_id)} — ${fdate(r.arrivee)} → ${fdate(r.depart)} — ${money(r.prix_total)} ${pill(r.statut)}</div>`).join("")}`:''}
-      ${(avis&&avis.length)?`<div class="fsec" style="margin-top:12px">Avis laissés</div>${avis.map(a=>`<div style="font-size:12.5px;padding:4px 0">${'⭐'.repeat(a.note||0)} ${esc((a.commentaire||'').slice(0,60))} <span class="muted">${fdate(a.cree_le)}</span></div>`).join("")}`:''}
+      ${(avis&&avis.length)?`<div class="fsec" style="margin-top:12px">Avis laissés</div>${avis.map(a=>`<div style="font-size:12.5px;padding:4px 0">${'⭐'.repeat(a.note_globale||0)} ${esc((a.commentaire||'').slice(0,60))} <span class="muted">${fdate(a.cree_le)}</span></div>`).join("")}`:''}
     </div>
     <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
 }
@@ -5312,7 +5312,7 @@ async function ficheBien(id){
   await loadOpts("voyageur");
   const [{data:resas},{data:avis},{data:photos},{data:taches}]=await Promise.all([
     sb.from("reservation").select("*").eq("bien_id",id).neq("statut","annulee").order("arrivee",{ascending:false}).limit(10),
-    sb.from("avis").select("note").eq("bien_id",id),
+    sb.from("avis").select("note_globale").eq("bien_id",id),
     sb.from("bien_photo").select("url").eq("bien_id",id).order("ordre").limit(6),
     sb.from("tache").select("titre,statut,date_prevue").eq("bien_id",id).eq("archive",false).order("date_prevue").limit(5)
   ]);
@@ -5445,7 +5445,7 @@ async function doSearch(){
   gDrop.hidden=false;gDrop.innerHTML='<div class="center"><span class="spin"></span></div>';
   const like='%'+q+'%';
   const [biens,resas,voyageurs]=await Promise.all([
-    sb.from("bien").select("id,nom,ville").ilike("nom",like).limit(5),
+    sb.from("bien").select("id,nom,parametres").ilike("nom",like).limit(5),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,canal").or(`canal.ilike.${like}`).limit(5),
     sb.from("voyageur").select("id,nom,email,telephone").or(`nom.ilike.${like},email.ilike.${like},telephone.ilike.${like}`).limit(5)
   ]);
@@ -5454,7 +5454,7 @@ async function doSearch(){
   const vList=voyageurs.data||[];
   const rList=resas.data||[];
   // Also search biens by ville
-  const [bVille]=await Promise.all([sb.from("bien").select("id,nom,ville").ilike("ville",like).limit(5)]);
+  const [bVille]=await Promise.all([sb.from("bien").select("id,nom,parametres").order("nom").limit(5)]);
   const bAll=[...bList,...(bVille.data||[]).filter(b=>!bList.find(x=>x.id===b.id))].slice(0,6);
   // Also search resas by voyageur name
   const vIds=vList.map(v=>v.id);
@@ -5481,7 +5481,8 @@ function fermerSearch(){gDrop.hidden=true;gSearch.value="";}
 /* ---------- NOTIFICATIONS ---------- */
 async function chargerNotifs(){
   try{
-    const {data}=await sb.from("notification").select("*").order("created_at",{ascending:false}).limit(30);
+    const {data,error}=await sb.from("notification").select("*").order("cree_le",{ascending:false}).limit(30);
+    if(error){console.warn("notifs query:",error.message);return;}
     const notifs=data||[];
     const unread=notifs.filter(n=>!n.lu).length;
     const badge=$("#notifBadge");
@@ -5490,14 +5491,14 @@ async function chargerNotifs(){
     if(!notifs.length){list.innerHTML='<p class="muted" style="text-align:center;padding:12px;font-size:13px">Aucune notification</p>';return;}
     list.innerHTML=notifs.map(n=>`<div style="padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;${n.lu?'opacity:.6':''}" data-nid="${n.id}" ${n.lien?`onclick="fermerNotifs();goRub('${n.lien}')"`:''}>
       <div style="font-size:13px;font-weight:${n.lu?'400':'700'}">${n.type==='alerte'?'🔴':n.type==='succes'?'🟢':n.type==='tache'?'✅':'🔵'} ${esc(n.titre)}</div>
-      ${n.message?`<div class="muted" style="font-size:12px;margin-top:2px">${esc(n.message)}</div>`:''}
-      <div class="muted" style="font-size:11px;margin-top:3px">${fdate(n.created_at)}</div>
+      ${n.corps?`<div class="muted" style="font-size:12px;margin-top:2px">${esc(n.corps)}</div>`:''}
+      <div class="muted" style="font-size:11px;margin-top:3px">${fdate(n.cree_le)}</div>
     </div>`).join("");
   }catch(e){console.warn("notifs",e);}
 }
 function fermerNotifs(){$("#notifDrop").hidden=true;}
-async function creerNotif(type,titre,message,lien){
-  try{await sb.from("notification").insert({tenant_id:state.tenant.id,user_id:state.user.id,type,titre,message,lien});}catch(e){console.warn("creerNotif",e);}
+async function creerNotif(type,titre,corps,lien){
+  try{await sb.from("notification").insert({tenant_id:state.tenant.id,destinataire:state.user.id,type,titre,corps,lien});}catch(e){console.warn("creerNotif",e);}
 }
 /* Toggle dropdown */
 document.addEventListener("click",e=>{
@@ -5514,7 +5515,7 @@ if(_nma)_nma.addEventListener("click",async()=>{
 /* Auto-notif sur nouvelle résa */
 sb.channel('resa-changes').on('postgres_changes',{event:'INSERT',schema:'public',table:'reservation'},payload=>{
   const r=payload.new;if(!r||r.tenant_id!==state.tenant?.id)return;
-  creerNotif('succes','Nouvelle réservation','Réservation de '+(r.voyageur_nom||'un voyageur')+' du '+fdate(r.date_arrivee)+' au '+fdate(r.date_depart),'reservations');
+  creerNotif('succes','Nouvelle réservation','Réservation du '+fdate(r.arrivee)+' au '+fdate(r.depart),'resa');
   chargerNotifs();toast("🔔 Nouvelle réservation !");
 }).subscribe();
 /* Auto-notif sur nouvelle tâche */
