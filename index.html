@@ -3069,7 +3069,8 @@ async function renderCanauxCarte(){
       <button class="btn g sm" id="bridgeSyncResa">📥 Synchro réservations</button>
       <button class="btn o sm" id="bridgePushPrices">💰 Pousser prix dynamiques</button>
       <button class="btn o sm" id="bridgeSyncCal">📅 Synchro calendrier</button>
-      <button class="btn sm" id="bridgePushContent">📝 Pousser contenu annonces</button>
+      <button class="btn sm" id="bridgePushContent">📝 Pousser contenu → plateformes</button>
+      <button class="btn sm" id="bridgePullContent" style="background:#2980b9;color:#fff">📥 Importer contenu ← plateformes</button>
     </div>
     <div id="bridgeLog" style="padding:0 16px 16px;font-family:monospace;font-size:12px;max-height:300px;overflow:auto"></div>
   </div>`;
@@ -3276,6 +3277,151 @@ async function renderCanauxCarte(){
     }
     logBridge(`Terminé : ${pushed} annonce(s) mises à jour`,pushed>0);
     if(pushed)toast(`Contenu poussé (${pushed} annonce${pushed>1?'s':''})`);
+  };
+  /* --- Importer contenu depuis les plateformes (pull) --- */
+  document.getElementById("bridgePullContent").onclick=async()=>{
+    logBridge("📥 Import du contenu depuis les plateformes...",true);
+    const liensAvecExt=(liens||[]).filter(l=>l.externe_id);
+    if(!liensAvecExt.length){logBridge("Aucun bien lié. Importe d'abord les annonces.",false);return;}
+    /* Ne garder qu'un lien par bien (priorité : airbnb > booking > vrbo) */
+    const parBien={};
+    const prio={airbnb:1,booking:2,vrbo:3,autre:9};
+    for(const l of liensAvecExt){
+      const prev=parBien[l.bien_id];
+      if(!prev||(prio[l.canal]||9)<(prio[prev.canal]||9)) parBien[l.bien_id]=l;
+    }
+    let pulled=0;
+    for(const bienId of Object.keys(parBien)){
+      const lien=parBien[bienId];
+      const bien=biens.find(b=>b.id===bienId);
+      const bNom=bien?bien.nom:'?';
+      logBridge(`📡 ${bNom} ← ${lien.canal} (${lien.externe_id})...`,true);
+      try{
+        const r=await channelBridge("getListing",{listingId:lien.externe_id});
+        if(!r.ok){logBridge(`❌ ${bNom} — ${r.error}`,false);continue;}
+        const ht=r.data||r;
+        /* Mapping inverse Host Tools → DPM */
+        const updates={};
+        const pUpdates={};
+        /* Champs directs (colonnes de la table bien) */
+        if(ht.name&&!bien.nom) updates.nom=ht.name;
+        if(ht.maxGuests) updates.capacite=ht.maxGuests;
+        if(ht.bedrooms) updates.nb_chambres=ht.bedrooms;
+        if(ht.bathrooms) updates.nb_sdb=Math.round(ht.bathrooms);
+        if(ht.basePrice) updates.prix_nuit_base=ht.basePrice;
+        if(ht.minNights) updates.nuits_min=ht.minNights;
+        /* Type de bien */
+        if(ht.propertyTypeId&&!bien.type){
+          const typeMap={apartment:"Appartement",house:"Maison",villa:"Villa",studio:"Studio",condominium:"Appartement",vacation_home:"Maison",loft:"Studio",townhouse:"Maison",bungalow:"Maison",cottage:"Maison",cabin:"Maison",chalet:"Villa"};
+          updates.type=typeMap[ht.propertyTypeId]||"Appartement";
+        }
+        /* Adresse */
+        if(ht.address&&typeof ht.address==='string') updates.adresse=ht.address;
+        else if(ht.address&&typeof ht.address==='object'){
+          const a=ht.address;
+          updates.adresse=[a.street,a.apartment,a.city,a.state,a.zipCode,a.country].filter(Boolean).join(', ');
+          if(a.city) pUpdates.ville=a.city;
+          if(a.country) pUpdates.pays=a.country;
+          if(a.zipCode) pUpdates.code_postal=a.zipCode;
+        }
+        /* GPS */
+        if(ht.lat||ht.latitude) updates.latitude=ht.lat||ht.latitude;
+        if(ht.lng||ht.longitude) updates.longitude=ht.lng||ht.longitude;
+        /* Frais */
+        if(ht.fees&&Array.isArray(ht.fees)){
+          const cleaning=ht.fees.find(f=>f.kind==='cleaning');
+          if(cleaning) updates.frais_menage=cleaning.value;
+          const tax=ht.fees.find(f=>f.kind==='tax'||f.name?.toLowerCase().includes('tax'));
+          if(tax) updates.taxe_sejour_nuit=tax.value;
+        }
+        /* Parametres (jsonb) */
+        if(ht.checkInTime) pUpdates.heure_arrivee=String(ht.checkInTime).padStart(2,'0')+':00';
+        if(ht.checkOutTime) pUpdates.heure_depart=String(ht.checkOutTime).padStart(2,'0')+':00';
+        /* Lits */
+        if(ht.beds) pUpdates.nb_lits=ht.beds;
+        else if(ht.bedroomConfiguration){
+          let totalBeds=0;
+          (Array.isArray(ht.bedroomConfiguration)?ht.bedroomConfiguration:[]).forEach(br=>{
+            if(br.beds) br.beds.forEach(bed=>totalBeds+=(bed.count||1));
+          });
+          if(totalBeds) pUpdates.nb_lits=totalBeds;
+        }
+        /* Nuits max */
+        if(ht.maxNights) pUpdates.nuits_max=ht.maxNights;
+        /* Superficie */
+        if(ht.space&&ht.space.value) pUpdates.superficie=ht.space.value;
+        /* Descriptions */
+        const extractText=(obj)=>{
+          if(!obj) return null;
+          if(typeof obj==='string') return obj;
+          if(obj.texts&&Array.isArray(obj.texts)){
+            const fr=obj.texts.find(t=>t.language==='fr');
+            const en=obj.texts.find(t=>t.language==='en');
+            return (fr||en||obj.texts[0])?.value||null;
+          }
+          return obj.value||null;
+        };
+        if(ht.notes){
+          const n=ht.notes;
+          if(n.description) pUpdates.description=extractText(n.description);
+          if(n.shortDescription) pUpdates.description_courte=extractText(n.shortDescription);
+          if(n.space) pUpdates.description_espace=extractText(n.space);
+          if(n.access||n.neighborhood) pUpdates.description_quartier=extractText(n.access||n.neighborhood);
+          if(n.transit) pUpdates.description_transport=extractText(n.transit);
+          if(n.houseRules) pUpdates.reglement_interieur=extractText(n.houseRules);
+        }
+        /* Si description plate (pas dans notes) */
+        if(!pUpdates.description&&ht.description) pUpdates.description=ht.description;
+        if(!pUpdates.description&&ht.summary) pUpdates.description=ht.summary;
+        /* Politiques */
+        if(ht.policy){
+          if(ht.policy.childrenAllowed!==undefined) pUpdates.enfants_acceptes=ht.policy.childrenAllowed?'oui':'non';
+          if(ht.policy.smokingAllowed!==undefined) pUpdates.fumeur_autorise=ht.policy.smokingAllowed?'oui':'non';
+          if(ht.policy.petPolicy) pUpdates.animaux_politique=ht.policy.petPolicy.allowedPets==='allowed'?'oui':'sur_demande';
+        }
+        /* Amenities → équipements */
+        if(ht.amenities&&Array.isArray(ht.amenities)){
+          const revMap={wifi:"Wifi",air_conditioning:"Climatisation",heating:"Chauffage",pool:"Piscine",kitchen:"Cuisine équipée",parking:"Parking",free_parking:"Parking gratuit",washer:"Lave-linge",dryer:"Sèche-linge",tv:"TV",hot_tub:"Jacuzzi",patio_or_balcony:"Balcon / Terrasse",pets_allowed:"Animaux acceptés",elevator:"Ascenseur",iron:"Fer à repasser",hair_dryer:"Sèche-cheveux",coffee_maker:"Machine à café",microwave:"Micro-ondes",dishwasher:"Lave-vaisselle",bbq_grill:"Barbecue",safe:"Coffre-fort",smoke_detector:"Détecteur fumée",fire_extinguisher:"Extincteur",first_aid_kit:"Kit premiers secours",garden:"Jardin"};
+          const mapped=ht.amenities.map(a=>revMap[a]||revMap[a?.id]).filter(Boolean);
+          if(mapped.length) pUpdates.equipements=[...new Set(mapped)];
+        }
+        /* Caution */
+        if(ht.securityDeposit) pUpdates.caution=ht.securityDeposit;
+        /* Politique annulation */
+        if(ht.cancellationPolicy){
+          const cpMap={flexible:"flexible",moderate:"moderee",strict:"stricte",super_strict:"stricte",non_refundable:"non_remboursable"};
+          pUpdates.politique_annulation=cpMap[ht.cancellationPolicy]||'moderee';
+        }
+        /* Licence */
+        if(ht.registrationNumber||ht.licenseNumber) pUpdates.licence_numero=ht.registrationNumber||ht.licenseNumber;
+        /* Fusionner avec parametres existants */
+        const {data:cur}=await sb.from("bien").select("parametres").eq("id",bienId).single();
+        const curP=(cur&&cur.parametres)||{};
+        const mergedP={...curP};
+        for(const [k,v] of Object.entries(pUpdates)){
+          if(v!==null&&v!==undefined&&(curP[k]===null||curP[k]===undefined||curP[k]==='')) mergedP[k]=v;
+        }
+        updates.parametres=mergedP;
+        /* Écrire en base (ne jamais écraser une valeur existante non vide) */
+        const finalUp={};
+        const {data:existRow}=await sb.from("bien").select("*").eq("id",bienId).single();
+        for(const [k,v] of Object.entries(updates)){
+          if(k==='parametres'){finalUp.parametres=updates.parametres;continue;}
+          if(existRow&&existRow[k]!==null&&existRow[k]!==undefined&&existRow[k]!=='') continue; /* ne pas écraser */
+          finalUp[k]=v;
+        }
+        if(Object.keys(finalUp).length===0&&Object.keys(pUpdates).length===0){
+          logBridge(`⏭ ${bNom} — rien de nouveau à importer`,true);continue;
+        }
+        const {error:upErr}=await sb.from("bien").update(finalUp).eq("id",bienId);
+        if(upErr){logBridge(`❌ ${bNom} — erreur update : ${upErr.message}`,false);continue;}
+        const nbFields=Object.keys(finalUp).length-1+Object.keys(pUpdates).length;
+        logBridge(`✅ ${bNom} — ${nbFields} champ(s) importé(s) depuis ${lien.canal}`,true);
+        pulled++;
+      }catch(ex){logBridge(`❌ ${bNom} — ${ex.message}`,false);}
+    }
+    logBridge(`Terminé : ${pulled} bien(s) mis à jour depuis les plateformes`,pulled>0);
+    if(pulled)toast(`Import terminé (${pulled} bien${pulled>1?'s':''})`);
   };
   /* --- Auto-test bridge au chargement --- */
   setTimeout(async()=>{
