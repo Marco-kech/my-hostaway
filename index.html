@@ -5246,8 +5246,48 @@ async function ficheReservation(id){
   ]);
   const f=(l,v)=>v?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)"><span class="muted">${l}</span><b>${v}</b></div>`:'';
   const ci=checkins?.data?.[0]||checkins?.[0]||null;
+  /* --- Solution D : Profil plateforme depuis donnees_source --- */
+  const ds=r.donnees_source||{};
+  const gNom=[ds.firstName,ds.lastName].filter(Boolean).join(" ");
+  const gEmail=ds.guestEmail||ds.email||voy.email||null;
+  const gPhone=ds.guestPhone||ds.phone||voy.tel||null;
+  const gAdults=ds.guests?.adults||ds.numberOfGuests||r.nb_personnes||'—';
+  const gChildren=ds.guests?.children||0;
+  const gInfants=ds.guests?.infants||0;
+  const gPets=ds.guests?.pets||0;
+  const gSource=ds.source||r.canal||'—';
+  const gConf=ds.confirmationCode||r.reference_canal||'—';
+  const gCheckIn=ds.checkInTime!=null?ds.checkInTime+':00':'—';
+  const gLockCode=ds.lockCode||'—';
+  const gHostPayout=ds.hostPayout?money(ds.hostPayout):'—';
+  const gGuestPrice=ds.guestPrice?money(ds.guestPrice):'—';
+  const gNotes=ds.notes||'';
+  const gConfDate=ds.confirmationDate?fdate(ds.confirmationDate):'—';
+  const platformColor=gSource.toLowerCase()==='airbnb'?'#FF5A5F':gSource.toLowerCase()==='booking'?'#003580':'#5B2BEE';
+  const profilHtml=`
+    <div style="background:linear-gradient(135deg,${platformColor}11,${platformColor}05);border:2px solid ${platformColor}33;border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="background:${platformColor};color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">${esc(gSource)}</div>
+        <span style="font-size:11px;color:#888">Confirmé le ${gConfDate}</span>
+        <span style="flex:1"></span>
+        <button class="btn sm" id="refreshProfile" style="font-size:11px">🔄 Actualiser profil</button>
+      </div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">👤 ${esc(gNom||voy.nom||'Voyageur inconnu')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px">
+        <div>📧 <b>Email</b> : ${gEmail?esc(gEmail):'<span style="color:#e74c3c">non fourni</span>'}</div>
+        <div>📱 <b>Téléphone</b> : ${gPhone?esc(gPhone):'<span style="color:#e74c3c">non fourni</span>'}</div>
+        <div>👥 <b>Voyageurs</b> : ${gAdults} adulte(s)${gChildren?' + '+gChildren+' enfant(s)':''}${gInfants?' + '+gInfants+' bébé(s)':''}${gPets?' + '+gPets+' animal(aux)':''}</div>
+        <div>🔑 <b>Code serrure</b> : ${esc(gLockCode)}</div>
+        <div>💰 <b>Payout hôte</b> : ${gHostPayout}</div>
+        <div>💳 <b>Prix voyageur</b> : ${gGuestPrice}</div>
+        <div>🏷️ <b>Confirmation</b> : ${esc(gConf)}</div>
+        <div>🕐 <b>Check-in</b> : ${esc(gCheckIn)}</div>
+      </div>
+      ${gNotes?`<div style="margin-top:8px;padding:8px;background:#fff8e1;border-radius:6px;font-size:12px"><b>Notes voyageur :</b> ${esc(gNotes)}</div>`:''}
+    </div>`;
   ouvrir(`<div class="h"><h3>Réservation — ${esc(bien.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b" style="max-height:70vh;overflow:auto">
+      ${profilHtml}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <div class="fsec">Séjour</div>
@@ -5279,6 +5319,28 @@ async function ficheReservation(id){
       <button class="btn o" onclick="fermer();openForm('reservations',${JSON.stringify(r).replace(/'/g,"\\'")})">Modifier</button>
       <button class="btn g" onclick="fermer();payForm('${id}')">💳 Paiement</button>
     </div>`);
+  /* Bouton Actualiser profil — appelle getReservation individuel via channel-bridge */
+  const rpBtn=document.getElementById("refreshProfile");
+  if(rpBtn&&r.source_id){
+    rpBtn.onclick=async()=>{
+      rpBtn.disabled=true;rpBtn.textContent="⏳ Chargement...";
+      try{
+        const htId=r.source_id.replace('ht_','');
+        const res=await channelBridge("getListing",{listingId:htId}); /* dummy — on va utiliser getReservation */
+        /* Appeler getReservation via une requête directe au channel-bridge */
+        const rr=await fetch("https://eztwwzzjzwmhfzmcafyu.supabase.co/functions/v1/channel-bridge",{
+          method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+SUPABASE_KEY},
+          body:JSON.stringify({action:"getReservations",tenant_id:state.tenant.id})
+        });
+        const dd=await rr.json();
+        if(dd.ok){
+          toast("✅ Profil actualisé — rechargement...");
+          setTimeout(()=>ficheReservation(id),500);
+        }else{toast("Erreur: "+(dd.error||""));}
+      }catch(e){toast("Erreur: "+e.message);}
+      rpBtn.disabled=false;rpBtn.textContent="🔄 Actualiser profil";
+    };
+  }
 }
 
 async function ficheVoyageur(id){
