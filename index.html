@@ -845,7 +845,8 @@ const RUBRIQUES=[
   {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
     ["liste","Canaux connectés",{m:"canaux"}],
     ["carte","Carte des annonces",{canauxcarte:1}],
-    ["ical","Synchronisation iCal",{icalsync:1}]]},
+    ["ical","Synchronisation iCal",{icalsync:1}],
+    ["cronhist","Historique tâches auto",{cronhist:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{ph:"Nuki / igloohome / TTLock : appareils en ligne, mappage de l'annonce, envoi du code de porte."}],
     ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
@@ -1258,6 +1259,7 @@ function goRub(rk,sk){
   if(t.tarifdyn)return renderTarifDyn();
   if(t.canauxcarte)return renderCanauxCarte();
   if(t.icalsync)return renderIcalSync();
+  if(t.cronhist)return renderCronHist();
   if(t.emailcfg)return renderEmailConfig();
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
@@ -3437,6 +3439,62 @@ async function renderCanauxCarte(){
 }
 
 /* ---------- SYNCHRO ICAL ---------- */
+/* ====== HISTORIQUE TÂCHES AUTOMATIQUES (cron_log) ====== */
+async function renderCronHist(){
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>📋 Historique des tâches automatiques</h3><span class="sp"></span><button class="btn g sm" id="cronRefresh">↻ Rafraîchir</button></div>
+    <div style="padding:0 16px 8px">
+      <p class="muted" style="margin:0 0 8px;font-size:13px">Ces tâches tournent automatiquement dans Supabase (pg_cron), sans aucune dépendance à Claude. Elles sont 100% autonomes.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="pill" style="background:#27ae60;color:#fff">sync-listing-content</span> <span class="muted" style="font-size:12px">2x/jour — import contenu depuis plateformes</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="pill" style="background:#2980b9;color:#fff">last-minute-pricing</span> <span class="muted" style="font-size:12px">quotidien 8h18 — tarifs agressifs J+1 à J+7</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="pill" style="background:#8e44ad;color:#fff">market-scan</span> <span class="muted" style="font-size:12px">lundi 7h42 — scraping prix Airbnb</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="pill" style="background:#e67e22;color:#fff">str-dynamic-pricing</span> <span class="muted" style="font-size:12px">lundi 8h — recalcul 90 jours</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="pill" style="background:#16a085;color:#fff">ical-sync-all</span> <span class="muted" style="font-size:12px">toutes les 3h — sync calendriers iCal</span>
+      </div>
+    </div>
+    <div id="cronTable" style="padding:0 16px 16px"><span class="muted">Chargement...</span></div>
+  </div>`;
+  async function loadCronLog(){
+    const {data,error}=await sb.from("cron_log").select("*").order("started_at",{ascending:false}).limit(50);
+    if(error){$("#cronTable").innerHTML=`<span style="color:red">Erreur : ${esc(error.message)}</span>`;return;}
+    if(!data||!data.length){$("#cronTable").innerHTML=`<span class="muted">Aucun historique pour l'instant. Les tâches se loggueront ici dès leur prochaine exécution.</span>`;return;}
+    const colorMap={
+      "sync-listing-content":"#27ae60","last-minute-pricing":"#2980b9",
+      "market-scan":"#8e44ad","str-dynamic-pricing":"#e67e22","ical-sync-all":"#16a085"
+    };
+    let html=`<table class="tbl" style="width:100%"><thead><tr><th>Date</th><th>Tâche</th><th>Statut</th><th>Détails</th></tr></thead><tbody>`;
+    for(const row of data){
+      const d=new Date(row.started_at);
+      const dt=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+      const color=colorMap[row.job_name]||'#666';
+      const statusIcon=row.status==='success'?'✅':row.status==='error'?'❌':'⏳';
+      let det='';
+      if(row.error_message) det=`<span style="color:red">${esc(row.error_message)}</span>`;
+      else if(row.details){
+        const d=row.details;
+        if(d.pulled!==undefined) det=`${d.pulled} bien(s) importé(s)`;
+        else if(d.biens_traites!==undefined) det=`${d.biens_traites} bien(s), ${d.horizon_jours||''}j`;
+        else if(d.biens_scannes!==undefined) det=`${d.biens_scannes} bien(s) scannés`;
+        else if(d.message) det=esc(d.message);
+        else det=JSON.stringify(d).slice(0,80);
+      }
+      html+=`<tr><td style="white-space:nowrap;font-size:13px">${dt}</td><td><span class="pill" style="background:${color};color:#fff;font-size:11px">${esc(row.job_name)}</span></td><td>${statusIcon}</td><td style="font-size:13px">${det}</td></tr>`;
+    }
+    html+=`</tbody></table>`;
+    $("#cronTable").innerHTML=html;
+  }
+  loadCronLog();
+  document.getElementById("cronRefresh").onclick=()=>loadCronLog();
+}
+
 const ICAL_EXPORT_BASE = SUPABASE_URL + "/functions/v1/ical-export?token=";
 const ICAL_CANAUX = ["airbnb","booking","vrbo","expedia","abritel","autre"];
 async function renderIcalSync(){
