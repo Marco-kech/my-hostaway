@@ -2715,7 +2715,7 @@ async function renderTarifDyn(){
   }
 
   /* --- Scanner de marché automatique --- */
-  document.getElementById("marketScan").onclick=async()=>{
+  const marketScanBtn=document.getElementById("marketScan"); if(marketScanBtn) marketScanBtn.onclick=async()=>{
     const scanDiv=document.getElementById("marketScanResult");
     scanDiv.innerHTML=`<div style="padding:12px;background:#fff8e1;border-radius:8px;margin-bottom:12px">
       <span class="spin" style="width:16px;height:16px;border-width:2px;vertical-align:middle;margin-right:8px"></span>
@@ -2763,7 +2763,7 @@ async function renderTarifDyn(){
       scanDiv.innerHTML=`<div style="padding:12px;background:#ffeaea;border-radius:8px;margin-bottom:12px">❌ ${esc(e.message)}</div>`;
     }
   };
-  document.getElementById("concAdd").onclick=()=>openConcForm(null);
+  const concAddBtn=document.getElementById("concAdd"); if(concAddBtn) concAddBtn.onclick=()=>openConcForm(null);
   document.querySelectorAll("[data-concEdit]").forEach(b=>b.onclick=()=>openConcForm(Number(b.dataset.concedit)));
   document.querySelectorAll("[data-concDel]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Supprimer ce concurrent ?"))return;
