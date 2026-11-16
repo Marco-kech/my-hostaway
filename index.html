@@ -567,39 +567,57 @@ const MODULES = {
       ["proprete","État de propreté",{opts:["propre","en_nettoyage","a_nettoyer"],def:"propre"}],
       ["type_unite","Type d'unité",{opts:["simple","parent","enfant"],def:"simple"}],
       ["parent_id","Annonce parente (si unité enfant)",{ref:"bien"}],
-      ["__s2","Localisation",{section:1}],
+      ["__s2","Description & contenu 🌐 Airbnb · Booking · VRBO",{section:1}],
+      ["description","Description principale",{long:1,p:1,placeholder:"Description détaillée du bien (envoyée à toutes les plateformes)"}],
+      ["description_courte","Résumé court",{p:1,placeholder:"1-2 phrases d'accroche (Booking / VRBO)"}],
+      ["description_espace","L'espace 🏷 Airbnb",{long:1,p:1,placeholder:"Décrivez les pièces, la disposition (champ Airbnb 'The Space')"}],
+      ["description_quartier","Le quartier 🏷 Airbnb",{long:1,p:1,placeholder:"Décrivez le quartier, les commodités (champ Airbnb 'Neighborhood')"}],
+      ["description_transport","Transports 🏷 Airbnb",{p:1,placeholder:"Comment se rendre au logement (champ Airbnb 'Transit')"}],
+      ["__s3","Localisation",{section:1}],
       ["adresse","Adresse",{}],
       ["ville","Ville",{p:1}],
       ["pays","Pays",{p:1,def:"Maroc"}],
       ["code_postal","Code postal",{p:1}],
-      ["__s3","Capacité",{section:1}],
+      ["latitude","Latitude GPS 🌐",{type:"number",placeholder:"ex: 31.6295"}],
+      ["longitude","Longitude GPS 🌐",{type:"number",placeholder:"ex: -7.9811"}],
+      ["__s4","Capacité & surface",{section:1}],
       ["capacite","Voyageurs max",{type:"number"}],
       ["nb_chambres","Chambres",{type:"number"}],
       ["nb_lits","Lits",{type:"number",p:1}],
       ["nb_sdb","Salles de bain",{type:"number"}],
-      ["__s4","Tarifs & conditions financières",{section:1}],
+      ["superficie","Superficie (m²)",{type:"number",p:1}],
+      ["__s5","Tarifs & conditions financières",{section:1}],
       ["prix_nuit_base","Prix de base / nuit",{type:"number"}],
       ["devise","Devise",{opts:["MAD","EUR","USD"],def:"MAD"}],
       ["nuits_min","Nuits minimum",{type:"number"}],
       ["nuits_max","Nuits maximum",{type:"number",p:1}],
+      ["prix_weekend","Supplément week-end / nuit",{type:"number",p:1}],
       ["frais_menage","Frais de ménage",{type:"number"}],
       ["taxe_sejour_nuit","Taxe de séjour / nuit",{type:"number"}],
       ["caution","Caution demandée",{type:"number",p:1}],
       ["politique_annulation","Politique d'annulation",{opts:["flexible","moderee","stricte","non_remboursable"],def:"moderee",p:1}],
-      ["__s5","Arrivée & accès",{section:1}],
+      ["__s6","Arrivée & accès",{section:1}],
       ["heure_arrivee","Heure d'arrivée",{type:"time",p:1}],
       ["heure_depart","Heure de départ",{type:"time",p:1}],
+      ["methode_checkin","Méthode de check-in 🏷 Airbnb",{opts:["boite_a_cles","serrure_connectee","concierge","en_personne","instructions"],p:1}],
       ["code_porte","Code de porte / boîte à clés",{p:1}],
       ["wifi_nom","Wifi — nom du réseau",{p:1}],
       ["wifi_mdp","Wifi — mot de passe",{p:1}],
       ["instructions_arrivee","Instructions d'arrivée",{long:1,p:1}],
       ["contact_urgence","Contact d'urgence sur place",{p:1}],
-      ["__s6","Équipements",{section:1}],
-      ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Lave-linge","Sèche-linge","TV","Jacuzzi","Balcon / Terrasse","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue"]}],
-      ["__s7","Conditions",{section:1}],
-      ["politique_annulation","Politique d'annulation",{opts:["Flexible","Modérée","Stricte","Non remboursable"],p:1}],
+      ["__s7","Équipements 🌐",{section:1}],
+      ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Parking gratuit","Lave-linge","Sèche-linge","TV","TV câble/satellite","Jacuzzi","Balcon / Terrasse","Jardin","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue","Vue mer","Vue montagne","Fer à repasser","Sèche-cheveux","Machine à café","Micro-ondes","Lave-vaisselle","Barbecue","Coffre-fort","Détecteur fumée","Extincteur","Kit premiers secours"]}],
+      ["__s8","Conditions & règlement",{section:1}],
       ["reglement_interieur","Règlement intérieur",{long:1,p:1}],
-      ["licence_numero","N° de licence / autorisation",{p:1}]]},
+      ["enfants_acceptes","Enfants acceptés 🏷 Booking",{opts:["oui","non"],def:"oui",p:1}],
+      ["fumeur_autorise","Fumeur autorisé 🏷 Booking",{opts:["oui","non"],def:"non",p:1}],
+      ["animaux_politique","Politique animaux 🏷 Booking",{opts:["non","sur_demande","oui"],def:"non",p:1}],
+      ["heure_calme_debut","Heures calmes — début 🏷 Booking",{type:"time",p:1}],
+      ["heure_calme_fin","Heures calmes — fin 🏷 Booking",{type:"time",p:1}],
+      ["__s9","Informations légales & plateformes",{section:1}],
+      ["licence_numero","N° de licence / autorisation 🌐",{p:1,placeholder:"Obligatoire selon la réglementation locale"}],
+      ["age_min_locataire","Âge minimum du locataire 🏷 VRBO",{type:"number",p:1}],
+      ["langue_communication","Langue de communication 🏷 Booking",{opts:["fr","en","ar","es","de"],def:"fr",p:1}]]},
   reservations:{title:"Réservations",add:"Nouvelle réservation",table:"reservation",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["voyageur_id","Voyageur",v=>refName("voyageur",v)],
       ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
@@ -3218,7 +3236,39 @@ async function renderCanauxCarte(){
         basePrice:fullBien.prix_nuit_base||0,
         minNights:fullBien.nuits_min||1,
         checkInTime:parseInt(p.heure_arrivee)||15,
+        checkOutTime:parseInt(p.heure_depart)||11,
       };
+      /* Description — notes multi-sections Host Tools */
+      if(p.description||p.description_espace||p.description_quartier||p.description_transport){
+        payload.notes={};
+        if(p.description) payload.notes.description={texts:[{language:"en",value:p.description}]};
+        if(p.description_courte) payload.notes.shortDescription={texts:[{language:"en",value:p.description_courte}]};
+        if(p.description_espace) payload.notes.space={texts:[{language:"en",value:p.description_espace}]};
+        if(p.description_quartier) payload.notes.access={texts:[{language:"en",value:p.description_quartier}]};
+        if(p.description_transport) payload.notes.transit={texts:[{language:"en",value:p.description_transport}]};
+        if(p.reglement_interieur) payload.notes.houseRules={texts:[{language:"en",value:p.reglement_interieur}]};
+      }
+      /* Adresse */
+      if(fullBien.adresse) payload.address=fullBien.adresse;
+      /* Superficie */
+      if(p.superficie) payload.space={spaceUnit:"sqm",value:p.superficie};
+      /* Politique enfants/animaux/fumeurs */
+      const policy={};
+      if(p.enfants_acceptes) policy.childrenAllowed=(p.enfants_acceptes==='oui');
+      if(p.fumeur_autorise) policy.smokingAllowed=(p.fumeur_autorise==='oui');
+      if(p.animaux_politique&&p.animaux_politique!=='non') policy.petPolicy={allowedPets:p.animaux_politique==='oui'?'allowed':'on_request'};
+      if(Object.keys(policy).length) payload.policy=policy;
+      /* Fees (frais de ménage + taxe séjour) */
+      const fees=[];
+      if(fullBien.frais_menage) fees.push({name:"Cleaning fee",kind:"cleaning",feeType:"per_stay",unit:"flat",value:Number(fullBien.frais_menage),valueType:"flat"});
+      if(fullBien.taxe_sejour_nuit) fees.push({name:"Tourist tax",kind:"tax",feeType:"per_night",unit:"flat",value:Number(fullBien.taxe_sejour_nuit),valueType:"flat"});
+      if(fees.length) payload.fees=fees;
+      /* Équipements — mapping vers amenities Host Tools */
+      if(p.equipements&&Array.isArray(p.equipements)&&p.equipements.length){
+        const amenMap={"Wifi":"wifi","Climatisation":"air_conditioning","Chauffage":"heating","Piscine":"pool","Cuisine équipée":"kitchen","Parking":"parking","Parking gratuit":"free_parking","Lave-linge":"washer","Sèche-linge":"dryer","TV":"tv","Jacuzzi":"hot_tub","Balcon / Terrasse":"patio_or_balcony","Animaux acceptés":"pets_allowed","Ascenseur":"elevator","Fer à repasser":"iron","Sèche-cheveux":"hair_dryer","Machine à café":"coffee_maker","Micro-ondes":"microwave","Lave-vaisselle":"dishwasher","Barbecue":"bbq_grill","Coffre-fort":"safe","Détecteur fumée":"smoke_detector","Extincteur":"fire_extinguisher","Kit premiers secours":"first_aid_kit"};
+        const mapped=p.equipements.map(e=>amenMap[e]).filter(Boolean);
+        if(mapped.length) payload.amenities=mapped;
+      }
       logBridge(`📝 ${bNom} → ${lien.canal} (${lien.externe_id})...`,true);
       const r=await channelBridge("pushListing",payload);
       if(r.ok){logBridge(`✅ ${bNom} — contenu poussé vers ${lien.canal}`,true);pushed++;}
