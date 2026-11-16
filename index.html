@@ -619,7 +619,11 @@ const MODULES = {
       ["age_min_locataire","Âge minimum du locataire 🏷 VRBO",{type:"number",p:1}],
       ["langue_communication","Langue de communication 🏷 Booking",{opts:["fr","en","ar","es","de"],def:"fr",p:1}]]},
   reservations:{title:"Réservations",add:"Nouvelle réservation",table:"reservation",
-    cols:[["bien_id","Bien",v=>refName("bien",v)],["voyageur_id","Voyageur",v=>refName("voyageur",v)],
+    cols:[["bien_id","Bien",v=>refName("bien",v)],["voyageur_id","Voyageur",(v,r)=>{
+      if(!v)return'—';const voy=(state.opts.voyageur||[]).find(x=>x.id===v);if(!voy)return'…';
+      const nm=esc(voy.nom||'?');const em=voy.email?`<br><span class="muted" style="font-size:11px">📧 ${esc(voy.email)}</span>`:'';
+      const ph=voy.tel?`<br><span class="muted" style="font-size:11px">📱 ${esc(voy.tel)}</span>`:'';
+      return`<a href="#" onclick="event.preventDefault();event.stopPropagation();ficheVoyageur('${v}')" style="color:var(--dpm-vert);font-weight:600;text-decoration:none" title="Voir la fiche voyageur">${nm}</a>${em}${ph}`;}],
       ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
       ["statut","Statut",v=>pill(v)],["prix_total","Total",v=>money(v)],["statut_paiement","Paiement",v=>pill(v)]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["voyageur_id","Voyageur",{ref:"voyageur"}],
