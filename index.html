@@ -1002,8 +1002,8 @@ async function renderInbox(){
       <button class="btn o sm" id="ibxIA" title="Générer une réponse avec l'IA" style="background:var(--gold-soft);border-color:var(--gold)">✨ IA</button>
     </div>
     <div style="display:flex;gap:8px">
-      <textarea id="ibxMsg" rows="2" placeholder="Écrivez un message…" style="flex:1;resize:none"></textarea>
-      <button class="btn g" id="ibxSend" style="align-self:stretch">Envoyer</button>
+      <textarea id="ibxMsg" rows="2" placeholder="Écrivez un message… (envoyé via la plateforme du voyageur)" style="flex:1;resize:none"></textarea>
+      <button class="btn g" id="ibxSend" style="align-self:stretch">📨 Envoyer</button>
     </div></div>`:'';
   $("#content").innerHTML=`<div class="panel" style="padding:0;overflow:hidden">
     <div style="display:grid;grid-template-columns:280px 1fr 300px;min-height:480px">
@@ -1053,11 +1053,24 @@ async function renderInbox(){
   if(joinBtn) joinBtn.onclick=()=>toast('Pièces jointes : à brancher (stockage)');
   const sb2=document.getElementById('ibxSend');
   if(sb2) sb2.onclick=async()=>{const corps=document.getElementById('ibxMsg').value.trim();if(!corps)return;sb2.disabled=true;
-    const rec={tenant_id:state.tenant.id,corps,sens:'sortant',statut:state.inboxSched?'brouillon':'envoye',canal:state.inboxNote?'interne':'whatsapp'};
-    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r)rec.voyageur_id=r.voyageur_id;}
+    const rec={tenant_id:state.tenant.id,corps,sens:'sortant',statut:state.inboxSched?'brouillon':'envoye',canal:state.inboxNote?'interne':'plateforme'};
+    let htResaId=null;
+    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r){rec.voyageur_id=r.voyageur_id;rec.canal=state.inboxNote?'interne':(r.canal||'plateforme');
+      /* Récupérer l'ID Host Tools depuis source_id (format ht_XXXXX) */
+      if(r.source_id&&r.source_id.startsWith('ht_'))htResaId=r.source_id.slice(3);}}
     else if(sel.startsWith('v:'))rec.voyageur_id=sel.slice(2);
-    const {error}=await sb.from('message').insert(rec);sb2.disabled=false;
-    if(error){toast(error.message);return;}state.inboxNote=false;state.inboxSched=false;toast(rec.statut==='brouillon'?'Brouillon enregistré':(rec.canal==='interne'?'Note interne ajoutée':'Message ajouté'));renderInbox();};
+    /* Envoi via Host Tools si c'est un message sortant (pas note interne, pas brouillon) et qu'on a l'ID HT */
+    if(!state.inboxNote&&!state.inboxSched&&htResaId){
+      try{sb2.textContent='Envoi…';
+        const res=await channelBridge('sendMessage',{reservationId:htResaId,message:corps});
+        if(!res.ok){toast('⚠️ Envoi plateforme échoué : '+(res.error||'erreur inconnue')+' — message sauvé localement');rec.statut='erreur_envoi';}
+        else{rec.statut='envoye';rec.canal=rec.canal||'plateforme';}
+      }catch(e){toast('⚠️ Erreur envoi : '+e.message+' — message sauvé localement');rec.statut='erreur_envoi';}
+    }
+    const {error}=await sb.from('message').insert(rec);sb2.disabled=false;sb2.textContent='Envoyer';
+    if(error){toast(error.message);return;}
+    document.getElementById('ibxMsg').value='';state.inboxNote=false;state.inboxSched=false;
+    toast(rec.statut==='brouillon'?'Brouillon enregistré':(state.inboxNote?'Note interne ajoutée':(rec.statut==='erreur_envoi'?'⚠️ Message sauvé mais envoi échoué':'✅ Message envoyé au voyageur via '+rec.canal)));renderInbox();};
   const cxl=document.getElementById('ibxCancel');
   if(cxl) cxl.onclick=()=>{const rid=cxl.dataset.rid;
     ouvrir(`<div class="h"><h3>Annuler la réservation ?</h3><button class="x" onclick="fermer()">×</button></div>
