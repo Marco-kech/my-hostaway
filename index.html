@@ -4348,12 +4348,86 @@ async function renderParamCompte(){
         <div style="display:flex;gap:16px;margin:10px 0">${v.logo_profil?'<img src="'+esc(v.logo_profil)+'" style="height:48px;border-radius:8px">':''}${v.logo_entreprise?'<img src="'+esc(v.logo_entreprise)+'" style="height:48px;border-radius:8px">':''}</div>
         <div style="margin-top:8px"><button class="btn g" id="cpSave">Enregistrer</button> <span class="ok" id="cpOk"></span></div>
       </div></div>
+    <div class="panel"><div class="phead"><h3>Sécurité</h3></div>
+      <div style="padding:16px">
+        <div class="fsec">Mot de passe</div>
+        <button class="btn o" id="cpChgPwd">🔑 Changer le mot de passe</button>
+        <div class="fsec" style="margin-top:16px">Authentification à deux facteurs (2FA)</div>
+        <p class="muted" style="margin:6px 0">Protégez votre compte avec une application d'authentification (Google Authenticator, Authy, 1Password…).</p>
+        <div id="cp2faZone"><button class="btn g" id="cp2faSetup">🔐 Activer la 2FA</button></div>
+      </div></div>
     <div class="panel"><div class="phead"><h3>Actions</h3></div>
       <div style="padding:16px">
-        <button class="btn o" onclick="toast('Changement de mot de passe : utiliser la page de connexion Supabase.')">Changer le mot de passe</button>
-        <button class="btn d" style="margin-left:8px" onclick="toast('Désactivation du compte : contacter le support.')">Désactiver le compte</button>
+        <button class="btn d" onclick="toast('Désactivation du compte : contacter le support.')">Désactiver le compte</button>
       </div></div>`;
   document.querySelector("#cpSave").onclick=async()=>{const valeur={societe:$("#cpSoc").value,email:$("#cpEmail").value,tel:$("#cpTel").value,tel_urgence:$("#cpTelU").value,adresse:$("#cpAdr").value,ville:$("#cpVille").value,cp:$("#cpCP").value,pays:$("#cpPays").value,web:$("#cpWeb").value,email_facture:$("#cpFact").value,logo_profil:$("#cpLogo").value,logo_entreprise:$("#cpLogoE").value};const e=await reglSet("compte",valeur);if(e){$("#cpOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#cpOk").textContent="Enregistré ✓";toast("Compte enregistré");};
+  /* Changement de mot de passe */
+  const chgPwd=document.getElementById('cpChgPwd');
+  if(chgPwd) chgPwd.onclick=()=>{
+    ouvrir(`<div class="h"><h3>Changer le mot de passe</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Nouveau mot de passe</label><input id="newPwd" type="password" placeholder="Minimum 8 caractères"></div>
+      <div class="field"><label>Confirmer</label><input id="newPwd2" type="password" placeholder="Retapez le mot de passe"></div>
+      <div class="err" id="pwdErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pwdOk">Changer</button></div>`);
+    document.getElementById('pwdOk').onclick=async()=>{
+      const p1=document.getElementById('newPwd').value,p2=document.getElementById('newPwd2').value;
+      if(p1.length<8){document.getElementById('pwdErr').textContent='8 caractères minimum';return;}
+      if(p1!==p2){document.getElementById('pwdErr').textContent='Les mots de passe ne correspondent pas';return;}
+      const {error}=await sb.auth.updateUser({password:p1});
+      if(error){document.getElementById('pwdErr').textContent=error.message;return;}
+      fermer();toast('✅ Mot de passe modifié');
+    };
+  };
+  /* 2FA TOTP */
+  const setup2fa=document.getElementById('cp2faSetup');
+  if(setup2fa) setup2fa.onclick=async()=>{
+    setup2fa.disabled=true;setup2fa.textContent='⏳…';
+    try{
+      const {data,error}=await sb.auth.mfa.enroll({factorType:'totp',friendlyName:'My Hostaway 2FA'});
+      if(error){toast('Erreur 2FA : '+error.message);setup2fa.disabled=false;setup2fa.textContent='🔐 Activer la 2FA';return;}
+      const qrUrl=data.totp.qr_code;
+      const secret=data.totp.secret;
+      const factorId=data.id;
+      document.getElementById('cp2faZone').innerHTML=`
+        <div style="text-align:center;padding:16px;background:var(--bg2);border-radius:12px">
+          <p><strong>Scannez ce QR code</strong> avec votre application d'authentification :</p>
+          <img src="${qrUrl}" style="width:200px;height:200px;margin:12px auto;display:block;border-radius:8px;border:2px solid var(--line)">
+          <p class="muted" style="font-size:11px;word-break:break-all">Clé secrète : <code>${secret}</code></p>
+          <div class="field" style="max-width:250px;margin:12px auto"><label>Code de vérification (6 chiffres)</label><input id="verify2fa" type="text" maxlength="6" placeholder="000000" style="text-align:center;font-size:20px;letter-spacing:4px"></div>
+          <button class="btn g" id="verify2faBtn">Vérifier et activer</button>
+          <button class="btn o" id="cancel2fa" style="margin-left:8px">Annuler</button>
+        </div>`;
+      document.getElementById('verify2faBtn').onclick=async()=>{
+        const code=document.getElementById('verify2fa').value.trim();
+        if(code.length!==6){toast('Entrez un code à 6 chiffres');return;}
+        const {data:challenge,error:cErr}=await sb.auth.mfa.challenge({factorId});
+        if(cErr){toast('Erreur : '+cErr.message);return;}
+        const {error:vErr}=await sb.auth.mfa.verify({factorId,challengeId:challenge.id,code});
+        if(vErr){toast('Code invalide : '+vErr.message);return;}
+        toast('✅ 2FA activée ! Votre compte est maintenant protégé.');
+        renderParamCompte();
+      };
+      document.getElementById('cancel2fa').onclick=async()=>{
+        await sb.auth.mfa.unenroll({factorId});
+        renderParamCompte();
+      };
+    }catch(e){toast('Erreur : '+e.message);setup2fa.disabled=false;setup2fa.textContent='🔐 Activer la 2FA';}
+  };
+  /* Vérifier si 2FA déjà active */
+  try{
+    const {data:factors}=await sb.auth.mfa.listFactors();
+    if(factors?.totp?.length){
+      const zone=document.getElementById('cp2faZone');
+      if(zone) zone.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span class="pill green">✅ 2FA activée</span>
+        <button class="btn o sm" id="cp2faRemove">Désactiver</button></div>`;
+      const rm=document.getElementById('cp2faRemove');
+      if(rm) rm.onclick=async()=>{
+        if(!confirm('Désactiver la 2FA ? Votre compte sera moins protégé.'))return;
+        for(const f of factors.totp) await sb.auth.mfa.unenroll({factorId:f.id});
+        toast('2FA désactivée');renderParamCompte();
+      };
+    }
+  }catch(e){}
 }
 async function renderParamLangues(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
