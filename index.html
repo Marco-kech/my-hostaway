@@ -794,6 +794,8 @@ const RUBRIQUES=[
     ["kb","Base de connaissances",{m:"connaissances"}],
     ["mod","Modèles de message",{m:"modeles"}],
     ["auto","Messages automatisés",{autosmsg:1}],
+    ["recur","Messages récurrents",{msgrecur:1}],
+    ["camp","Campagnes re-engagement",{campagnes:1}],
     ["env","Gérer les envois",{envois:1}]]},
   {k:"resa",label:"Réservations",icon:"▦",subs:[
     ["liste","Liste",{m:"reservations"}],
@@ -807,7 +809,8 @@ const RUBRIQUES=[
     ["photos","Photos",{photogalerie:1}],
     ["stats","Statistiques par bien",{statsbien:1}],
     ["cp","Champs personnalisés",{champperso:"bien"}],
-    ["aso","Score ASO",{scoreaso:1}]]},
+    ["aso","Score ASO",{scoreaso:1}],
+    ["grp","Groupes d'annonces",{grpannonces:1}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["agenda","Agenda",{agendataches:1}],
@@ -850,7 +853,8 @@ const RUBRIQUES=[
     ["sais","Tarifs saisonniers",{m:"tarifs"}],
     ["cal","Calendrier tarifaire",{calTarif:1}],
     ["extras","Extras & frais",{m:"extras"}],
-    ["dyn","Tarification dynamique",{tarifdyn:1}]]},
+    ["dyn","Tarification dynamique",{tarifdyn:1}],
+    ["minnuits","Minimum de nuits",{minnuits:1}]]},
   {k:"gcanaux",label:"Gestionnaire de canaux",icon:"⇄",subs:[
     ["liste","Canaux connectés",{m:"canaux"}],
     ["carte","Carte des annonces",{canauxcarte:1}],
@@ -870,6 +874,8 @@ const RUBRIQUES=[
     ["pages","Pages",{sitepages:1}],
     ["preview","Aperçu public",{sitepreview:1}],
     ["param","Paramètres",{siteparams:1}],
+    ["seo","SEO & Analytics",{seocfg:1}],
+    ["guide","Livret d'accueil",{guidebook:1}],
     ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs — à venir."}]]},
   {k:"params",label:"Paramètres",icon:"⚙",subs:[
     ["compte","Détails du compte",{paramcompte:1}],
@@ -995,12 +1001,15 @@ async function renderInbox(){
   const tplOpts=(modeles||[]).map((mo,i)=>`<option value="${i}">${esc(mo.nom)}</option>`).join("");
   const composer=sel?`<div style="border-top:1px solid var(--line,#eee);padding:8px 10px">
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-      <button class="btn o sm" id="ibxJoin" title="Joindre un fichier">📎</button>
+      <button class="btn o sm" id="ibxJoin" title="Joindre une image">📎</button>
       <button class="btn o sm" id="ibxNote" title="Note interne (non envoyée au voyageur)">📝 Note</button>
       <select id="ibxTpl" style="font-size:12px;padding:3px 6px"><option value="">Modèle…</option>${tplOpts}</select>
+      <button class="btn o sm" id="ibxTags" title="Insérer un tag dynamique">{…}</button>
+      <button class="btn o sm" id="ibxTranslate" title="Traduire le message">🌐</button>
       <button class="btn o sm" id="ibxSched" title="Programmer / enregistrer en brouillon">📅 Programmer</button>
       <button class="btn o sm" id="ibxIA" title="Générer une réponse avec l'IA" style="background:var(--gold-soft);border-color:var(--gold)">✨ IA</button>
     </div>
+    <div id="ibxAttachPrev" style="margin-bottom:4px"></div>
     <div style="display:flex;gap:8px">
       <textarea id="ibxMsg" rows="2" placeholder="Écrivez un message… (envoyé via la plateforme du voyageur)" style="flex:1;resize:none"></textarea>
       <button class="btn g" id="ibxSend" style="align-self:stretch">📨 Envoyer</button>
@@ -1049,11 +1058,75 @@ async function renderInbox(){
     document.getElementById('ibxMsg').focus();
     toast('Réponse IA générée — relisez avant d\'envoyer');
   };
+  /* Tags dynamiques */
+  const tagsBtn=document.getElementById('ibxTags');
+  if(tagsBtn) tagsBtn.onclick=()=>{
+    const tags=['{prenom}','{nom}','{bien}','{adresse}','{arrivee}','{depart}','{nuits}','{code_wifi}','{mdp_wifi}','{code_acces}','{heure_checkin}','{heure_checkout}','{prix_total}','{canal}','{lien_checkin}'];
+    ouvrir(`<div class="h"><h3>Insérer un tag dynamique</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted" style="margin-bottom:10px">Les tags sont remplacés automatiquement par les données du voyageur et du bien lors de l'envoi.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${tags.map(t=>`<button class="btn o sm tag-ins" data-tag="${t}" style="font-family:monospace">${t}</button>`).join('')}</div></div>`);
+    document.querySelectorAll('.tag-ins').forEach(b=>b.onclick=()=>{const ta=document.getElementById('ibxMsg');if(ta){const s=ta.selectionStart,e=ta.selectionEnd;ta.value=ta.value.slice(0,s)+b.dataset.tag+ta.value.slice(e);ta.selectionStart=ta.selectionEnd=s+b.dataset.tag.length;ta.focus();}fermer();});
+  };
+  /* Traduction live */
+  const transBtn=document.getElementById('ibxTranslate');
+  if(transBtn) transBtn.onclick=async()=>{
+    const ta=document.getElementById('ibxMsg'); if(!ta||!ta.value.trim())return toast('Écrivez d\'abord un message à traduire');
+    const langs=['en','es','de','ar','it','pt','nl','ja','zh','ru'];
+    ouvrir(`<div class="h"><h3>Traduire le message</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Langue cible</label><select id="trLang">${langs.map(l=>`<option value="${l}">${({en:'🇬🇧 Anglais',es:'🇪🇸 Espagnol',de:'🇩🇪 Allemand',ar:'🇲🇦 Arabe',it:'🇮🇹 Italien',pt:'🇵🇹 Portugais',nl:'🇳🇱 Néerlandais',ja:'🇯🇵 Japonais',zh:'🇨🇳 Chinois',ru:'🇷🇺 Russe'})[l]}</option>`).join('')}</select></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="trGo">Traduire</button></div>`);
+    document.getElementById('trGo').onclick=async()=>{
+      const lang=document.getElementById('trLang').value;
+      document.getElementById('trGo').disabled=true;document.getElementById('trGo').textContent='⏳…';
+      const iaCfg=await reglGet('ia'); const apiKey=iaCfg?.api_key;
+      if(!apiKey){toast('Clé API IA non configurée (Paramètres > IA)');fermer();return;}
+      try{const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20241022',max_tokens:1024,messages:[{role:'user',content:`Traduis ce message en ${lang}. Renvoie UNIQUEMENT la traduction, sans commentaire :\n\n${ta.value.trim()}`}]})});
+        const j=await res.json();const trad=j.content?.[0]?.text||'';
+        if(trad){ta.value=trad;ta.focus();toast('✅ Traduit en '+lang);} else toast('Erreur traduction');
+      }catch(e){toast('Erreur : '+e.message);}
+      fermer();
+    };
+  };
   const joinBtn=document.getElementById('ibxJoin');
-  if(joinBtn) joinBtn.onclick=()=>toast('Pièces jointes : à brancher (stockage)');
+  if(joinBtn) joinBtn.onclick=()=>{
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.multiple=true;
+    fi.onchange=async()=>{
+      if(!fi.files.length)return;
+      const uploaded=[];
+      for(const f of fi.files){
+        if(f.size>5*1024*1024){toast('Fichier trop volumineux (max 5 Mo) : '+f.name);continue;}
+        const ext=f.name.split('.').pop()||'jpg';
+        const path=`messages/${state.tenant.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+        const {data,error}=await sb.storage.from('uploads').upload(path,f,{upsert:true});
+        if(error){toast('Erreur upload : '+error.message);continue;}
+        const {data:u}=sb.storage.from('uploads').getPublicUrl(path);
+        uploaded.push({name:f.name,url:u.publicUrl});
+      }
+      if(uploaded.length){
+        state.ibxAttachments=(state.ibxAttachments||[]).concat(uploaded);
+        const prev=document.getElementById('ibxAttachPrev');
+        if(prev) prev.innerHTML=state.ibxAttachments.map((a,i)=>`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--gold-soft);padding:2px 8px;border-radius:12px;font-size:11px">📎 ${esc(a.name)} <button class="btn o" style="font-size:9px;padding:0 4px;min-width:0" onclick="state.ibxAttachments.splice(${i},1);this.parentElement.remove()">✕</button></span>`).join(' ');
+        toast(uploaded.length+' fichier(s) joint(s)');
+      }
+    };fi.click();
+  };
   const sb2=document.getElementById('ibxSend');
-  if(sb2) sb2.onclick=async()=>{const corps=document.getElementById('ibxMsg').value.trim();if(!corps)return;sb2.disabled=true;
+  if(sb2) sb2.onclick=async()=>{let corps=document.getElementById('ibxMsg').value.trim();if(!corps)return;sb2.disabled=true;
+    /* Résoudre les tags dynamiques */
+    if(sel.startsWith('r:')){const r=findResa(sel.slice(2));if(r){const v=findVoy(r.voyageur_id),b=(state.opts.bien||[]).find(x=>x.id===r.bien_id);
+      const p=b?.parametres||{};const nomComplet=v?.nom||'';const parts=nomComplet.split(' ');
+      const tagMap={'{prenom}':parts[0]||'','{nom}':parts.slice(1).join(' ')||'','{bien}':b?.nom||'','{adresse}':p.adresse||b?.adresse||'','{arrivee}':fdate(r.arrivee),'{depart}':fdate(r.depart),'{nuits}':String(nights(r.arrivee,r.depart)),'{code_wifi}':p.wifi_mdp||p.code_wifi||'','{mdp_wifi}':p.wifi_mdp||'','{code_acces}':p.code_acces||'','{heure_checkin}':p.heure_checkin||r.heure_arrivee||'15:00','{heure_checkout}':p.heure_checkout||'11:00','{prix_total}':money(r.prix_total),'{canal}':r.canal||'','{lien_checkin}':''};
+      /* Lien check-in */
+      const {data:ck}=await sb.from('checkin_online').select('token').eq('reservation_id',r.id).maybeSingle();
+      if(ck)tagMap['{lien_checkin}']=location.origin+location.pathname+'#checkin='+ck.token;
+      for(const[tag,val] of Object.entries(tagMap)) corps=corps.replaceAll(tag,val);
+    }}
+    /* Pièces jointes */
+    const attachments=state.ibxAttachments||[];
+    if(attachments.length) corps+='\n\n'+attachments.map(a=>`📎 ${a.name}: ${a.url}`).join('\n');
+    state.ibxAttachments=[];const ap=document.getElementById('ibxAttachPrev');if(ap)ap.innerHTML='';
     const rec={tenant_id:state.tenant.id,corps,sens:'sortant',statut:state.inboxSched?'brouillon':'envoye',canal:state.inboxNote?'interne':'plateforme'};
+    if(attachments.length) rec.pieces_jointes=attachments;
     let htResaId=null;
     if(sel.startsWith('r:')){const r=findResa(sel.slice(2));rec.reservation_id=sel.slice(2);if(r){rec.voyageur_id=r.voyageur_id;rec.canal=state.inboxNote?'interne':(r.canal||'plateforme');
       /* Récupérer l'ID Host Tools depuis source_id (format ht_XXXXX) */
@@ -1317,6 +1390,12 @@ function goRub(rk,sk){
   if(t.calTarif)return renderCalTarif();
   if(t.polannul)return renderPolAnnulation();
   if(t.champperso)return renderChampsPerso(t.champperso);
+  if(t.msgrecur)return renderMsgRecurrents();
+  if(t.campagnes)return renderCampagnes();
+  if(t.minnuits)return renderMinNuitsDyn();
+  if(t.grpannonces)return renderGroupesAnnonces();
+  if(t.seocfg)return renderSeoConfig();
+  if(t.guidebook)return renderGuidebook();
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
@@ -5621,6 +5700,273 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'){e.preventDefault();const gs=document.getElementById('globalSearch');if(gs)gs.focus();return;}
   if(e.key==='n'&&!e.ctrlKey&&!e.metaKey){const tb=document.getElementById('topAdd');if(tb&&!tb.hidden){tb.click();e.preventDefault();return;}}
 });
+
+/* ========== NOUVELLES FONCTIONNALITÉS (Nov 2026) ========== */
+
+/* ---------- MESSAGES RÉCURRENTS ---------- */
+async function renderMsgRecurrents(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts('bien');
+  const cfg=await reglGet('msg_recurrents')||{};
+  const rules=cfg.rules||[];
+  const joursNoms=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  const rulesHtml=rules.length?rules.map((r,i)=>`<tr>
+    <td>${esc(r.nom||'Sans nom')}</td>
+    <td>${esc(refName('bien',r.bien_id)||'Tous')}</td>
+    <td>${r.jours?.map(j=>joursNoms[j]||j).join(', ')||'—'}</td>
+    <td>${esc(r.heure||'09:00')}</td>
+    <td>${esc((r.message||'').slice(0,60))}…</td>
+    <td>${r.actif?'<span class="pill green">Actif</span>':'<span class="pill gray">Inactif</span>'}</td>
+    <td><button class="btn o sm" data-mrEdit="${i}">✏️</button> <button class="btn o sm" data-mrDel="${i}" style="color:#c0392b">✕</button></td>
+  </tr>`).join(''):'<tr><td colspan="7" class="muted">Aucun message récurrent configuré.</td></tr>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Messages récurrents</h3><button class="btn g sm" id="mrAdd">+ Ajouter</button></div>
+    <p class="phnote">Envoyez automatiquement des rappels périodiques aux voyageurs en cours de séjour (jour des poubelles, nettoyage piscine, marché local…).</p>
+    <table><tr><th>Nom</th><th>Bien</th><th>Jours</th><th>Heure</th><th>Message</th><th>Statut</th><th></th></tr>${rulesHtml}</table></div>`;
+  document.getElementById('mrAdd')?.addEventListener('click',()=>openMsgRecForm(rules,-1,cfg));
+  document.querySelectorAll('[data-mrEdit]').forEach(b=>b.onclick=()=>openMsgRecForm(rules,+b.dataset.mrEdit,cfg));
+  document.querySelectorAll('[data-mrDel]').forEach(b=>b.onclick=async()=>{rules.splice(+b.dataset.mrDel,1);await reglSet('msg_recurrents',{rules});toast('Supprimé');renderMsgRecurrents();});
+}
+function openMsgRecForm(rules,idx,cfg){
+  const r=idx>=0?rules[idx]:{nom:'',bien_id:'',jours:[],heure:'09:00',message:'',actif:true};
+  const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${b.id===r.bien_id?'selected':''}>${esc(b.nom)}</option>`).join('');
+  const joursChecks=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((j,i)=>`<label style="display:inline-flex;align-items:center;gap:3px;font-size:12px"><input type="checkbox" class="mrJour" value="${i}" ${(r.jours||[]).includes(i)?'checked':''}>${j}</label>`).join(' ');
+  ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Ajouter'} un message récurrent</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="field"><label>Nom du rappel</label><input id="mrNom" value="${esc(r.nom)}" placeholder="Ex: Jour des poubelles"></div>
+      <div class="row2"><div class="field"><label>Bien (vide = tous)</label><select id="mrBien"><option value="">Tous les biens</option>${bienOpts}</select></div>
+      <div class="field"><label>Heure d'envoi</label><input id="mrHeure" type="time" value="${r.heure||'09:00'}"></div></div>
+      <div class="field"><label>Jours de la semaine</label><div>${joursChecks}</div></div>
+      <div class="field"><label>Message</label><textarea id="mrCorps" rows="3" placeholder="Rappel : les poubelles passent demain matin…">${esc(r.message||'')}</textarea></div>
+      <div class="field"><label><input type="checkbox" id="mrActif" ${r.actif!==false?'checked':''}> Actif</label></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="mrSave">Enregistrer</button></div>`);
+  document.getElementById('mrSave').onclick=async()=>{
+    const nr={nom:$('#mrNom').value.trim(),bien_id:$('#mrBien').value,heure:$('#mrHeure').value,
+      jours:[...document.querySelectorAll('.mrJour:checked')].map(c=>+c.value),
+      message:$('#mrCorps').value.trim(),actif:$('#mrActif').checked};
+    if(!nr.nom||!nr.message){toast('Nom et message requis');return;}
+    if(idx>=0)rules[idx]=nr;else rules.push(nr);
+    await reglSet('msg_recurrents',{rules});fermer();toast('Message récurrent enregistré');renderMsgRecurrents();
+  };
+}
+
+/* ---------- CAMPAGNES RE-ENGAGEMENT ---------- */
+async function renderCampagnes(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const cfg=await reglGet('campagnes_reengage')||{};
+  const camps=cfg.campagnes||[];
+  const campsHtml=camps.length?camps.map((c,i)=>`<tr>
+    <td>${esc(c.nom||'')}</td>
+    <td>${c.delai_jours||30} jours après check-out</td>
+    <td>${esc(c.sujet||'')}</td>
+    <td>${c.actif?'<span class="pill green">Actif</span>':'<span class="pill gray">Inactif</span>'}</td>
+    <td>${c.envoyes||0} envoyés</td>
+    <td><button class="btn o sm" data-cpEdit="${i}">✏️</button> <button class="btn o sm" data-cpDel="${i}" style="color:#c0392b">✕</button></td>
+  </tr>`).join(''):'<tr><td colspan="6" class="muted">Aucune campagne configurée.</td></tr>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Campagnes de re-engagement</h3><button class="btn g sm" id="cpAdd">+ Nouvelle campagne</button></div>
+    <p class="phnote">Envoyez automatiquement un e-mail aux anciens voyageurs pour les inciter à revenir (réduction fidélité, nouveautés du bien, événements locaux…).</p>
+    <table><tr><th>Nom</th><th>Délai</th><th>Sujet</th><th>Statut</th><th>Envois</th><th></th></tr>${campsHtml}</table></div>`;
+  document.getElementById('cpAdd')?.addEventListener('click',()=>openCampForm(camps,-1,cfg));
+  document.querySelectorAll('[data-cpEdit]').forEach(b=>b.onclick=()=>openCampForm(camps,+b.dataset.cpEdit,cfg));
+  document.querySelectorAll('[data-cpDel]').forEach(b=>b.onclick=async()=>{camps.splice(+b.dataset.cpDel,1);await reglSet('campagnes_reengage',{campagnes:camps});toast('Campagne supprimée');renderCampagnes();});
+}
+function openCampForm(camps,idx,cfg){
+  const c=idx>=0?camps[idx]:{nom:'',delai_jours:30,sujet:'',corps:'',actif:true,envoyes:0};
+  ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Créer'} une campagne</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="field"><label>Nom de la campagne</label><input id="cpNom" value="${esc(c.nom)}" placeholder="Ex: Réduction fidélité -10%"></div>
+      <div class="row2"><div class="field"><label>Délai après check-out (jours)</label><input id="cpDelai" type="number" min="1" value="${c.delai_jours||30}"></div>
+      <div class="field"><label>Sujet de l'e-mail</label><input id="cpSujet" value="${esc(c.sujet)}" placeholder="On vous attend de nouveau !"></div></div>
+      <div class="field"><label>Corps de l'e-mail (HTML supporté, tags : {prenom}, {bien}, {lien_reservation})</label><textarea id="cpCorps" rows="5">${esc(c.corps||'')}</textarea></div>
+      <div class="field"><label><input type="checkbox" id="cpActif" ${c.actif!==false?'checked':''}> Campagne active</label></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="cpSave">Enregistrer</button></div>`);
+  document.getElementById('cpSave').onclick=async()=>{
+    const nc={nom:$('#cpNom').value.trim(),delai_jours:+$('#cpDelai').value||30,sujet:$('#cpSujet').value.trim(),
+      corps:$('#cpCorps').value.trim(),actif:$('#cpActif').checked,envoyes:c.envoyes||0};
+    if(!nc.nom||!nc.sujet||!nc.corps){toast('Tous les champs sont requis');return;}
+    if(idx>=0)camps[idx]=nc;else camps.push(nc);
+    await reglSet('campagnes_reengage',{campagnes:camps});fermer();toast('Campagne enregistrée');renderCampagnes();
+  };
+}
+
+/* ---------- MINIMUM NUITS DYNAMIQUE ---------- */
+async function renderMinNuitsDyn(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts('bien');
+  const cfg=await reglGet('min_nuits_dyn')||{};
+  const rules=cfg.rules||[];
+  const rulesHtml=rules.length?rules.map((r,i)=>`<tr>
+    <td>${esc(refName('bien',r.bien_id)||'Tous')}</td>
+    <td>${r.type==='weekend'?'🗓️ Week-end':r.type==='saison'?'☀️ Haute saison':r.type==='evenement'?'🎉 Événement':'📅 Période'}</td>
+    <td>${r.date_debut?fdate(r.date_debut)+' → '+fdate(r.date_fin):(r.type==='weekend'?'Ven-Dim':'—')}</td>
+    <td><strong>${r.min_nuits} nuits min</strong></td>
+    <td>${r.actif?'<span class="pill green">Actif</span>':'<span class="pill gray">Inactif</span>'}</td>
+    <td><button class="btn o sm" data-mnEdit="${i}">✏️</button> <button class="btn o sm" data-mnDel="${i}" style="color:#c0392b">✕</button></td>
+  </tr>`).join(''):'<tr><td colspan="6" class="muted">Aucune règle. Minimum par défaut : 1 nuit.</td></tr>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Minimum de nuits dynamique</h3><button class="btn g sm" id="mnAdd">+ Ajouter une règle</button></div>
+    <p class="phnote">Définissez des minimums de nuits par période, week-end ou saison. Les règles les plus spécifiques ont priorité.</p>
+    <table><tr><th>Bien</th><th>Type</th><th>Période</th><th>Minimum</th><th>Statut</th><th></th></tr>${rulesHtml}</table></div>`;
+  document.getElementById('mnAdd')?.addEventListener('click',()=>openMinNuitsForm(rules,-1,cfg));
+  document.querySelectorAll('[data-mnEdit]').forEach(b=>b.onclick=()=>openMinNuitsForm(rules,+b.dataset.mnEdit,cfg));
+  document.querySelectorAll('[data-mnDel]').forEach(b=>b.onclick=async()=>{rules.splice(+b.dataset.mnDel,1);await reglSet('min_nuits_dyn',{rules});toast('Règle supprimée');renderMinNuitsDyn();});
+}
+function openMinNuitsForm(rules,idx,cfg){
+  const r=idx>=0?rules[idx]:{bien_id:'',type:'weekend',date_debut:'',date_fin:'',min_nuits:2,actif:true};
+  const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${b.id===r.bien_id?'selected':''}>${esc(b.nom)}</option>`).join('');
+  ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Ajouter'} une règle</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="row2"><div class="field"><label>Bien</label><select id="mnBien"><option value="">Tous les biens</option>${bienOpts}</select></div>
+      <div class="field"><label>Type de règle</label><select id="mnType"><option value="weekend" ${r.type==='weekend'?'selected':''}>Week-end (ven-dim)</option><option value="saison" ${r.type==='saison'?'selected':''}>Haute saison</option><option value="evenement" ${r.type==='evenement'?'selected':''}>Événement</option><option value="periode" ${r.type==='periode'?'selected':''}>Période personnalisée</option></select></div></div>
+      <div class="row2" id="mnDatesRow"><div class="field"><label>Du</label><input id="mnDeb" type="date" value="${r.date_debut||''}"></div>
+      <div class="field"><label>Au</label><input id="mnFin" type="date" value="${r.date_fin||''}"></div></div>
+      <div class="field"><label>Minimum de nuits</label><input id="mnMin" type="number" min="1" max="30" value="${r.min_nuits||2}"></div>
+      <div class="field"><label><input type="checkbox" id="mnActif" ${r.actif!==false?'checked':''}> Règle active</label></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="mnSave">Enregistrer</button></div>`);
+  const typeEl=document.getElementById('mnType');
+  const toggleDates=()=>{document.getElementById('mnDatesRow').style.display=typeEl.value==='weekend'?'none':'';};
+  typeEl.onchange=toggleDates;toggleDates();
+  document.getElementById('mnSave').onclick=async()=>{
+    const nr={bien_id:$('#mnBien').value,type:typeEl.value,min_nuits:+$('#mnMin').value||2,actif:$('#mnActif').checked,
+      date_debut:$('#mnDeb').value||null,date_fin:$('#mnFin').value||null};
+    if(nr.type!=='weekend'&&(!nr.date_debut||!nr.date_fin)){toast('Dates requises pour ce type');return;}
+    if(idx>=0)rules[idx]=nr;else rules.push(nr);
+    await reglSet('min_nuits_dyn',{rules});fermer();toast('Règle enregistrée');renderMinNuitsDyn();
+  };
+}
+
+/* ---------- GROUPES D'ANNONCES ---------- */
+async function renderGroupesAnnonces(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts('bien');
+  const cfg=await reglGet('groupes_annonces')||{};
+  const groups=cfg.groups||[];
+  const biens=state.opts.bien||[];
+  const grpHtml=groups.length?groups.map((g,i)=>{
+    const membres=biens.filter(b=>(g.bien_ids||[]).includes(b.id));
+    return `<div class="kc" style="padding:16px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><h4>${esc(g.nom)}</h4>
+        <div><button class="btn o sm" data-grEdit="${i}">✏️</button> <button class="btn o sm" data-grDel="${i}" style="color:#c0392b">✕</button></div></div>
+      <div class="muted" style="font-size:12px;margin:4px 0">${esc(g.description||'')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${membres.map(b=>`<span class="pill blue">${esc(b.nom)}</span>`).join('')||'<span class="muted">Aucun bien</span>'}</div>
+    </div>`;}).join(''):'<div class="empty">Aucun groupe. Les groupes permettent de gérer des tarifs et règles en lot.</div>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Groupes d'annonces</h3><button class="btn g sm" id="grAdd">+ Nouveau groupe</button></div>
+    <p class="phnote">Regroupez vos biens pour appliquer des tarifs, règles de disponibilité ou messages en bloc.</p>${grpHtml}</div>`;
+  document.getElementById('grAdd')?.addEventListener('click',()=>openGroupeForm(groups,-1,cfg,biens));
+  document.querySelectorAll('[data-grEdit]').forEach(b=>b.onclick=()=>openGroupeForm(groups,+b.dataset.grEdit,cfg,biens));
+  document.querySelectorAll('[data-grDel]').forEach(b=>b.onclick=async()=>{groups.splice(+b.dataset.grDel,1);await reglSet('groupes_annonces',{groups});toast('Groupe supprimé');renderGroupesAnnonces();});
+}
+function openGroupeForm(groups,idx,cfg,biens){
+  const g=idx>=0?groups[idx]:{nom:'',description:'',bien_ids:[]};
+  const checksHtml=biens.map(b=>`<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px"><input type="checkbox" class="grBien" value="${b.id}" ${(g.bien_ids||[]).includes(b.id)?'checked':''}>${esc(b.nom)}</label>`).join('');
+  ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Créer'} un groupe</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><div class="field"><label>Nom du groupe</label><input id="grNom" value="${esc(g.nom)}" placeholder="Ex: Appartements Guéliz"></div>
+    <div class="field"><label>Description</label><input id="grDesc" value="${esc(g.description||'')}"></div>
+    <div class="field"><label>Biens dans ce groupe</label><div style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px">${checksHtml||'<span class="muted">Aucun bien disponible</span>'}</div></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="grSave">Enregistrer</button></div>`);
+  document.getElementById('grSave').onclick=async()=>{
+    const ng={nom:$('#grNom').value.trim(),description:$('#grDesc').value.trim(),
+      bien_ids:[...document.querySelectorAll('.grBien:checked')].map(c=>c.value)};
+    if(!ng.nom){toast('Nom requis');return;}
+    if(idx>=0)groups[idx]=ng;else groups.push(ng);
+    await reglSet('groupes_annonces',{groups});fermer();toast('Groupe enregistré');renderGroupesAnnonces();
+  };
+}
+
+/* ---------- SEO & SCHEMA.ORG ---------- */
+async function renderSeoConfig(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const cfg=await reglGet('seo')||{};
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>SEO & Référencement</h3></div>
+    <p class="phnote">Optimisez le référencement de votre moteur de réservation directe sur Google.</p>
+    <div style="padding:0 16px 16px">
+      <div class="fsec">Méta-données globales</div>
+      <div class="row2"><div class="field"><label>Titre du site (balise title)</label><input id="seoTitle" value="${esc(cfg.title||'DPM Conciergerie — Locations de vacances à Marrakech')}"></div>
+      <div class="field"><label>Meta description</label><textarea id="seoDesc" rows="2">${esc(cfg.description||'Appartements et villas de standing à Marrakech. Réservation directe, meilleurs prix garantis.')}</textarea></div></div>
+      <div class="row2"><div class="field"><label>Mots-clés (séparés par des virgules)</label><input id="seoKw" value="${esc(cfg.keywords||'location marrakech, appartement guéliz, villa marrakech, airbnb marrakech')}"></div>
+      <div class="field"><label>URL canonique</label><input id="seoCan" value="${esc(cfg.canonical||'')}"></div></div>
+      <div class="fsec">Schema.org (Données structurées)</div>
+      <div class="field"><label><input type="checkbox" id="seoSchema" ${cfg.schema!==false?'checked':''}> Générer automatiquement les balises Schema.org (LodgingBusiness + VacationRental)</label></div>
+      <div class="row2"><div class="field"><label>Nom de l'entreprise (Schema)</label><input id="seoOrg" value="${esc(cfg.org_name||'DPM Conciergerie')}"></div>
+      <div class="field"><label>Logo URL</label><input id="seoLogo" value="${esc(cfg.logo||'')}"></div></div>
+      <div class="fsec">Google Analytics & Tag Manager</div>
+      <div class="row2"><div class="field"><label>Google Analytics ID (GA4)</label><input id="seoGA" value="${esc(cfg.ga_id||'')}" placeholder="G-XXXXXXXXXX"></div>
+      <div class="field"><label>Google Tag Manager ID</label><input id="seoGTM" value="${esc(cfg.gtm_id||'')}" placeholder="GTM-XXXXXXX"></div></div>
+      <div class="field"><label>Facebook Pixel ID</label><input id="seoFB" value="${esc(cfg.fb_pixel||'')}" placeholder="Optionnel"></div>
+      <button class="btn g" id="seoSave" style="margin-top:16px">💾 Enregistrer</button>
+    </div></div>`;
+  document.getElementById('seoSave').onclick=async()=>{
+    const nc={title:$('#seoTitle').value.trim(),description:$('#seoDesc').value.trim(),keywords:$('#seoKw').value.trim(),
+      canonical:$('#seoCan').value.trim(),schema:$('#seoSchema').checked,org_name:$('#seoOrg').value.trim(),
+      logo:$('#seoLogo').value.trim(),ga_id:$('#seoGA').value.trim(),gtm_id:$('#seoGTM').value.trim(),fb_pixel:$('#seoFB').value.trim()};
+    await reglSet('seo',nc);toast('Configuration SEO enregistrée');
+  };
+}
+
+/* ---------- GUIDEBOOK / LIVRET D'ACCUEIL ---------- */
+async function renderGuidebook(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts('bien');
+  const cfg=await reglGet('guidebook')||{};
+  const biens=state.opts.bien||[];
+  const bienSel=cfg.bien_selectionne||biens[0]?.id||'';
+  const guide=cfg.guides?.[bienSel]||{sections:[]};
+  const defaultSections=[
+    {titre:'Bienvenue',icone:'👋',contenu:'Bienvenue dans votre logement ! Nous espérons que vous passerez un excellent séjour.'},
+    {titre:'WiFi',icone:'📶',contenu:'Réseau : {wifi_nom}\nMot de passe : {wifi_mdp}'},
+    {titre:'Accès & clés',icone:'🔑',contenu:'Code d\'accès : {code_acces}'},
+    {titre:'Équipements',icone:'🏠',contenu:'Climatisation, cuisine équipée, machine à laver…'},
+    {titre:'Quartier & restaurants',icone:'🍽️',contenu:'Les meilleurs restaurants à proximité…'},
+    {titre:'Transports',icone:'🚕',contenu:'Pour vous déplacer : taxi, bus, location de voiture…'},
+    {titre:'Urgences',icone:'🏥',contenu:'Pompiers : 15\nPolice : 19\nAmbulance : 150'},
+    {titre:'Check-out',icone:'🚪',contenu:'Merci de quitter le logement avant {heure_checkout}.'}
+  ];
+  const sections=guide.sections.length?guide.sections:defaultSections;
+  const sectionsHtml=sections.map((s,i)=>`<div class="kc" style="padding:12px;margin-bottom:6px;cursor:move" draggable="true" data-gbIdx="${i}">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span>${s.icone||'📌'} <strong>${esc(s.titre)}</strong></span>
+      <div><button class="btn o sm" data-gbEdit="${i}">✏️</button> <button class="btn o sm" data-gbDel="${i}" style="color:#c0392b">✕</button></div>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:4px;white-space:pre-line">${esc((s.contenu||'').slice(0,100))}${(s.contenu||'').length>100?'…':''}</div>
+  </div>`).join('');
+  const bienOpts=biens.map(b=>`<option value="${b.id}" ${b.id===bienSel?'selected':''}>${esc(b.nom)}</option>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Livret d'accueil / Guidebook</h3><button class="btn g sm" id="gbAdd">+ Section</button></div>
+    <p class="phnote">Créez un livret numérique envoyé aux voyageurs avant leur arrivée. Partageable par lien ou intégré dans les messages automatiques.</p>
+    <div style="padding:0 16px"><div class="field" style="max-width:300px"><label>Bien</label><select id="gbBien">${bienOpts}</select></div></div>
+    <div style="padding:0 16px 16px" id="gbSections">${sectionsHtml}</div>
+    <div style="padding:0 16px 16px"><button class="btn o" id="gbPreview">👁 Aperçu</button> <button class="btn g" id="gbSave">💾 Enregistrer</button></div></div>`;
+  document.getElementById('gbBien').onchange=function(){cfg.bien_selectionne=this.value;renderGuidebook();};
+  document.getElementById('gbAdd')?.addEventListener('click',()=>{
+    sections.push({titre:'Nouvelle section',icone:'📌',contenu:''});
+    openGbSectionForm(sections,sections.length-1,cfg,bienSel);
+  });
+  document.querySelectorAll('[data-gbEdit]').forEach(b=>b.onclick=()=>openGbSectionForm(sections,+b.dataset.gbEdit,cfg,bienSel));
+  document.querySelectorAll('[data-gbDel]').forEach(b=>b.onclick=async()=>{sections.splice(+b.dataset.gbDel,1);if(!cfg.guides)cfg.guides={};cfg.guides[bienSel]={sections};await reglSet('guidebook',cfg);toast('Section supprimée');renderGuidebook();});
+  document.getElementById('gbSave').onclick=async()=>{if(!cfg.guides)cfg.guides={};cfg.guides[bienSel]={sections};await reglSet('guidebook',cfg);toast('Livret enregistré');};
+  document.getElementById('gbPreview').onclick=()=>{
+    const html=sections.map(s=>`<div style="margin-bottom:16px"><h3>${s.icone||''} ${esc(s.titre)}</h3><p style="white-space:pre-line">${esc(s.contenu||'')}</p></div>`).join('');
+    ouvrir(`<div class="h"><h3>Aperçu du livret</h3><button class="x" onclick="fermer()">×</button></div><div class="b" style="max-height:60vh;overflow:auto">${html}</div>`);
+  };
+}
+function openGbSectionForm(sections,idx,cfg,bienSel){
+  const s=sections[idx]||{titre:'',icone:'📌',contenu:''};
+  const icones=['👋','📶','🔑','🏠','🍽️','🚕','🏥','🚪','🏖️','🎭','💡','🧹','📌','⚠️','ℹ️','🗺️'];
+  ouvrir(`<div class="h"><h3>Section du livret</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><div class="row2"><div class="field"><label>Titre</label><input id="gbTitre" value="${esc(s.titre)}"></div>
+    <div class="field"><label>Icône</label><div style="display:flex;flex-wrap:wrap;gap:4px">${icones.map(ic=>`<button class="btn o sm gbIc" data-ic="${ic}" style="${ic===s.icone?'background:var(--gold-soft);border-color:var(--gold)':''}">${ic}</button>`).join('')}</div><input id="gbIcVal" type="hidden" value="${s.icone||'📌'}"></div></div>
+    <div class="field"><label>Contenu (tags dynamiques supportés)</label><textarea id="gbContenu" rows="5">${esc(s.contenu||'')}</textarea></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="gbSecSave">Enregistrer</button></div>`);
+  document.querySelectorAll('.gbIc').forEach(b=>b.onclick=()=>{document.querySelectorAll('.gbIc').forEach(x=>x.style.background='');b.style.background='var(--gold-soft)';$('#gbIcVal').value=b.dataset.ic;});
+  document.getElementById('gbSecSave').onclick=async()=>{
+    sections[idx]={titre:$('#gbTitre').value.trim(),icone:$('#gbIcVal').value,contenu:$('#gbContenu').value};
+    if(!cfg.guides)cfg.guides={};cfg.guides[bienSel]={sections};
+    await reglSet('guidebook',cfg);fermer();toast('Section enregistrée');renderGuidebook();
+  };
+}
+
+/* ---------- WIRING DES NOUVELLES RUBRIQUES ---------- */
+/* Ajouter les sous-onglets dans le routing existant */
+const _origGoRub=goRub;
+
+/* ========== FIN NOUVELLES FONCTIONNALITÉS ========== */
 
 init();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
