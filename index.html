@@ -563,6 +563,7 @@ const MODULES = {
       ["nom","Nom de l'annonce",{req:1}],
       ["type","Type de bien",{opts:["Appartement","Villa","Riad","Studio","Maison","Chambre"]}],
       ["proprietaire_id","Propriétaire",{ref:"proprietaire"}],
+      ["commission_prestation_pct","Conciergerie : commission sur les services vendus par le propriétaire (%)",{type:"number",def:20,req:1}],
       ["statut","Statut",{opts:["en_ligne","masque","brouillon"],def:"en_ligne"}],
       ["proprete","État de propreté",{opts:["propre","en_nettoyage","a_nettoyer"],def:"propre"}],
       ["type_unite","Type d'unité",{opts:["simple","parent","enfant"],def:"simple"}],
@@ -684,6 +685,7 @@ const MODULES = {
       ["contact","Personne à contacter",{}],["tel","Téléphone",{}],["email","E-mail",{}],
       ["adresse","Adresse",{}],["ville","Ville",{}],["site","Site web",{}],["ice","ICE",{}],
       ["reglement","Règlement (mode, délai, coordonnées)",{long:1}],["note","Note / conditions (le partenaire la voit et peut la modifier)",{long:1}],
+      ["interlocuteurs","Interlocuteurs",{interloc:1}],["ressources","Ressources (véhicules, équipes… pour le planning)",{liste:1}],
       ["actif","Actif",{opts:["true","false"],def:"true"}],
       ["peut_editer","Peut modifier ses prestations lui-même",{opts:["false","true"],def:"false"}],
       ["peut_promo","Peut créer des promotions",{opts:["true","false"],def:"true"}]]},
@@ -704,7 +706,7 @@ const MODULES = {
       ["partenaire_id","Partenaire (obligatoire si « externe »)",{ref:"partenaire"}],
       ["proprietaire_id","Propriétaire (obligatoire si « interne »)",{ref:"proprietaire"}],
       ["service_interne_id","Service interne concerné",{ref:"service_interne"}],
-      ["unite","Unité (par personne, par heure, forfait…)",{}],["description","Description",{long:1}],
+      ["unite","Unité (par personne, par heure, forfait…)",{}],["icone","Icône (emoji, affichée au voyageur)",{}],["description","Description",{long:1}],
       ["s1","Au logement",{section:1}],
       ["au_logement","Proposée au logement",{opts:["true","false"],def:"true"}],
       ["prix_logement","Prix facturé au voyageur",{type:"number",def:0}],
@@ -772,7 +774,8 @@ const MODULES = {
       ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
-    fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes",{long:1}]]},
+    fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
+      ["reglement","Règlement — coordonnées pour ses reversements",{long:1}],["interlocuteurs","Interlocuteurs",{interloc:1}]]},
   canaux:{title:"Canaux connectés",add:"Connecter un canal",table:"canal_connexion",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["canal","Canal",v=>pill(v)],["statut_sync","Sync"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["canal","Canal",{opts:["airbnb","booking","vrbo","expedia","abritel","direct","autre"],def:"airbnb"}],
@@ -1800,6 +1803,8 @@ async function openForm(k,row){
       inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${String(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
     }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">${v?` <a href="${esc(v)}" target="_blank" class="muted" style="font-size:11px">📎 fichier actuel</a>`:''}`; }
     else if(o.horaires){ inp=cgHorairesHtml(key,v); }
+    else if(o.interloc){ inp=cgInterHtml(key,v); }
+    else if(o.liste){ inp=`<input id="f_${key}" value="${esc(Array.isArray(v)?v.join(", "):"")}" placeholder="Séparés par des virgules">`; }
     else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
     return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
@@ -1834,6 +1839,8 @@ async function openForm(k,row){
         } else if(row[key]!=null){ d[key]=row[key]; }
         continue;}
       if(o.horaires){ d[key]=cgHorairesLire(key); continue; }
+      if(o.interloc){ d[key]=cgInterLire(key); continue; }
+      if(o.liste){ d[key]=(document.getElementById("f_"+key).value||"").split(",").map(x=>x.trim()).filter(Boolean); continue; }
       let val;
       if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
       else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); if(val==="true")val=true; if(val==="false")val=false; }
@@ -3079,6 +3086,13 @@ async function renderTarifDyn(){
 /* Forme enregistrée : null = toujours disponible ; sinon {mode:"plages"|"departs", jours:{0..6:{ouvert,de,a}}, departs:["09:00",…]}
    (0 = dimanche, heures entières), identique à celle de l'appli Conciergerie. */
 const CG_JOURS=[[1,"Lundi"],[2,"Mardi"],[3,"Mercredi"],[4,"Jeudi"],[5,"Vendredi"],[6,"Samedi"],[0,"Dimanche"]];
+/* Interlocuteurs d'une fiche partenaire ou propriétaire : nom, fonction, téléphone, e-mail (autant que nécessaire). */
+function cgInterLigne(it){const c=(k,ph)=>`<input data-k="${k}" placeholder="${ph}" value="${esc((it&&it[k])||"")}" style="flex:1;min-width:110px">`;
+  return `<div class="cgInterL" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${c("nom","Nom et prénom")}${c("fonction","Fonction")}${c("tel","Téléphone")}${c("email","E-mail")}<button type="button" class="btn o sm" onclick="this.parentElement.remove()" title="Retirer">×</button></div>`;}
+function cgInterHtml(key,v){const l=Array.isArray(v)?v:[];
+  return `<div id="f_${key}__box">${l.map(cgInterLigne).join("")}</div><button type="button" class="btn o sm" onclick="document.getElementById('f_${key}__box').insertAdjacentHTML('beforeend',cgInterLigne({}))">+ Ajouter un interlocuteur</button>`;}
+function cgInterLire(key){
+  return [...document.querySelectorAll("#f_"+key+"__box .cgInterL")].map(l=>{const o={};l.querySelectorAll("input").forEach(i=>o[i.dataset.k]=i.value.trim());return o;}).filter(o=>o.nom||o.tel||o.email);}
 function cgHorairesHtml(key,v){
   const h=(v&&typeof v==="object")?v:null;
   const mode=!h?"libre":(h.mode==="departs"?"departs":"plages");
