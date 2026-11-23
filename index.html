@@ -1517,7 +1517,9 @@ async function renderList(k){
   const refs=new Set(["bien","voyageur","intervenant","reservation","proprietaire"]);
   m.fields.forEach(f=>{if(f[2]&&f[2].ref)refs.add(f[2].ref);});
   await Promise.all([...refs].map(loadOpts));
-  const {data,error}=await sb.from(m.table).select("*").order("cree_le",{ascending:false});
+  let {data,error}=await sb.from(m.table).select("*").order("cree_le",{ascending:false});
+  /* Certaines tables (ex. extra) n'ont pas de colonne cree_le : on recharge sans tri. */
+  if(error&&/cree_le/.test(error.message||"")){({data,error}=await sb.from(m.table).select("*"));}
   if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
   state.cache=state.cache||{}; state.cache[k]=(k==='biens'&&data)?orderBiensHierarchy(data):(data||[]);
   state.listState=state.listState||{};
@@ -3001,9 +3003,11 @@ async function renderScoreASO(){
   /* Charger les réservations et avis pour les métriques */
   const today=new Date().toISOString().slice(0,10);
   const j90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
-  const {data:resas}=await sb.from("reservation").select("bien_id,arrivee,depart,statut,cree_le");
+  const {data:resas}=await sb.from("reservation").select("id,bien_id,arrivee,depart,statut,cree_le");
   const {data:avisData}=await sb.from("avis").select("bien_id,note_globale,cree_le");
-  const {data:msgs}=await sb.from("message").select("bien_id,created_at,expediteur");
+  /* message n'a pas de bien_id : on rattache chaque message au bien par sa réservation. */
+  const {data:msgs}=await sb.from("message").select("reservation_id,sens,cree_le");
+  const resaBien={};(resas||[]).forEach(r=>{resaBien[r.id]=r.bien_id;});
   const {data:canaux}=await sb.from("canal_bien").select("bien_id,canal,actif");
 
   const cards=biens.map(b=>{
@@ -3063,7 +3067,7 @@ async function renderScoreASO(){
     else{checks.push({label:'Multi-canal',pts:0,max:10,ok:false,tip:'❌ Aucune plateforme connectée — va dans Canaux pour activer'});}
 
     /* 9. Temps de réponse (10pts) */
-    const bMsgs=(msgs||[]).filter(m=>m.bien_id===b.id&&m.expediteur==='hote');
+    const bMsgs=(msgs||[]).filter(m=>m.sens==='sortant'&&resaBien[m.reservation_id]===b.id);
     if(bMsgs.length>=5){checks.push({label:'Réactivité',pts:10,max:10,ok:true,tip:'✅ Messagerie active — les réponses rapides boostent le classement'});score+=10;}
     else if(bMsgs.length>=1){checks.push({label:'Réactivité',pts:5,max:10,ok:false,tip:'⚠️ Peu de messages envoyés — active les réponses automatiques IA pour un temps de réponse <1h'});score+=5;}
     else{checks.push({label:'Réactivité',pts:2,max:10,ok:false,tip:'⚠️ Aucun message envoyé — configure les messages auto dans Boîte de réception → IA'});score+=2;}
