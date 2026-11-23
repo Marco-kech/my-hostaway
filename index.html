@@ -861,7 +861,9 @@ const RUBRIQUES=[
     ["ical","Synchronisation iCal",{icalsync:1}],
     ["cronhist","Historique tâches auto",{cronhist:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
-    ["serr","Serrures intelligentes",{ph:"Nuki / igloohome / TTLock : appareils en ligne, mappage de l'annonce, envoi du code de porte."}],
+    ["serr","Serrures intelligentes",{serrures:1}],
+    ["serrapp","Appareils",{serrappareils:1}],
+    ["serrhist","Historique accès",{serrhist:1}],
     ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
     ["market","Marketplace",{ph:"~220 partenaires par catégorie (canaux, serrures, ménage, paiement, tarification, CRM) : configurer / connecté."}]]},
   {k:"users",label:"Utilisateurs & groupes",icon:"☺",subs:[
@@ -1396,6 +1398,9 @@ function goRub(rk,sk){
   if(t.grpannonces)return renderGroupesAnnonces();
   if(t.seocfg)return renderSeoConfig();
   if(t.guidebook)return renderGuidebook();
+  if(t.serrures)return renderSerrures();
+  if(t.serrappareils)return renderSerrAppareils();
+  if(t.serrhist)return renderSerrHist();
   if(t.m){const m=MODULES[t.m];if(m.add){$("#topAdd").hidden=false;$("#topAdd").textContent="+ "+m.add;$("#topAdd").onclick=()=>openForm(t.m);}return renderList(t.m);}
   if(t.ph!=null)return renderPlaceholder(rub.label,sub[1],t.ph);
 }
@@ -6036,9 +6041,190 @@ function openGbSectionForm(sections,idx,cfg,bienSel){
   };
 }
 
-/* ---------- WIRING DES NOUVELLES RUBRIQUES ---------- */
-/* Ajouter les sous-onglets dans le routing existant */
-const _origGoRub=goRub;
+/* ---------- SERRURES CONNECTÉES WiFi ---------- */
+async function renderSerrures(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts('bien');
+  const cfg=await reglGet('serrures')||{};
+  const locks=cfg.appareils||[];
+  const biens=state.opts.bien||[];
+  const statusIcon=s=>s==='en_ligne'?'🟢':s==='hors_ligne'?'🔴':'🟡';
+  const battIcon=b=>b>60?'🔋':b>20?'🪫':'🪫⚠️';
+
+  const summary=`<div class="panel"><div class="phead"><h3>Serrures intelligentes</h3><button class="btn g sm" id="srrAdd">+ Ajouter une serrure</button></div>
+    <p class="phnote">Gérez vos serrures connectées WiFi. Les codes d'accès sont générés automatiquement pour chaque réservation et envoyés au voyageur.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:0 16px 16px">
+      ${locks.length?locks.map((l,i)=>`<div class="kc" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:start">
+          <div><strong>${esc(l.nom||'Sans nom')}</strong><br><span class="muted" style="font-size:12px">${esc(l.marque||'')} ${esc(l.modele||'')}</span></div>
+          <span style="font-size:18px">${statusIcon(l.statut||'inconnu')}</span>
+        </div>
+        <div style="margin-top:8px;font-size:13px">
+          <div>🏠 ${esc(refName('bien',l.bien_id)||'Non assigné')}</div>
+          <div>${battIcon(l.batterie||100)} Batterie : ${l.batterie||'—'}%</div>
+          <div>🔑 Code actuel : <strong style="font-family:monospace;font-size:15px">${esc(l.code_actuel||'—')}</strong></div>
+          <div class="muted" style="font-size:11px">Dernier accès : ${l.dernier_acces?fdate(l.dernier_acces):'—'}</div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn o sm" data-srrCode="${i}" title="Générer un nouveau code">🔄 Code</button>
+          <button class="btn o sm" data-srrEdit="${i}">✏️</button>
+          <button class="btn o sm" data-srrTest="${i}" title="Tester la connexion">📡 Test</button>
+          <button class="btn o sm" data-srrDel="${i}" style="color:#c0392b">✕</button>
+        </div>
+      </div>`).join(''):'<div class="empty" style="grid-column:1/-1">Aucune serrure configurée.<br><br>Marques supportées : <strong>Nuki, igloohome, TTLock, Yale, August, Schlage</strong><br>Connectez vos serrures WiFi pour générer automatiquement des codes d\'accès par réservation.</div>'}
+    </div>
+    ${locks.length?`<div class="panel" style="margin-top:0"><div class="phead"><h3>Réglages automatiques</h3></div>
+      <div style="padding:16px">
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="srrAuto" ${cfg.auto_codes!==false?'checked':''} style="width:auto"> Générer automatiquement un code pour chaque nouvelle réservation</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="srrExpire" ${cfg.expirer_codes!==false?'checked':''} style="width:auto"> Désactiver le code automatiquement au check-out</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="srrNotif" ${cfg.notif_batterie!==false?'checked':''} style="width:auto"> M'alerter quand la batterie est en dessous de 20%</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="srrMsg" ${cfg.envoyer_code!==false?'checked':''} style="width:auto"> Inclure le code d'accès dans le message de check-in automatique</label>
+        <div class="row2" style="margin-top:10px">
+          <div class="field"><label>Activation du code avant l'arrivée (heures)</label><input id="srrAvant" type="number" min="0" max="48" value="${cfg.heures_avant||2}"></div>
+          <div class="field"><label>Désactivation après le départ (heures)</label><input id="srrApres" type="number" min="0" max="24" value="${cfg.heures_apres||1}"></div>
+        </div>
+        <div class="field"><label>Format du code (nombre de chiffres)</label><select id="srrFormat"><option value="4" ${(cfg.format||6)==4?'selected':''}>4 chiffres</option><option value="6" ${(cfg.format||6)==6?'selected':''}>6 chiffres</option><option value="8" ${(cfg.format||6)==8?'selected':''}>8 chiffres</option><option value="phone" ${cfg.format==='phone'?'selected':''}>Basé sur le téléphone du voyageur</option></select></div>
+        <button class="btn g" id="srrSaveCfg" style="margin-top:8px">💾 Enregistrer les réglages</button>
+      </div></div>`:''}
+  </div>`;
+
+  document.getElementById('srrAdd')?.addEventListener('click',()=>openSerrForm(locks,-1,cfg));
+  document.querySelectorAll('[data-srrEdit]').forEach(b=>b.onclick=()=>openSerrForm(locks,+b.dataset.srrEdit,cfg));
+  document.querySelectorAll('[data-srrDel]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('Supprimer cette serrure ?'))return;
+    locks.splice(+b.dataset.srrDel,1);await reglSet('serrures',{...cfg,appareils:locks});toast('Serrure supprimée');renderSerrures();
+  });
+  document.querySelectorAll('[data-srrCode]').forEach(b=>b.onclick=async()=>{
+    const idx=+b.dataset.srrCode;
+    const format=cfg.format||6;
+    let code;
+    if(format==='phone'){code='Basé sur le téléphone';}
+    else{const len=+format||6;code='';for(let i=0;i<len;i++)code+=Math.floor(Math.random()*10);}
+    locks[idx].code_actuel=code;
+    locks[idx].code_genere_le=new Date().toISOString();
+    await reglSet('serrures',{...cfg,appareils:locks});
+    toast('🔑 Nouveau code généré : '+code);renderSerrures();
+  });
+  document.querySelectorAll('[data-srrTest]').forEach(b=>b.onclick=()=>{
+    const idx=+b.dataset.srrTest;const l=locks[idx];
+    if(!l.api_url){toast('⚠️ URL API non configurée pour cette serrure');return;}
+    toast('📡 Test de connexion à '+l.nom+'… (fonctionnalité API à brancher)');
+  });
+  const saveCfg=document.getElementById('srrSaveCfg');
+  if(saveCfg) saveCfg.onclick=async()=>{
+    cfg.auto_codes=document.getElementById('srrAuto').checked;
+    cfg.expirer_codes=document.getElementById('srrExpire').checked;
+    cfg.notif_batterie=document.getElementById('srrNotif').checked;
+    cfg.envoyer_code=document.getElementById('srrMsg').checked;
+    cfg.heures_avant=+document.getElementById('srrAvant').value||2;
+    cfg.heures_apres=+document.getElementById('srrApres').value||1;
+    cfg.format=document.getElementById('srrFormat').value;
+    cfg.appareils=locks;
+    await reglSet('serrures',cfg);toast('Réglages serrures enregistrés');
+  };
+}
+
+function openSerrForm(locks,idx,cfg){
+  const l=idx>=0?locks[idx]:{nom:'',marque:'',modele:'',bien_id:'',statut:'hors_ligne',batterie:100,code_actuel:'',api_url:'',api_key:'',type_connexion:'wifi'};
+  const bienOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${b.id===l.bien_id?'selected':''}>${esc(b.nom)}</option>`).join('');
+  ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Ajouter'} une serrure</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="row2"><div class="field"><label>Nom de la serrure *</label><input id="srrNom" value="${esc(l.nom)}" placeholder="Ex: Porte principale La Môme"></div>
+      <div class="field"><label>Bien associé *</label><select id="srrBien"><option value="">Choisir…</option>${bienOpts}</select></div></div>
+      <div class="row3"><div class="field"><label>Marque</label><select id="srrMarque"><option value="">—</option><option ${l.marque==='Nuki'?'selected':''}>Nuki</option><option ${l.marque==='igloohome'?'selected':''}>igloohome</option><option ${l.marque==='TTLock'?'selected':''}>TTLock</option><option ${l.marque==='Yale'?'selected':''}>Yale</option><option ${l.marque==='August'?'selected':''}>August</option><option ${l.marque==='Schlage'?'selected':''}>Schlage</option><option ${l.marque==='Autre'?'selected':''}>Autre</option></select></div>
+      <div class="field"><label>Modèle</label><input id="srrModele" value="${esc(l.modele||'')}" placeholder="Ex: Smart Lock 3.0 Pro"></div>
+      <div class="field"><label>Type de connexion</label><select id="srrType"><option value="wifi" ${l.type_connexion==='wifi'?'selected':''}>WiFi</option><option value="bluetooth" ${l.type_connexion==='bluetooth'?'selected':''}>Bluetooth</option><option value="zigbee" ${l.type_connexion==='zigbee'?'selected':''}>Zigbee</option><option value="zwave" ${l.type_connexion==='zwave'?'selected':''}>Z-Wave</option></select></div></div>
+      <div class="fsec">Connexion API (optionnel)</div>
+      <div class="row2"><div class="field"><label>URL de l'API / Bridge</label><input id="srrApi" value="${esc(l.api_url||'')}" placeholder="https://api.nuki.io/…"></div>
+      <div class="field"><label>Clé API / Token</label><input id="srrKey" type="password" value="${esc(l.api_key||'')}" placeholder="Clé secrète"></div></div>
+      <div class="field"><label>ID de l'appareil (chez le fabricant)</label><input id="srrDevId" value="${esc(l.device_id||'')}" placeholder="Ex: 123456789"></div>
+    </div><div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="srrSave">Enregistrer</button></div>`);
+  document.getElementById('srrSave').onclick=async()=>{
+    const nl={nom:$('#srrNom').value.trim(),bien_id:$('#srrBien').value,marque:$('#srrMarque').value,modele:$('#srrModele').value.trim(),
+      type_connexion:$('#srrType').value,api_url:$('#srrApi').value.trim(),api_key:$('#srrKey').value.trim(),device_id:$('#srrDevId').value.trim(),
+      statut:l.statut||'hors_ligne',batterie:l.batterie||100,code_actuel:l.code_actuel||'',dernier_acces:l.dernier_acces||null};
+    if(!nl.nom){toast('Nom requis');return;}
+    if(!nl.bien_id){toast('Associez la serrure à un bien');return;}
+    if(idx>=0)locks[idx]=nl;else locks.push(nl);
+    cfg.appareils=locks;await reglSet('serrures',cfg);fermer();toast('Serrure enregistrée');renderSerrures();
+  };
+}
+
+/* Appareils serrures — vue détaillée */
+async function renderSerrAppareils(){
+  await loadOpts('bien');
+  const cfg=await reglGet('serrures')||{};
+  const locks=cfg.appareils||[];
+  if(!locks.length){$("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Appareils</h3></div><div class="empty">Aucun appareil. Ajoutez une serrure depuis l'onglet "Serrures intelligentes".</div></div>`;return;}
+  const rows=locks.map((l,i)=>{
+    const online=l.statut==='en_ligne';
+    return `<tr>
+      <td>${online?'🟢':'🔴'} ${esc(l.nom)}</td>
+      <td>${esc(l.marque||'')} ${esc(l.modele||'')}</td>
+      <td>${esc(refName('bien',l.bien_id)||'—')}</td>
+      <td>${esc(l.type_connexion||'wifi')}</td>
+      <td>${l.batterie!=null?l.batterie+'%':'—'} ${l.batterie!=null&&l.batterie<20?'⚠️':''}</td>
+      <td style="font-family:monospace;font-weight:bold">${esc(l.code_actuel||'—')}</td>
+      <td>${l.dernier_acces?fdate(l.dernier_acces):'—'}</td>
+      <td><button class="btn o sm" data-saDet="${i}">Détails</button></td>
+    </tr>`;}).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Appareils connectés</h3></div>
+    <table><tr><th>Serrure</th><th>Modèle</th><th>Bien</th><th>Connexion</th><th>Batterie</th><th>Code</th><th>Dernier accès</th><th></th></tr>${rows}</table></div>`;
+  document.querySelectorAll('[data-saDet]').forEach(b=>b.onclick=()=>{
+    const l=locks[+b.dataset.saDet];
+    ouvrir(`<div class="h"><h3>${esc(l.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b" style="font-size:13px">
+        <div class="row2"><div><span class="muted">Marque</span><br>${esc(l.marque||'—')} ${esc(l.modele||'')}</div><div><span class="muted">Connexion</span><br>${esc(l.type_connexion||'wifi')}</div></div>
+        <div class="row2" style="margin-top:8px"><div><span class="muted">Bien</span><br>${esc(refName('bien',l.bien_id)||'—')}</div><div><span class="muted">Statut</span><br>${l.statut==='en_ligne'?'🟢 En ligne':'🔴 Hors ligne'}</div></div>
+        <div class="row2" style="margin-top:8px"><div><span class="muted">Batterie</span><br>${l.batterie||'—'}%</div><div><span class="muted">Code actuel</span><br><strong style="font-family:monospace;font-size:18px">${esc(l.code_actuel||'—')}</strong></div></div>
+        <div style="margin-top:8px"><span class="muted">Dernier accès</span><br>${l.dernier_acces?fdate(l.dernier_acces):'Jamais'}</div>
+        ${l.api_url?'<div style="margin-top:8px"><span class="muted">API</span><br><code style="font-size:11px">'+esc(l.api_url)+'</code></div>':''}
+        ${l.device_id?'<div style="margin-top:4px"><span class="muted">ID appareil</span><br><code>'+esc(l.device_id)+'</code></div>':''}
+      </div>`);
+  });
+}
+
+/* Historique des accès serrures */
+async function renderSerrHist(){
+  const cfg=await reglGet('serrures')||{};
+  const hist=cfg.historique||[];
+  const locks=cfg.appareils||[];
+  if(!hist.length){
+    // Générer un historique de démo basé sur les réservations
+    await loadOpts('reservation');
+    const resas=(state.opts.reservation||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee').slice(0,10);
+    const demoHist=[];
+    resas.forEach(r=>{
+      const lock=locks.find(l=>l.bien_id===r.bien_id);
+      if(lock){
+        demoHist.push({date:r.arrivee+'T15:00:00',serrure:lock.nom,action:'code_genere',code:lock.code_actuel||'----',voyageur:r.voyageur_id});
+        if(r.statut==='terminee'){
+          demoHist.push({date:r.depart+'T11:00:00',serrure:lock.nom,action:'code_expire',code:'',voyageur:r.voyageur_id});
+        }
+      }
+    });
+  }
+  const events=[
+    {icon:'🔑',label:'Code généré',color:'green'},
+    {icon:'🚪',label:'Porte déverrouillée',color:'blue'},
+    {icon:'🔒',label:'Porte verrouillée',color:'gray'},
+    {icon:'⏰',label:'Code expiré',color:'orange'},
+    {icon:'⚠️',label:'Échec d\'accès',color:'red'},
+    {icon:'🔋',label:'Batterie faible',color:'red'}
+  ];
+  const histRows=hist.length?hist.slice(-50).reverse().map(h=>`<tr>
+    <td>${fdate(h.date)}</td>
+    <td>${esc(h.serrure||'—')}</td>
+    <td>${events.find(e=>e.label.toLowerCase().includes((h.action||'').replace(/_/g,' ')))?.icon||'📌'} ${esc((h.action||'').replace(/_/g,' '))}</td>
+    <td style="font-family:monospace">${esc(h.code||'—')}</td>
+    <td>${esc(h.voyageur?refName('voyageur',h.voyageur):'—')}</td>
+  </tr>`).join(''):'<tr><td colspan="5" class="muted">Aucun événement enregistré. Les événements apparaîtront ici quand des serrures seront connectées et utilisées.</td></tr>';
+
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Historique des accès</h3></div>
+    <p class="phnote">Journal de tous les événements de serrures : génération de codes, déverrouillages, verrouillages, alertes batterie.</p>
+    <div style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">${events.map(e=>`<span class="pill ${e.color}" style="font-size:11px">${e.icon} ${e.label}</span>`).join('')}</div>
+    <table><tr><th>Date</th><th>Serrure</th><th>Action</th><th>Code</th><th>Voyageur</th></tr>${histRows}</table></div>`;
+}
 
 /* ========== FIN NOUVELLES FONCTIONNALITÉS ========== */
 
