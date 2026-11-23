@@ -488,10 +488,11 @@ if(location.hash.startsWith('#checkin=')){
     <p class="muted" style="margin:8px 0 16px">Remplissez ce formulaire avant votre arrivée pour accélérer votre accueil.</p>
     <div id="ciPub"><div class="center"><span class="spin"></span></div></div></div>`;
   (async()=>{
-    const {data,error}=await sb.from("checkin_online").select("*").eq("token",token).single();
+    /* Le voyageur n'atteint que sa fiche, par son lien (fonctions checkin_par_token / checkin_remplir). */
+    const {data:ciStatut,error}=await sb.rpc("checkin_par_token",{p_token:token});
     const box=document.getElementById("ciPub");
-    if(error||!data){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
-    if(data.statut==='rempli'){box.innerHTML='<p class="ok">✅ Vous avez déjà rempli ce formulaire. Merci et bon séjour !</p>';return;}
+    if(error||!ciStatut){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
+    if(ciStatut==='rempli'){box.innerHTML='<p class="ok">✅ Vous avez déjà rempli ce formulaire. Merci et bon séjour !</p>';return;}
     const f=(id,l,type,ph)=>`<div class="field"><label>${l}</label><input id="${id}" type="${type||'text'}" placeholder="${ph||''}"></div>`;
     box.innerHTML=`${f('ci_nom','Nom *','text','Votre nom de famille')}${f('ci_prenom','Prénom *','text','Votre prénom')}
       ${f('ci_email','Email','email','vous@exemple.com')}${f('ci_tel','Téléphone','tel','+33 6 ...')}
@@ -513,10 +514,9 @@ if(location.hash.startsWith('#checkin=')){
         nb_personnes:Number(document.getElementById("ci_nb").value)||null,
         vehicule:document.getElementById("ci_veh").value.trim()||null,
         plaque:document.getElementById("ci_plaq").value.trim()||null,
-        demandes_speciales:document.getElementById("ci_dem").value.trim()||null,
-        statut:'rempli',rempli_le:new Date().toISOString()};
-      const {error:e2}=await sb.from("checkin_online").update(upd).eq("token",token);
-      if(e2){document.getElementById("ciPubErr").textContent=e2.message;document.getElementById("ciPubSave").disabled=false;return;}
+        demandes_speciales:document.getElementById("ci_dem").value.trim()||null};
+      const {data:ciRes,error:e2}=await sb.rpc("checkin_remplir",{p_token:token,p_infos:upd});
+      if(e2||ciRes==='invalide'){document.getElementById("ciPubErr").textContent=e2?e2.message:"Lien invalide ou expiré.";document.getElementById("ciPubSave").disabled=false;return;}
       box.innerHTML='<p class="ok" style="text-align:center;font-size:16px;padding:20px 0">✅ Merci ! Vos informations ont été transmises.<br>Bon voyage et à bientôt !</p>';
     };
   })();
