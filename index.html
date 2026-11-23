@@ -5785,8 +5785,8 @@ document.addEventListener('keydown',e=>{
 /* ---------- MESSAGES RÉCURRENTS ---------- */
 async function renderMsgRecurrents(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts('bien');
-  const cfg=await reglGet('msg_recurrents')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('msg_recurrents')||{};}catch(e){cfg={};};
   const rules=cfg.rules||[];
   const joursNoms=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const rulesHtml=rules.length?rules.map((r,i)=>`<tr>
@@ -5831,7 +5831,7 @@ function openMsgRecForm(rules,idx,cfg){
 /* ---------- CAMPAGNES RE-ENGAGEMENT ---------- */
 async function renderCampagnes(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const cfg=await reglGet('campagnes_reengage')||{};
+  let cfg;try{cfg=await reglGet('campagnes_reengage')||{};}catch(e){cfg={};};
   const camps=cfg.campagnes||[];
   const campsHtml=camps.length?camps.map((c,i)=>`<tr>
     <td>${esc(c.nom||'')}</td>
@@ -5870,8 +5870,8 @@ function openCampForm(camps,idx,cfg){
 /* ---------- MINIMUM NUITS DYNAMIQUE ---------- */
 async function renderMinNuitsDyn(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts('bien');
-  const cfg=await reglGet('min_nuits_dyn')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('min_nuits_dyn')||{};}catch(e){cfg={};};
   const rules=cfg.rules||[];
   const rulesHtml=rules.length?rules.map((r,i)=>`<tr>
     <td>${esc(refName('bien',r.bien_id)||'Tous')}</td>
@@ -5915,8 +5915,8 @@ function openMinNuitsForm(rules,idx,cfg){
 /* ---------- GROUPES D'ANNONCES ---------- */
 async function renderGroupesAnnonces(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts('bien');
-  const cfg=await reglGet('groupes_annonces')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('groupes_annonces')||{};}catch(e){cfg={};};
   const groups=cfg.groups||[];
   const biens=state.opts.bien||[];
   const grpHtml=groups.length?groups.map((g,i)=>{
@@ -5953,7 +5953,7 @@ function openGroupeForm(groups,idx,cfg,biens){
 /* ---------- SEO & SCHEMA.ORG ---------- */
 async function renderSeoConfig(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const cfg=await reglGet('seo')||{};
+  let cfg;try{cfg=await reglGet('seo')||{};}catch(e){cfg={};};
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>SEO & Référencement</h3></div>
     <p class="phnote">Optimisez le référencement de votre moteur de réservation directe sur Google.</p>
     <div style="padding:0 16px 16px">
@@ -5983,8 +5983,8 @@ async function renderSeoConfig(){
 /* ---------- GUIDEBOOK / LIVRET D'ACCUEIL ---------- */
 async function renderGuidebook(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts('bien');
-  const cfg=await reglGet('guidebook')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('guidebook')||{};}catch(e){cfg={};};
   const biens=state.opts.bien||[];
   const bienSel=cfg.bien_selectionne||biens[0]?.id||'';
   const guide=cfg.guides?.[bienSel]||{sections:[]};
@@ -6044,8 +6044,8 @@ function openGbSectionForm(sections,idx,cfg,bienSel){
 /* ---------- SERRURES CONNECTÉES WiFi ---------- */
 async function renderSerrures(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts('bien');
-  const cfg=await reglGet('serrures')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const locks=cfg.appareils||[];
   const biens=state.opts.bien||[];
   const statusIcon=s=>s==='en_ligne'?'🟢':s==='hors_ligne'?'🔴':'🟡';
@@ -6152,8 +6152,8 @@ function openSerrForm(locks,idx,cfg){
 
 /* Appareils serrures — vue détaillée */
 async function renderSerrAppareils(){
-  await loadOpts('bien');
-  const cfg=await reglGet('serrures')||{};
+  try{await loadOpts('bien');}catch(e){}
+  let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const locks=cfg.appareils||[];
   if(!locks.length){$("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Appareils</h3></div><div class="empty">Aucun appareil. Ajoutez une serrure depuis l'onglet "Serrures intelligentes".</div></div>`;return;}
   const rows=locks.map((l,i)=>{
@@ -6186,7 +6186,7 @@ async function renderSerrAppareils(){
 
 /* Historique des accès serrures */
 async function renderSerrHist(){
-  const cfg=await reglGet('serrures')||{};
+  let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const hist=cfg.historique||[];
   const locks=cfg.appareils||[];
   if(!hist.length){
