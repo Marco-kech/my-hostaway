@@ -5785,7 +5785,7 @@ document.addEventListener('keydown',e=>{
 /* ---------- MESSAGES RÉCURRENTS ---------- */
 async function renderMsgRecurrents(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('msg_recurrents')||{};}catch(e){cfg={};};
   const rules=cfg.rules||[];
   const joursNoms=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -5870,7 +5870,7 @@ function openCampForm(camps,idx,cfg){
 /* ---------- MINIMUM NUITS DYNAMIQUE ---------- */
 async function renderMinNuitsDyn(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('min_nuits_dyn')||{};}catch(e){cfg={};};
   const rules=cfg.rules||[];
   const rulesHtml=rules.length?rules.map((r,i)=>`<tr>
@@ -5915,7 +5915,7 @@ function openMinNuitsForm(rules,idx,cfg){
 /* ---------- GROUPES D'ANNONCES ---------- */
 async function renderGroupesAnnonces(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('groupes_annonces')||{};}catch(e){cfg={};};
   const groups=cfg.groups||[];
   const biens=state.opts.bien||[];
@@ -5983,7 +5983,7 @@ async function renderSeoConfig(){
 /* ---------- GUIDEBOOK / LIVRET D'ACCUEIL ---------- */
 async function renderGuidebook(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('guidebook')||{};}catch(e){cfg={};};
   const biens=state.opts.bien||[];
   const bienSel=cfg.bien_selectionne||biens[0]?.id||'';
@@ -6044,7 +6044,7 @@ function openGbSectionForm(sections,idx,cfg,bienSel){
 /* ---------- SERRURES CONNECTÉES WiFi ---------- */
 async function renderSerrures(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const locks=cfg.appareils||[];
   const biens=state.opts.bien||[];
@@ -6152,7 +6152,7 @@ function openSerrForm(locks,idx,cfg){
 
 /* Appareils serrures — vue détaillée */
 async function renderSerrAppareils(){
-  try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const locks=cfg.appareils||[];
   if(!locks.length){$("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Appareils</h3></div><div class="empty">Aucun appareil. Ajoutez une serrure depuis l'onglet "Serrures intelligentes".</div></div>`;return;}
