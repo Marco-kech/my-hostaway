@@ -922,6 +922,7 @@ const RUBRIQUES=[
     ["ical","Synchronisation iCal",{icalsync:1}],
     ["cronhist","Historique tâches auto",{cronhist:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
+    ["cmd","Commandes",{cgcommandes:1}],
     ["presta","Prestations",{m:"prestations"}],
     ["part","Partenaires",{m:"partenaires"}],
     ["serv","Services internes",{m:"services_internes"}],
@@ -1456,6 +1457,7 @@ function goRub(rk,sk){
   if(t.cgoptions)return renderCgOptions();
   if(t.cgcomptes)return renderCgComptes();
   if(t.cgliens)return renderCgLiens();
+  if(t.cgcommandes)return renderCgCommandes();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -3151,6 +3153,104 @@ async function renderCgOptions(){
     if(ok){toast("Enregistré");logAction('modification','bien_prestation',b.id,'Options par bien');renderCgOptions();}
   };
   $("#cgReset").onclick=async()=>{ if(await ecrire([])){toast("Réglage par défaut rétabli");renderCgOptions();} };
+}
+
+/* ---------- Conciergerie : commandes et finances ---------- */
+const CG_ST={attente:["En attente","gold"],confirme:["Confirmée","green"],fait:["Réalisée","blue"],venu:["Venu","blue"],refuse:["Refusée","red"],annule:["Annulée","gray"]};
+const CG_OK=["confirme","fait","venu"];
+async function renderCgCommandes(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [rc,rb,rr,rv,rpa,rpr,rp]=await Promise.all([
+    sb.from("commande").select("*").order("date",{ascending:false}),
+    sb.from("bien").select("id,nom,proprietaire_id").order("nom"),
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut").order("arrivee",{ascending:false}),
+    sb.from("voyageur").select("id,nom"),
+    sb.from("partenaire").select("id,nom"),
+    sb.from("proprietaire").select("id,nom"),
+    sb.from("prestation").select("id,nom,type,icone,unite,partenaire_id,proprietaire_id,actif").order("nom")]);
+  const err=rc.error||rb.error||rr.error||rv.error||rpa.error||rpr.error||rp.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const cmds=rc.data||[],biens=rb.data||[],resas=rr.data||[],voys=rv.data||[],parts=rpa.data||[],props=rpr.data||[],prestas=rp.data||[];
+  const st=state.cgCmd||(state.cgCmd={filtre:"attente",mois:new Date().toISOString().slice(0,7)});
+  const par=(l,id)=>l.find(x=>x.id===id);
+  const nb=n=>Number(n)||0;
+  const attente=cmds.filter(c=>c.statut==="attente").length;
+  const visibles=cmds.filter(c=>st.filtre==="attente"?c.statut==="attente":st.filtre==="ok"?CG_OK.includes(c.statut):true);
+  const duMois=cmds.filter(c=>CG_OK.includes(c.statut)&&(c.date||"").slice(0,7)===st.mois);
+  const som=k=>duMois.reduce((t,c)=>t+nb(c[k]),0);
+  const typeLib={externe:["Partenaire","gold"],interne:["Propriétaire","blue"],dpm:["Conciergerie","green"]};
+  const lignes=visibles.map(c=>{
+    const p=par(prestas,c.prestation_id)||{},b=par(biens,c.bien_id),r=par(resas,c.reservation_id),v=r?par(voys,r.voyageur_id):null;
+    const fournisseur=p.type==="externe"?(par(parts,p.partenaire_id)||{}).nom:p.type==="interne"?(par(props,p.proprietaire_id)||{}).nom:"";
+    const tl=typeLib[p.type]||["—","gray"], sl=CG_ST[c.statut]||[c.statut,"gray"];
+    const act=c.statut==="attente"?`<button class="btn sm cgcSt" data-id="${c.id}" data-s="confirme">Confirmer</button> <button class="btn o sm cgcSt" data-id="${c.id}" data-s="refuse">Refuser</button>`
+      :c.statut==="confirme"?`<button class="btn o sm cgcSt" data-id="${c.id}" data-s="fait">Marquer réalisée</button> <button class="btn o sm cgcSt" data-id="${c.id}" data-s="annule">Annuler</button>`:"";
+    return `<tr><td>${esc(p.icone||"")} <b>${esc(p.nom||"—")}</b> <span class="pill ${tl[1]}">${tl[0]}</span>${fournisseur?`<br><span class="muted" style="font-size:11px">${esc(fournisseur)}</span>`:""}${c.note?`<br><span class="muted" style="font-size:11px">📝 ${esc(c.note)}</span>`:""}${c.source==="manuel"?`<br><span class="muted" style="font-size:11px">saisie par l'équipe</span>`:""}</td>
+      <td>${esc(b?b.nom:"—")}${v?`<br><span class="muted" style="font-size:11px">${esc(v.nom||"")}</span>`:""}</td>
+      <td style="white-space:nowrap">${fdate(c.date)}${c.heure?" · "+esc(c.heure):""}</td><td style="text-align:right">${c.quantite}</td>
+      <td style="text-align:right">${money(c.montant)}</td><td style="text-align:right">${money(c.part_conciergerie)}</td><td style="text-align:right">${money(c.reversement)}</td><td style="text-align:right">${money(c.part_proprietaire)}</td>
+      <td><span class="pill ${sl[1]}">${sl[0]}</span></td>
+      <td><select class="cgcReg" data-id="${c.id}" style="font-size:12px;padding:4px 6px"><option value="non" ${c.reglement==="non"?"selected":""}>Non réglé</option><option value="note" ${c.reglement==="note"?"selected":""}>Sur la note</option><option value="paye" ${c.reglement==="paye"?"selected":""}>Payé</option></select></td>
+      <td style="white-space:nowrap">${act}</td></tr>`;}).join("");
+  const grp=(cle,liste)=>{const m={};duMois.forEach(c=>{const p=par(prestas,c.prestation_id)||{};const id=cle(p,c);if(!id)return;const g=m[id]||(m[id]={nom:(par(liste,id)||{}).nom||"—",n:0,ventes:0,comm:0,rev:0,pp:0});g.n++;g.ventes+=nb(c.montant);g.comm+=nb(c.part_conciergerie);g.rev+=nb(c.reversement);g.pp+=nb(c.part_proprietaire);});return Object.values(m).sort((a,b)=>a.nom.localeCompare(b.nom));};
+  const gPart=grp(p=>p.type==="externe"?p.partenaire_id:null,parts);
+  const gProp=grp((p,c)=>{const b=par(biens,c.bien_id);return b?b.proprietaire_id:null;},props);
+  const seg=(k,l)=>`<button class="btn ${st.filtre===k?"":"o"} sm cgcF" data-f="${k}">${l}</button>`;
+  $("#content").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Ventes confirmées</div><div class="v" style="font-size:22px">${money(som("montant"))}</div><div class="s">${duMois.length} commande(s) sur le mois</div></div>
+      <div class="kpi" style="border-left:3px solid var(--dpm-vert)"><div class="l">Part conciergerie</div><div class="v" style="font-size:22px;color:var(--dpm-vert)">${money(som("part_conciergerie"))}</div><div class="s">votre revenu sur les prestations</div></div>
+      <div class="kpi"><div class="l">À reverser aux partenaires</div><div class="v" style="font-size:22px">${money(som("reversement"))}</div><div class="s">net dû aux prestataires</div></div>
+      <div class="kpi"><div class="l">Part des propriétaires</div><div class="v" style="font-size:22px">${money(som("part_proprietaire"))}</div><div class="s">à porter sur leurs relevés</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Commandes</h3>${attente?` <span class="pill gold">${attente} à traiter</span>`:""}<span class="sp"></span>
+      ${seg("attente","À traiter")} ${seg("ok","Confirmées")} ${seg("toutes","Toutes")}
+      <input type="month" id="cgcMois" value="${st.mois}" title="Mois des chiffres ci-dessus" style="margin-left:8px">
+      <button class="btn g sm" id="cgcAdd" style="margin-left:8px">+ Saisir une commande</button></div>
+      <span class="err" id="cgcErr" style="display:block;padding:0 16px"></span>
+      ${visibles.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Bien · voyageur</th><th>Date</th><th style="text-align:right">Qté</th><th style="text-align:right">Montant</th><th style="text-align:right">Conciergerie</th><th style="text-align:right">Partenaire</th><th style="text-align:right">Propriétaire</th><th>Statut</th><th>Règlement</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">${st.filtre==="attente"?"Aucune commande à traiter.":"Aucune commande."}</div>`}</div>
+    <div class="panel"><div class="phead"><h3>Répartition du mois</h3></div>
+      <p class="phnote">Commandes confirmées ou réalisées dont la date tombe dans le mois choisi.</p>
+      ${gPart.length||gProp.length?`<div style="overflow:auto"><table><thead><tr><th>Partenaire</th><th style="text-align:right">Commandes</th><th style="text-align:right">Ventes</th><th style="text-align:right">Part conciergerie</th><th style="text-align:right">À lui reverser</th></tr></thead><tbody>
+        ${gPart.map(g=>`<tr><td>${esc(g.nom)}</td><td style="text-align:right">${g.n}</td><td style="text-align:right">${money(g.ventes)}</td><td style="text-align:right">${money(g.comm)}</td><td style="text-align:right"><b>${money(g.rev)}</b></td></tr>`).join("")||`<tr><td colspan="5" class="muted">Aucune commande partenaire ce mois-ci.</td></tr>`}</tbody></table>
+        <table style="margin-top:14px"><thead><tr><th>Propriétaire (du bien)</th><th style="text-align:right">Commandes</th><th style="text-align:right">Ventes</th><th style="text-align:right">Sa part</th></tr></thead><tbody>
+        ${gProp.map(g=>`<tr><td>${esc(g.nom)}</td><td style="text-align:right">${g.n}</td><td style="text-align:right">${money(g.ventes)}</td><td style="text-align:right"><b>${money(g.pp)}</b></td></tr>`).join("")||`<tr><td colspan="4" class="muted">Aucun bien rattaché à un propriétaire dans ces commandes.</td></tr>`}</tbody></table></div>`
+      :`<div class="empty">Aucune commande confirmée sur ce mois.</div>`}</div>`;
+  document.querySelectorAll(".cgcF").forEach(b=>b.onclick=()=>{st.filtre=b.dataset.f;renderCgCommandes();});
+  $("#cgcMois").onchange=e=>{if(e.target.value){st.mois=e.target.value;renderCgCommandes();}};
+  const maj=async(id,patch,msg)=>{
+    $("#cgcErr").textContent="";
+    const {data,error}=await sb.from("commande").update(patch).eq("id",id).select("id");
+    if(error){$("#cgcErr").textContent=error.message;return;}
+    if(!data||!data.length){$("#cgcErr").textContent="Modification refusée.";return;}
+    toast(msg);logAction('modification','commande',id,msg);renderCgCommandes();};
+  document.querySelectorAll(".cgcSt").forEach(b=>b.onclick=()=>maj(b.dataset.id,{statut:b.dataset.s},"Commande : "+(CG_ST[b.dataset.s]||[b.dataset.s])[0].toLowerCase()));
+  document.querySelectorAll(".cgcReg").forEach(s=>s.onchange=()=>maj(s.dataset.id,{reglement:s.value},"Règlement mis à jour"));
+  $("#cgcAdd").onclick=()=>{
+    if(!biens.length){$("#cgcErr").textContent="Ajoutez d'abord un bien.";return;}
+    const optR=bid=>`<option value="">— sans réservation —</option>`+resas.filter(r=>r.bien_id===bid&&r.statut!=="annulee").map(r=>`<option value="${r.id}">${esc((par(voys,r.voyageur_id)||{}).nom||"Voyageur")} · ${fdate(r.arrivee)} → ${fdate(r.depart)}</option>`).join("");
+    ouvrir(`<div class="h"><h3>Saisir une commande</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted" style="margin:0 0 10px">Pour une demande reçue par téléphone ou message. Le montant, la commission et le reversement sont calculés automatiquement à partir de la fiche de la prestation.</p>
+        <div class="field"><label>Bien *</label><select id="cgaBien">${biens.map(b=>`<option value="${b.id}">${esc(b.nom||"—")}</option>`).join("")}</select></div>
+        <div class="field"><label>Réservation (voyageur)</label><select id="cgaResa">${optR(biens[0].id)}</select></div>
+        <div class="field"><label>Prestation *</label><select id="cgaPresta">${prestas.filter(p=>p.actif).map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join("")}</select></div>
+        <div class="row2"><div class="field"><label>Date *</label><input type="date" id="cgaDate" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>Heure</label><input type="time" id="cgaHeure"></div></div>
+        <div class="field"><label>Quantité</label><input type="number" id="cgaQte" min="1" max="99" value="1"></div>
+        <div class="field"><label>Note</label><textarea id="cgaNote" rows="2"></textarea></div>
+        <div class="err" id="cgaErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="cgaOk">Enregistrer</button></div>`);
+    $("#cgaBien").onchange=e=>{$("#cgaResa").innerHTML=optR(e.target.value);};
+    $("#cgaOk").onclick=async()=>{
+      if(!$("#cgaPresta").value){$("#cgaErr").textContent="Créez d'abord une prestation active.";return;}
+      const jour=$("#cgaDate").value;
+      if(!jour){$("#cgaErr").textContent="La date est obligatoire.";return;}
+      $("#cgaOk").disabled=true;
+      const {error}=await sb.rpc("cg_commander_equipe",{p_bien:$("#cgaBien").value,p_reservation:$("#cgaResa").value||null,p_prestation:$("#cgaPresta").value,
+        p_date:jour,p_heure:$("#cgaHeure").value||null,p_quantite:Number($("#cgaQte").value)||1,p_note:$("#cgaNote").value.trim()||null});
+      if(error){$("#cgaOk").disabled=false;$("#cgaErr").textContent=error.message;return;}
+      fermer();toast("Commande enregistrée");st.filtre="ok";st.mois=jour.slice(0,7);renderCgCommandes();};
+  };
 }
 
 async function renderCgLiens(){
