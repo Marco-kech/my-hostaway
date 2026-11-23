@@ -5032,6 +5032,15 @@ async function genererReleve(pid,deb,fin,nom){
   (deps||[]).forEach(d=>{const m=Number(d.montant||0);const sup=d.type==="supplement";
     if(sup){brut+=m;lignes.push({libelle:"Supplément : "+(d.libelle||d.categorie||''),montant_brut:m,commission:0,montant_net:m});}
     else{frais+=m;lignes.push({libelle:"Dépense : "+(d.libelle||d.categorie||''),montant_brut:0,commission:0,montant_net:-m});}});
+  /* Conciergerie : part du propriétaire sur les prestations confirmées ou réalisées dans ses biens (date dans la période). */
+  const {data:cmds,error:e4}=await sb.from("commande").select("date,quantite,part_proprietaire,statut,bien_id,prestation_id").in("bien_id",biensProp).in("statut",["confirme","fait","venu"]).gte("date",deb).lte("date",fin).order("date");
+  if(e4)return {error:e4.message};
+  const cmdsPart=(cmds||[]).filter(c=>Number(c.part_proprietaire||0)>0);
+  if(cmdsPart.length){
+    const {data:prs}=await sb.from("prestation").select("id,nom").in("id",[...new Set(cmdsPart.map(c=>c.prestation_id))]);
+    cmdsPart.forEach(c=>{const m=Number(c.part_proprietaire);const pn=((prs||[]).find(x=>x.id===c.prestation_id)||{}).nom||"prestation";
+      brut+=m;lignes.push({libelle:"Prestation : "+pn+(c.quantite>1?" × "+c.quantite:"")+" · "+fdate(c.date)+" (votre part)",montant_brut:m,commission:0,montant_net:m});});
+  }
   const net=brut-commission-frais;
   const {data:rel,error}=await sb.from("releve_proprietaire").insert({tenant_id:state.tenant.id,proprietaire_id:pid,periode_debut:deb,periode_fin:fin,montant_brut:brut,commission,frais,montant_net:net,statut:"brouillon",nom:nom||("Relevé "+prop.nom),cree_par:state.user.email}).select().single();
   if(error)return {error:error.message};
@@ -5107,7 +5116,7 @@ function releveForm(pre){
       <div class="field"><label>Propriétaire *</label><select id="rvProp"><option value="">—</option>${propOpts}</select></div>
       <div class="row3"><div class="field"><label>Début *</label><input id="rvDeb" type="date" value="${pre.deb||isoD(first)}"></div>
       <div class="field"><label>Fin *</label><input id="rvFin" type="date" value="${pre.fin||isoD(new Date())}"></div></div>
-      <p class="muted" style="font-size:12px">Le relevé reprend les réservations dont le départ tombe dans la période, la commission du propriétaire, ses dépenses et ses suppléments. Il est créé en brouillon.</p>
+      <p class="muted" style="font-size:12px">Le relevé reprend les réservations dont le départ tombe dans la période, la commission du propriétaire, ses dépenses, ses suppléments et sa part sur les prestations de conciergerie confirmées. Il est créé en brouillon.</p>
       <div class="err" id="rvErr"></div></div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="rvGen">Générer le relevé</button></div>`);
   $("#rvGen").onclick=async()=>{
