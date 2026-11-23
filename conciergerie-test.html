@@ -925,7 +925,8 @@ const RUBRIQUES=[
     ["presta","Prestations",{m:"prestations"}],
     ["part","Partenaires",{m:"partenaires"}],
     ["serv","Services internes",{m:"services_internes"}],
-    ["opt","Options par bien",{cgoptions:1}]]},
+    ["opt","Options par bien",{cgoptions:1}],
+    ["cpt","Comptes",{cgcomptes:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
@@ -1452,6 +1453,7 @@ function goRub(rk,sk){
   if(t.statsbien)return renderStatsBien();
   if(t.scoreaso)return renderScoreASO();
   if(t.cgoptions)return renderCgOptions();
+  if(t.cgcomptes)return renderCgComptes();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -3147,6 +3149,46 @@ async function renderCgOptions(){
     if(ok){toast("Enregistré");logAction('modification','bien_prestation',b.id,'Options par bien');renderCgOptions();}
   };
   $("#cgReset").onclick=async()=>{ if(await ecrire([])){toast("Réglage par défaut rétabli");renderCgOptions();} };
+}
+
+async function renderCgComptes(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [rc,rpa,rpr]=await Promise.all([
+    sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
+    sb.from("partenaire").select("id,nom").order("nom"),
+    sb.from("proprietaire").select("id,nom").order("nom")]);
+  const err=rc.error||rpa.error||rpr.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const comptes=rc.data||[],parts=rpa.data||[],props=rpr.data||[];
+  const libRole={partenaire:"Partenaire",proprietaire:"Propriétaire"};
+  const attente=comptes.filter(c=>c.statut==="en_attente").length;
+  const infos=c=>{const i=c.inscription||{};const t=Object.keys(i).filter(k=>i[k]!=null&&i[k]!==""&&typeof i[k]!=="object").map(k=>`${esc(k)} : ${esc(i[k])}`).join(" · ");
+    return t?`<br><span class="muted" style="font-size:11px">${t}</span>`:"";};
+  const lignes=comptes.map(c=>{
+    const liste=c.role==="partenaire"?parts:props, cur=c.role==="partenaire"?c.partenaire_id:c.proprietaire_id;
+    const sel=`<select class="cgFiche" data-id="${c.id}" ${c.statut==="actif"?"disabled":""}><option value="">— choisir la fiche —</option>${liste.map(x=>`<option value="${x.id}" ${x.id===cur?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select>`;
+    const act=c.statut==="actif"
+      ?`<button class="btn o sm cgOff" data-id="${c.id}">Désactiver</button>`
+      :`<button class="btn sm cgOn" data-id="${c.id}">${c.statut==="desactive"?"Réactiver":"Valider"}</button>${c.statut==="en_attente"?` <button class="btn o sm cgOff" data-id="${c.id}">Refuser</button>`:""}`;
+    return `<tr><td><b>${esc(c.nom||"—")}</b>${infos(c)}</td><td>${esc(c.email||"—")}</td><td>${esc(libRole[c.role]||c.role)}</td>
+      <td>${fdate((c.cree_le||"").slice(0,10))}</td><td>${sel}</td><td>${pill(c.statut==="desactive"?"inactif":c.statut)}</td><td style="white-space:nowrap">${act}</td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Comptes partenaires et propriétaires</h3><span class="sp"></span>${attente?`<span class="pill gold">${attente} en attente</span>`:""}</div>
+    <p class="phnote">Les partenaires et les propriétaires demandent leur accès depuis leur propre interface. Ici, l'administrateur rattache chaque demande à la bonne fiche puis la valide. Un compte validé ne voit que ce qui concerne sa fiche ; il n'a aucun accès à My Hostaway.</p>
+    <span class="err" id="cgcErr" style="display:block;padding:0 16px"></span>
+    ${comptes.length?`<div style="overflow:auto"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Demande du</th><th>Rattaché à la fiche</th><th>Statut</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+    :`<div class="empty">Aucune demande de compte pour l'instant.</div>`}</div>`;
+  const maj=async(id,patch,msg)=>{
+    $("#cgcErr").textContent="";
+    const {data,error}=await sb.from("cg_compte").update(patch).eq("id",id).select("id");
+    if(error){$("#cgcErr").textContent=error.message;return;}
+    if(!data||!data.length){$("#cgcErr").textContent="Action réservée à l'administrateur du compte.";return;}
+    toast(msg);logAction('modification','cg_compte',id,msg);renderCgComptes();};
+  document.querySelectorAll(".cgOn").forEach(b=>b.onclick=()=>{
+    const c=comptes.find(x=>x.id===b.dataset.id), f=document.querySelector(`.cgFiche[data-id="${c.id}"]`).value;
+    if(!f){$("#cgcErr").textContent="Choisissez d'abord la fiche à laquelle rattacher ce compte.";return;}
+    const patch=c.role==="partenaire"?{statut:"actif",partenaire_id:f,proprietaire_id:null}:{statut:"actif",proprietaire_id:f,partenaire_id:null};
+    maj(c.id,patch,"Compte validé");});
+  document.querySelectorAll(".cgOff").forEach(b=>b.onclick=()=>maj(b.dataset.id,{statut:"desactive"},"Compte désactivé"));
 }
 
 async function renderScoreASO(){
