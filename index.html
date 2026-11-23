@@ -3315,11 +3315,12 @@ async function renderCgComptes(){
     return `<tr><td><b>${esc(c.nom||"—")}</b>${infos(c)}</td><td>${esc(c.email||"—")}</td><td>${esc(libRole[c.role]||c.role)}</td>
       <td>${fdate((c.cree_le||"").slice(0,10))}</td><td>${sel}</td><td>${pill(c.statut==="desactive"?"inactif":c.statut)}</td><td style="white-space:nowrap">${act}</td></tr>`;}).join("");
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Comptes partenaires et propriétaires</h3><span class="sp"></span>${attente?`<span class="pill gold">${attente} en attente</span>`:""}</div>
-    <p class="phnote">Les partenaires et les propriétaires demandent leur accès depuis leur propre interface. Ici, l'administrateur rattache chaque demande à la bonne fiche puis la valide. Un compte validé ne voit que ce qui concerne sa fiche ; il n'a aucun accès à My Hostaway.<br>Adresse à donner aux partenaires : <a href="partenaire/" target="_blank" id="cgLienPart"></a></p>
+    <p class="phnote">Les partenaires et les propriétaires demandent leur accès depuis leur propre interface. Ici, l'administrateur rattache chaque demande à la bonne fiche puis la valide. Un compte validé ne voit que ce qui concerne sa fiche ; il n'a aucun accès à My Hostaway.<br>Adresse à donner aux partenaires : <a href="partenaire/" target="_blank" id="cgLienPart"></a><br>Adresse à donner aux propriétaires : <a href="proprietaire/" target="_blank" id="cgLienProp"></a></p>
     <span class="err" id="cgcErr" style="display:block;padding:0 16px"></span>
     ${comptes.length?`<div style="overflow:auto"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Demande du</th><th>Rattaché à la fiche</th><th>Statut</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
     :`<div class="empty">Aucune demande de compte pour l'instant.</div>`}</div>`;
   $("#cgLienPart").textContent=$("#cgLienPart").href;
+  $("#cgLienProp").textContent=$("#cgLienProp").href;
   const maj=async(id,patch,msg)=>{
     $("#cgcErr").textContent="";
     const {data,error}=await sb.from("cg_compte").update(patch).eq("id",id).select("id");
