@@ -923,6 +923,7 @@ const RUBRIQUES=[
     ["cronhist","Historique tâches auto",{cronhist:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
     ["cmd","Commandes",{cgcommandes:1}],
+    ["stat","Statistiques",{cgstats:1}],
     ["msg","Messages",{cgmessages:1}],
     ["presta","Prestations",{m:"prestations"}],
     ["part","Partenaires",{m:"partenaires"}],
@@ -1460,6 +1461,7 @@ function goRub(rk,sk){
   if(t.cgliens)return renderCgLiens();
   if(t.cgcommandes)return renderCgCommandes();
   if(t.cgmessages)return renderCgMessages();
+  if(t.cgstats)return renderCgStats();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -3308,6 +3310,79 @@ async function renderCgMessages(){
   $("#cgmTxt").onkeydown=e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();envoyer();}};
   /* Ouvrir un fil marque comme lus les messages reçus. */
   if(nonLus(sel.id)){ await sb.from("cg_message").update({lu:true}).eq("compte_id",sel.id).eq("de_equipe",false).eq("lu",false); }
+}
+
+/* ---------- Conciergerie : synthèse et statistiques des prestations ---------- */
+async function renderCgStats(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [rc,rb,rpa,rpr,rp]=await Promise.all([
+    sb.from("commande").select("*").order("date"),
+    sb.from("bien").select("id,nom,proprietaire_id"),
+    sb.from("partenaire").select("id,nom"),
+    sb.from("proprietaire").select("id,nom"),
+    sb.from("prestation").select("id,nom,type,partenaire_id,proprietaire_id")]);
+  const err=rc.error||rb.error||rpa.error||rpr.error||rp.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const cmds=rc.data||[],biens=rb.data||[],parts=rpa.data||[],props=rpr.data||[],prestas=rp.data||[];
+  const auj=new Date(), st=state.cgStat||(state.cgStat={mode:"mois",ref:auj.toISOString().slice(0,7)});
+  const nb=n=>Number(n)||0, par=(l,id)=>l.find(x=>x.id===id);
+  const cle=st.mode==="annee"?st.ref.slice(0,4):st.ref;
+  const dans=c=>(c.date||"").slice(0,cle.length)===cle;
+  const periode=cmds.filter(dans), ok=periode.filter(c=>CG_OK.includes(c.statut));
+  const som=(l,k)=>l.reduce((t,c)=>t+nb(c[k]),0);
+  const ventes=som(ok,"montant");
+  const libPeriode=st.mode==="annee"?"année "+cle:new Date(cle+"-01T00:00:00").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  /* 12 mois glissants terminés par le mois de référence */
+  const fin=new Date((st.mode==="annee"?cle+"-12":cle)+"-01T00:00:00"), mois=[];
+  for(let i=11;i>=0;i--){const d=new Date(fin.getFullYear(),fin.getMonth()-i,1);const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    const l=cmds.filter(c=>CG_OK.includes(c.statut)&&(c.date||"").slice(0,7)===k);mois.push({k,lib:d.toLocaleDateString("fr-FR",{month:"short"}),n:l.length,v:som(l,"montant"),pc:som(l,"part_conciergerie")});}
+  const maxV=Math.max(1,...mois.map(m=>m.v));
+  const barres=mois.map(m=>`<div style="flex:1;min-width:0;text-align:center" title="${esc(m.k)} : ${m.n} commande(s), ${money(m.v)}, dont conciergerie ${money(m.pc)}">
+      <div style="height:120px;display:flex;align-items:flex-end;justify-content:center"><div style="width:70%;background:var(--line);border-radius:4px 4px 0 0;height:${Math.round(m.v/maxV*100)}%;min-height:${m.v?3:0}px;display:flex;align-items:flex-end"><div style="width:100%;background:var(--brand);border-radius:0;height:${m.v?Math.round(m.pc/m.v*100):0}%"></div></div></div>
+      <div class="muted" style="font-size:11px;margin-top:4px">${esc(m.lib)}</div><div style="font-size:11px">${m.n||""}</div></div>`).join("");
+  const grp=(cleDe,nomDe)=>{const m={};ok.forEach(c=>{const p=par(prestas,c.prestation_id)||{};const id=cleDe(p,c);if(!id)return;const g=m[id]||(m[id]={nom:nomDe(id,p),n:0,q:0,v:0,pc:0,rev:0,pp:0});g.n++;g.q+=nb(c.quantite);g.v+=nb(c.montant);g.pc+=nb(c.part_conciergerie);g.rev+=nb(c.reversement);g.pp+=nb(c.part_proprietaire);});return Object.values(m).sort((a,b)=>b.v-a.v);};
+  const gPresta=grp((p,c)=>c.prestation_id,(id,p)=>p.nom||"—");
+  const gPart=grp(p=>p.type==="externe"?p.partenaire_id:null,id=>(par(parts,id)||{}).nom||"—");
+  const gBien=grp((p,c)=>c.bien_id,id=>(par(biens,id)||{}).nom||"—");
+  const gProp=grp((p,c)=>(par(biens,c.bien_id)||{}).proprietaire_id,id=>(par(props,id)||{}).nom||"—");
+  const typeLib={externe:"Partenaires",interne:"Services des propriétaires",dpm:"Conciergerie"};
+  const gType=grp(p=>p.type,id=>typeLib[id]||id);
+  const tab=(titre,l,cols)=>`<div class="panel"><div class="phead"><h3>${titre}</h3></div>${l.length?`<div style="overflow:auto"><table><thead><tr><th>${cols[0]}</th><th style="text-align:right">Commandes</th><th style="text-align:right">Ventes</th><th style="text-align:right">${cols[1]}</th></tr></thead><tbody>${l.map(g=>`<tr><td>${esc(g.nom)}</td><td style="text-align:right">${g.n}</td><td style="text-align:right">${money(g.v)}</td><td style="text-align:right"><b>${money(g[cols[2]])}</b></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Rien sur la période.</div>`}</div>`;
+  const statuts=Object.keys(CG_ST).map(k=>{const n=periode.filter(c=>c.statut===k).length;const pct=periode.length?Math.round(n/periode.length*100):0;
+    return `<div style="display:flex;align-items:center;gap:8px;margin:5px 0"><span class="pill ${CG_ST[k][1]}" style="min-width:86px;text-align:center">${CG_ST[k][0]}</span><div style="flex:1;height:8px;background:var(--line);border-radius:4px"><div style="width:${pct}%;height:8px;background:var(--brand);border-radius:4px"></div></div><span style="min-width:64px;text-align:right">${n} (${pct} %)</span></div>`;}).join("");
+  const seg=(k,l)=>`<button class="btn ${st.mode===k?"":"o"} sm cgsM" data-m="${k}">${l}</button>`;
+  $("#content").innerHTML=`
+    <div class="panel"><div class="phead" style="flex-wrap:wrap;row-gap:8px"><h3>Statistiques des prestations</h3><span class="sp"></span>
+      ${seg("mois","Mois")} ${seg("annee","Année")}
+      ${st.mode==="mois"?`<input type="month" id="cgsRef" value="${st.ref}" style="margin-left:8px;width:160px;flex:none">`:`<input type="number" id="cgsRef" value="${cle}" min="2020" max="2100" style="margin-left:8px;width:100px;flex:none">`}
+      <button class="btn o sm" id="cgsCsv" style="margin-left:8px">⬇ CSV</button></div>
+      <p class="phnote">Période : ${esc(libPeriode)}. ${periode.length} commande(s) reçue(s), dont ${ok.length} confirmée(s) ou réalisée(s). Les montants ne comptent que ces dernières, à la date de la prestation.</p></div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Ventes</div><div class="v" style="font-size:22px">${money(ventes)}</div><div class="s">${ok.length} commande(s)</div></div>
+      <div class="kpi" style="border-left:3px solid var(--brand)"><div class="l">Part conciergerie</div><div class="v" style="font-size:22px;color:var(--brand)">${money(som(ok,"part_conciergerie"))}</div><div class="s">${ventes?Math.round(som(ok,"part_conciergerie")/ventes*100):0} % des ventes</div></div>
+      <div class="kpi"><div class="l">Reversé aux partenaires</div><div class="v" style="font-size:22px">${money(som(ok,"reversement"))}</div><div class="s">net des prestataires</div></div>
+      <div class="kpi"><div class="l">Part des propriétaires</div><div class="v" style="font-size:22px">${money(som(ok,"part_proprietaire"))}</div><div class="s">portée sur leurs relevés</div></div>
+      <div class="kpi"><div class="l">Panier moyen</div><div class="v" style="font-size:22px">${money(ok.length?Math.round(ventes/ok.length):0)}</div><div class="s">par commande</div></div>
+      <div class="kpi"><div class="l">Encaissé</div><div class="v" style="font-size:22px">${money(som(ok.filter(c=>c.reglement==="paye"),"montant"))}</div><div class="s">commandes marquées « payé »</div></div>
+    </div>
+    <div class="panel"><div class="phead"><h3>Évolution sur 12 mois</h3></div>
+      <div style="display:flex;gap:4px;padding:14px 16px 6px">${barres}</div>
+      <p class="phnote">Barre claire : ventes du mois. Partie foncée : part de la conciergerie. Chiffre : nombre de commandes.</p></div>
+    <div class="panel"><div class="phead"><h3>Répartition par statut</h3></div><div style="padding:10px 16px 14px">${periode.length?statuts:`<div class="empty">Aucune commande sur la période.</div>`}</div></div>
+    ${tab("Par type de prestation",gType,["Type","Part conciergerie","pc"])}
+    ${tab("Prestations les plus vendues",gPresta.slice(0,15),["Prestation","Part conciergerie","pc"])}
+    ${tab("Par partenaire",gPart,["Partenaire","À lui reverser","rev"])}
+    ${tab("Par bien",gBien,["Bien","Part conciergerie","pc"])}
+    ${tab("Par propriétaire",gProp,["Propriétaire (du bien)","Sa part","pp"])}`;
+  document.querySelectorAll(".cgsM").forEach(b=>b.onclick=()=>{st.mode=b.dataset.m;if(st.mode==="mois"&&st.ref.length<7)st.ref=st.ref.slice(0,4)+"-"+String(auj.getMonth()+1).padStart(2,"0");renderCgStats();});
+  $("#cgsRef").onchange=e=>{const v=e.target.value;if(!v)return;st.ref=st.mode==="annee"?String(v).slice(0,4)+"-01":v;renderCgStats();};
+  $("#cgsCsv").onclick=()=>{
+    const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    const lignes=[["Date","Heure","Prestation","Type","Partenaire","Bien","Quantité","Statut","Règlement","Montant","Part conciergerie","Reversement partenaire","Part propriétaire","Source","Note"]]
+      .concat(periode.map(c=>{const p=par(prestas,c.prestation_id)||{};return [c.date,c.heure,p.nom,p.type,(par(parts,p.partenaire_id)||{}).nom,(par(biens,c.bien_id)||{}).nom,c.quantite,c.statut,c.reglement,c.montant,c.part_conciergerie,c.reversement,c.part_proprietaire,c.source,c.note];}));
+    const blob=new Blob(["﻿"+lignes.map(l=>l.map(q).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="prestations-"+cle+".csv";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  };
 }
 
 async function renderCgLiens(){
