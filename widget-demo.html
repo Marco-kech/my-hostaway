@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DPM — Démo Widget Calendrier</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 40px 20px; }
+  h1 { text-align: center; color: #14352A; margin-bottom: 8px; }
+  p.sub { text-align: center; color: #666; margin-bottom: 30px; }
+  .container { max-width: 500px; margin: 0 auto; }
+  .code-block { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 0.8em; margin-top: 30px; overflow-x: auto; white-space: pre-wrap; }
+  .code-block .tag { color: #569cd6; }
+  .code-block .attr { color: #9cdcfe; }
+  .code-block .str { color: #ce9178; }
+</style>
+</head>
+<body>
+
+<h1>Widget Calendrier DPM Conciergerie</h1>
+<p class="sub">Démo — à intégrer sur WordPress via un bloc HTML</p>
+
+<div class="container">
+  <!-- Le widget s'affiche ici -->
+  <div id="dpm-calendar"
+       data-bien-id="b9391c6c-3418-4e20-9060-e63820ed7319"
+       data-mode="direct"
+       data-booking-url="https://dpmconciergerie-group.com/bien/lappartement-de-la-mome-gueliz-marrakech/">
+  </div>
+</div>
+
+<div class="container">
+  <div class="code-block"><span class="tag">&lt;!-- Coller ce code dans un bloc HTML WordPress --&gt;</span>
+
+<span class="tag">&lt;div</span> <span class="attr">id</span>=<span class="str">"dpm-calendar"</span>
+     <span class="attr">data-bien-id</span>=<span class="str">"b9391c6c-3418-4e20-9060-e63820ed7319"</span>
+     <span class="attr">data-mode</span>=<span class="str">"direct"</span>
+     <span class="attr">data-booking-url</span>=<span class="str">"https://dpmconciergerie-group.com/..."</span><span class="tag">&gt;&lt;/div&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="str">"https://marco-kech.github.io/my-hostaway/widget-calendar.js"</span><span class="tag">&gt;&lt;/script&gt;</span></div>
+</div>
+
+<script src="widget-calendar.js"></script>
+</body>
+</html>
