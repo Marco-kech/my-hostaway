@@ -923,6 +923,7 @@ const RUBRIQUES=[
     ["cronhist","Historique tâches auto",{cronhist:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
     ["cmd","Commandes",{cgcommandes:1}],
+    ["msg","Messages",{cgmessages:1}],
     ["presta","Prestations",{m:"prestations"}],
     ["part","Partenaires",{m:"partenaires"}],
     ["serv","Services internes",{m:"services_internes"}],
@@ -1458,6 +1459,7 @@ function goRub(rk,sk){
   if(t.cgcomptes)return renderCgComptes();
   if(t.cgliens)return renderCgLiens();
   if(t.cgcommandes)return renderCgCommandes();
+  if(t.cgmessages)return renderCgMessages();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -3251,6 +3253,61 @@ async function renderCgCommandes(){
       if(error){$("#cgaOk").disabled=false;$("#cgaErr").textContent=error.message;return;}
       fermer();toast("Commande enregistrée");st.filtre="ok";st.mois=jour.slice(0,7);renderCgCommandes();};
   };
+}
+
+/* ---------- Conciergerie : messages avec les partenaires et les propriétaires ---------- */
+async function renderCgMessages(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [rc,rm,rpa,rpr]=await Promise.all([
+    sb.from("cg_compte").select("id,role,nom,email,statut,partenaire_id,proprietaire_id").order("nom"),
+    sb.from("cg_message").select("*").order("cree_le"),
+    sb.from("partenaire").select("id,nom"),
+    sb.from("proprietaire").select("id,nom")]);
+  const err=rc.error||rm.error||rpa.error||rpr.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const msgs=rm.data||[],parts=rpa.data||[],props=rpr.data||[];
+  const comptes=(rc.data||[]).filter(c=>c.statut==="actif"||msgs.some(m=>m.compte_id===c.id));
+  const fiche=c=>((c.role==="partenaire"?parts.find(x=>x.id===c.partenaire_id):props.find(x=>x.id===c.proprietaire_id))||{}).nom||c.nom||c.email||"—";
+  const fil=id=>msgs.filter(m=>m.compte_id===id);
+  const nonLus=id=>fil(id).filter(m=>!m.de_equipe&&!m.lu).length;
+  const dernier=id=>{const f=fil(id);return f.length?f[f.length-1].cree_le:"";};
+  comptes.sort((a,b)=>(nonLus(b.id)-nonLus(a.id))||dernier(b.id).localeCompare(dernier(a.id)));
+  if(!state.cgMsg||!comptes.some(c=>c.id===state.cgMsg))state.cgMsg=comptes.length?comptes[0].id:null;
+  const sel=comptes.find(c=>c.id===state.cgMsg);
+  const heure=d=>{const x=new Date(d);return x.toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})+" "+x.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});};
+  const liste=comptes.map(c=>{const n=nonLus(c.id);const f=fil(c.id);const d=f.length?f[f.length-1]:null;
+    return `<div class="cgmC" data-id="${c.id}" style="padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;${c.id===state.cgMsg?"background:var(--gold-soft)":""}">
+      <div style="display:flex;gap:6px;align-items:center"><b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fiche(c))}</b>${n?`<span class="pill gold">${n}</span>`:""}</div>
+      <div class="muted" style="font-size:11px">${c.role==="partenaire"?"Partenaire":"Propriétaire"}${c.statut!=="actif"?" · compte inactif":""}</div>
+      ${d?`<div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.de_equipe?"Vous : ":""}${esc(d.contenu)}</div>`:""}</div>`;}).join("");
+  const bulles=sel?fil(sel.id).map(m=>`<div style="display:flex;justify-content:${m.de_equipe?"flex-end":"flex-start"};margin:6px 0">
+      <div style="max-width:72%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;${m.de_equipe?"background:var(--dpm-vert);color:#fff":"background:var(--surface);border:1px solid var(--line)"}">${esc(m.contenu)}
+        <div style="font-size:10px;opacity:.7;margin-top:3px;text-align:right">${heure(m.cree_le)}${m.de_equipe?(m.lu?" ✓✓":" ✓"):""}</div></div></div>`).join(""):"";
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Messages</h3></div>
+    <p class="phnote">Vos échanges avec les partenaires et les propriétaires qui ont un compte. Ils vous écrivent depuis l'onglet « Messages » de leur espace. Les messages des voyageurs restent dans la Boîte de réception.</p>
+    ${comptes.length?`<div style="display:grid;grid-template-columns:minmax(200px,280px) 1fr;min-height:420px;border-top:1px solid var(--line)">
+      <div style="border-right:1px solid var(--line);overflow:auto;max-height:560px">${liste}</div>
+      <div style="display:flex;flex-direction:column;min-width:0">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--line)"><b>${esc(fiche(sel))}</b> <span class="muted" style="font-size:12px">${esc(sel.email||"")}</span></div>
+        <div id="cgmFil" style="flex:1;overflow:auto;padding:10px 14px;max-height:420px;background:var(--bg)">${bulles||`<div class="empty">Aucun message. Écrivez le premier.</div>`}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end">
+          <textarea id="cgmTxt" rows="2" maxlength="4000" placeholder="${sel.statut==="actif"?"Votre message…":"Ce compte est inactif : il ne lira pas le message."}" style="flex:1"></textarea>
+          <button class="btn g" id="cgmEnv">Envoyer</button></div>
+        <span class="err" id="cgmErr" style="display:block;padding:0 14px 8px"></span></div></div>`
+    :`<div class="empty">Aucun compte partenaire ou propriétaire actif pour l'instant.</div>`}</div>`;
+  if(!sel)return;
+  const f=$("#cgmFil"); f.scrollTop=f.scrollHeight;
+  document.querySelectorAll(".cgmC").forEach(d=>d.onclick=()=>{state.cgMsg=d.dataset.id;renderCgMessages();});
+  const envoyer=async()=>{
+    const t=$("#cgmTxt").value.trim(); if(!t)return;
+    $("#cgmEnv").disabled=true;
+    const {error}=await sb.from("cg_message").insert({tenant_id:state.tenant.id,compte_id:sel.id,de_equipe:true,auteur:state.user.id,contenu:t});
+    if(error){$("#cgmEnv").disabled=false;$("#cgmErr").textContent=error.message;return;}
+    renderCgMessages();};
+  $("#cgmEnv").onclick=envoyer;
+  $("#cgmTxt").onkeydown=e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();envoyer();}};
+  /* Ouvrir un fil marque comme lus les messages reçus. */
+  if(nonLus(sel.id)){ await sb.from("cg_message").update({lu:true}).eq("compte_id",sel.id).eq("de_equipe",false).eq("lu",false); }
 }
 
 async function renderCgLiens(){
