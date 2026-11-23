@@ -6044,7 +6044,7 @@ function openGbSectionForm(sections,idx,cfg,bienSel){
 /* ---------- SERRURES CONNECTÉES WiFi ---------- */
 async function renderSerrures(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  if(!state.opts.bien)if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
+  if(!state.opts.bien)try{await loadOpts('bien');}catch(e){}
   let cfg;try{cfg=await reglGet('serrures')||{};}catch(e){cfg={};};
   const locks=cfg.appareils||[];
   const biens=state.opts.bien||[];
@@ -6087,6 +6087,7 @@ async function renderSerrures(){
         <button class="btn g" id="srrSaveCfg" style="margin-top:8px">💾 Enregistrer les réglages</button>
       </div></div>`:''}
   </div>`;
+  $("#content").innerHTML=summary;
 
   document.getElementById('srrAdd')?.addEventListener('click',()=>openSerrForm(locks,-1,cfg));
   document.querySelectorAll('[data-srrEdit]').forEach(b=>b.onclick=()=>openSerrForm(locks,+b.dataset.srrEdit,cfg));
