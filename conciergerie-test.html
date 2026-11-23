@@ -722,6 +722,8 @@ const MODULES = {
       ["cout","Coût de revient (prestation DPM)",{type:"number",def:0}],
       ["validation","Validation des commandes",{opts:["auto","manuelle"],def:"auto"}],
       ["preavis_heures","Préavis minimum (heures)",{type:"number"}],
+      ["s4","Disponibilité",{section:1}],
+      ["horaires","Horaires de la prestation",{horaires:1}],
       ["visible_site","Visible sur le site",{opts:["false","true"],def:"false"}],
       ["actif","Active",{opts:["true","false"],def:"true"}]],
     valide:d=>{
@@ -731,6 +733,10 @@ const MODULES = {
       if(d.type==="interne") d.partenaire_id=null;
       if(d.type==="dpm"){ d.partenaire_id=null; d.proprietaire_id=null; }
       if(d.au_logement!==true&&d.a_l_exterieur!==true) return "Cochez au moins un lieu : au logement ou à l'extérieur.";
+      if(d.horaires){const h=d.horaires,ouv=Object.values(h.jours).filter(j=>j.ouvert);
+        if(!ouv.length) return "Horaires : cochez au moins un jour d'ouverture, ou choisissez « Toujours disponible ».";
+        if(h.mode==="plages"&&ouv.some(j=>j.a<=j.de)) return "Horaires : l'heure de fin doit être après l'heure de début.";
+        if(h.mode==="departs"&&!h.departs.length) return "Horaires : indiquez au moins une heure de départ, par exemple 09:00, 14:00.";}
       ["prix_logement","prix_public_logement","commission_logement","prix_exterieur","prix_public_exterieur","commission_exterieur","net_partenaire","cout"].forEach(k=>{ if(d[k]==null||isNaN(d[k])) d[k]=0; if(d[k]<0) d[k]=0; });
     }},
   intervenants:{title:"Intervenants",add:"Ajouter un intervenant",table:"intervenant",
@@ -1783,6 +1789,7 @@ async function openForm(k,row){
       const blank=(!o.req&&o.def==null)?'<option value="">—</option>':'';
       inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${String(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
     }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">${v?` <a href="${esc(v)}" target="_blank" class="muted" style="font-size:11px">📎 fichier actuel</a>`:''}`; }
+    else if(o.horaires){ inp=cgHorairesHtml(key,v); }
     else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
     return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
@@ -1816,6 +1823,7 @@ async function openForm(k,row){
           d[key]=sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
         } else if(row[key]!=null){ d[key]=row[key]; }
         continue;}
+      if(o.horaires){ d[key]=cgHorairesLire(key); continue; }
       let val;
       if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
       else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); if(val==="true")val=true; if(val==="false")val=false; }
@@ -3057,6 +3065,40 @@ async function renderTarifDyn(){
 }
 
 /* ========== SCORE ASO — Optimisation annonces plateformes ========== */
+/* ---------- CONCIERGERIE : horaires d'une prestation ---------- */
+/* Forme enregistrée : null = toujours disponible ; sinon {mode:"plages"|"departs", jours:{0..6:{ouvert,de,a}}, departs:["09:00",…]}
+   (0 = dimanche, heures entières), identique à celle de l'appli Conciergerie. */
+const CG_JOURS=[[1,"Lundi"],[2,"Mardi"],[3,"Mercredi"],[4,"Jeudi"],[5,"Vendredi"],[6,"Samedi"],[0,"Dimanche"]];
+function cgHorairesHtml(key,v){
+  const h=(v&&typeof v==="object")?v:null;
+  const mode=!h?"libre":(h.mode==="departs"?"departs":"plages");
+  const J=(h&&h.jours)||{};
+  const hs=n=>Array.from({length:25},(_,i)=>`<option ${i===n?"selected":""}>${i}</option>`).join("");
+  const rows=CG_JOURS.map(([d,lab])=>{const j=J[d]||{ouvert:true,de:9,a:19};
+    return `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap"><label style="min-width:105px;margin:0"><input type="checkbox" id="f_${key}__o${d}" ${j.ouvert?"checked":""}> ${lab}</label>
+      <span class="muted">de</span><select id="f_${key}__d${d}" style="width:auto">${hs(j.de==null?9:j.de)}</select><span class="muted">h à</span><select id="f_${key}__a${d}" style="width:auto">${hs(j.a==null?19:j.a)}</select><span class="muted">h</span></div>`;}).join("");
+  const o=(val,lab)=>`<option value="${val}" ${mode===val?"selected":""}>${lab}</option>`;
+  return `<select id="f_${key}__mode" onchange="cgHorairesMaj('${key}')">${o("libre","Toujours disponible (aucune contrainte)")}${o("plages","Plages d'ouverture par jour")}${o("departs","Heures de départ fixes")}</select>
+    <div id="f_${key}__grid" style="margin-top:8px;${mode==="libre"?"display:none":""}">${rows}</div>
+    <input id="f_${key}__dep" style="margin-top:8px;${mode==="departs"?"":"display:none"}" placeholder="Heures de départ, ex. 09:00, 14:00, 16:30" value="${esc(((h&&h.departs)||[]).join(", "))}">`;
+}
+function cgHorairesMaj(key){
+  const m=document.getElementById("f_"+key+"__mode").value;
+  document.getElementById("f_"+key+"__grid").style.display=(m==="libre")?"none":"";
+  document.getElementById("f_"+key+"__dep").style.display=(m==="departs")?"":"none";
+}
+function cgHorairesLire(key){
+  const m=document.getElementById("f_"+key+"__mode").value;
+  if(m==="libre")return null;
+  const jours={};
+  CG_JOURS.forEach(([d])=>{jours[d]={ouvert:document.getElementById(`f_${key}__o${d}`).checked,
+    de:Number(document.getElementById(`f_${key}__d${d}`).value),a:Number(document.getElementById(`f_${key}__a${d}`).value)};});
+  const h={mode:m,jours};
+  if(m==="departs"){h.departs=[...new Set(document.getElementById("f_"+key+"__dep").value.split(/[,;\s]+/).map(x=>x.trim().replace("h",":")).filter(x=>/^\d{1,2}:\d{2}$/.test(x))
+    .map(x=>{const[a,b]=x.split(":");return a.padStart(2,"0")+":"+b;}).filter(x=>Number(x.slice(0,2))<24&&Number(x.slice(3))<60))].sort();}
+  return h;
+}
+
 /* ---------- CONCIERGERIE : options par bien ---------- */
 async function renderCgOptions(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -3082,7 +3124,7 @@ async function renderCgOptions(){
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Options par bien</h3><span class="sp"></span>
       <select id="cgBienSel">${biens.map(x=>`<option value="${x.id}" ${x.id===b.id?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select></div>
     <p class="phnote">Choisissez les prestations proposées dans ce bien. ${restreint?`Sélection personnalisée : <b>${miens.length}</b> prestation(s) retenue(s).`:`Réglage par défaut : <b>toutes</b> les prestations applicables sont proposées.`} Les prestations internes n'apparaissent que pour les biens de leur propriétaire.</p>
-    ${applic.length?`<div class="tw"><table><thead><tr><th>Prestation</th><th>Catégorie</th><th>Type</th><th style="text-align:center">Proposée</th><th style="text-align:center">Visible sur le site</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    ${applic.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Catégorie</th><th>Type</th><th style="text-align:center">Proposée</th><th style="text-align:center">Visible sur le site</th></tr></thead><tbody>${lignes}</tbody></table></div>
     <div style="padding:14px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cgSave">Enregistrer</button><button class="btn o" id="cgReset">Revenir au réglage par défaut</button><span class="err" id="cgErr"></span></div>`
     :`<div class="empty">Aucune prestation active applicable à ce bien. Créez-en dans Conciergerie → Prestations.</div>`}</div>`;
   $("#cgBienSel").onchange=e=>{state.cgBien=e.target.value;renderCgOptions();};
