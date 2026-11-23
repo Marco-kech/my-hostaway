@@ -3201,7 +3201,7 @@ async function renderCgCommandes(){
   $("#content").innerHTML=`
     <div class="kpis">
       <div class="kpi"><div class="l">Ventes confirmées</div><div class="v" style="font-size:22px">${money(som("montant"))}</div><div class="s">${duMois.length} commande(s) sur le mois</div></div>
-      <div class="kpi" style="border-left:3px solid var(--dpm-vert)"><div class="l">Part conciergerie</div><div class="v" style="font-size:22px;color:var(--dpm-vert)">${money(som("part_conciergerie"))}</div><div class="s">votre revenu sur les prestations</div></div>
+      <div class="kpi" style="border-left:3px solid var(--brand)"><div class="l">Part conciergerie</div><div class="v" style="font-size:22px;color:var(--brand)">${money(som("part_conciergerie"))}</div><div class="s">votre revenu sur les prestations</div></div>
       <div class="kpi"><div class="l">À reverser aux partenaires</div><div class="v" style="font-size:22px">${money(som("reversement"))}</div><div class="s">net dû aux prestataires</div></div>
       <div class="kpi"><div class="l">Part des propriétaires</div><div class="v" style="font-size:22px">${money(som("part_proprietaire"))}</div><div class="s">à porter sur leurs relevés</div></div>
     </div>
@@ -3281,7 +3281,7 @@ async function renderCgMessages(){
       <div class="muted" style="font-size:11px">${c.role==="partenaire"?"Partenaire":"Propriétaire"}${c.statut!=="actif"?" · compte inactif":""}</div>
       ${d?`<div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.de_equipe?"Vous : ":""}${esc(d.contenu)}</div>`:""}</div>`;}).join("");
   const bulles=sel?fil(sel.id).map(m=>`<div style="display:flex;justify-content:${m.de_equipe?"flex-end":"flex-start"};margin:6px 0">
-      <div style="max-width:72%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;${m.de_equipe?"background:var(--dpm-vert);color:#fff":"background:var(--surface);border:1px solid var(--line)"}">${esc(m.contenu)}
+      <div style="max-width:72%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-break:break-word;${m.de_equipe?"background:var(--brand);color:var(--onbrand)":"background:var(--surface);border:1px solid var(--line)"}">${esc(m.contenu)}
         <div style="font-size:10px;opacity:.7;margin-top:3px;text-align:right">${heure(m.cree_le)}${m.de_equipe?(m.lu?" ✓✓":" ✓"):""}</div></div></div>`).join(""):"";
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Messages</h3></div>
     <p class="phnote">Vos échanges avec les partenaires et les propriétaires qui ont un compte. Ils vous écrivent depuis l'onglet « Messages » de leur espace. Les messages des voyageurs restent dans la Boîte de réception.</p>
