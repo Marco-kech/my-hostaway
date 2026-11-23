@@ -678,6 +678,67 @@ const MODULES = {
     fields:[["nom","Nom de l'extra",{req:1}],["bien_id","Bien (laisser vide = tous les biens)",{ref:"bien"}],
       ["type","Mode de facturation",{opts:["par_sejour","par_nuit","par_personne","par_personne_nuit"],def:"par_sejour"}],
       ["prix","Prix",{type:"number",req:1}],["obligatoire","Obligatoire",{opts:["false","true"],def:"false"}],["actif","Actif",{opts:["true","false"],def:"true"}]]},
+  partenaires:{title:"Partenaires",add:"Ajouter un partenaire",table:"partenaire",
+    cols:[["nom","Nom"],["categorie","Activité"],["contact","Contact"],["tel","Téléphone"],["ville","Ville"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom du partenaire",{req:1}],["categorie","Activité (quad, spa, restaurant…)",{}],
+      ["contact","Personne à contacter",{}],["tel","Téléphone",{}],["email","E-mail",{}],
+      ["adresse","Adresse",{}],["ville","Ville",{}],["site","Site web",{}],["ice","ICE",{}],
+      ["reglement","Règlement (mode, délai, coordonnées)",{long:1}],["note","Note interne",{long:1}],
+      ["actif","Actif",{opts:["true","false"],def:"true"}],
+      ["peut_editer","Peut modifier ses prestations lui-même",{opts:["false","true"],def:"false"}],
+      ["peut_promo","Peut créer des promotions",{opts:["true","false"],def:"true"}]]},
+  services_internes:{title:"Services internes",add:"Ajouter un service",table:"service_interne",
+    cols:[["nom","Service"],["proprietaire_id","Propriétaire",v=>v?refName("proprietaire",v):"—"],["partenaire_id","Partenaire",v=>v?refName("partenaire",v):"—"],["responsable","Responsable"],["tel","Téléphone"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom du service (spa, cuisine, étages…)",{req:1}],
+      ["proprietaire_id","Rattaché au propriétaire",{ref:"proprietaire"}],["partenaire_id","…ou rattaché au partenaire",{ref:"partenaire"}],
+      ["responsable","Responsable",{}],["tel","Téléphone",{}],["email","E-mail",{}],["horaires","Horaires (texte libre)",{}],
+      ["actif","Actif",{opts:["true","false"],def:"true"}]],
+    valide:d=>{ if(!!d.proprietaire_id===!!d.partenaire_id) return "Choisissez soit un propriétaire, soit un partenaire (un seul des deux)."; }},
+  prestations:{title:"Prestations",add:"Ajouter une prestation",table:"prestation",
+    cols:[["nom","Prestation"],["categorie","Catégorie"],["type","Type",v=>pill(v)],
+      ["partenaire_id","Vendue par",(v,r)=>r&&r.type==="interne"?refName("proprietaire",r.proprietaire_id):(v?refName("partenaire",v):"DPM")],
+      ["prix_logement","Prix au logement",v=>money(v)],["prix_exterieur","Prix à l'extérieur",v=>money(v)],
+      ["net_partenaire","Net partenaire",v=>money(v)],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    fields:[["nom","Nom de la prestation",{req:1}],["categorie","Catégorie (bien-être, repas, excursion…)",{}],
+      ["type","Type",{opts:["externe","interne","dpm"],def:"externe",req:1}],
+      ["partenaire_id","Partenaire (obligatoire si « externe »)",{ref:"partenaire"}],
+      ["proprietaire_id","Propriétaire (obligatoire si « interne »)",{ref:"proprietaire"}],
+      ["service_interne_id","Service interne concerné",{ref:"service_interne"}],
+      ["unite","Unité (par personne, par heure, forfait…)",{}],["description","Description",{long:1}],
+      ["s1","Au logement",{section:1}],
+      ["au_logement","Proposée au logement",{opts:["true","false"],def:"true"}],
+      ["prix_logement","Prix facturé au voyageur",{type:"number",def:0}],
+      ["prix_public_logement","Prix public affiché sur le site",{type:"number",def:0}],
+      ["commission_logement","Commission",{type:"number",def:0}],
+      ["mode_commission_logement","Commission exprimée en",{opts:["pct","montant"],def:"pct"}],
+      ["s2","À l'extérieur",{section:1}],
+      ["a_l_exterieur","Proposée à l'extérieur",{opts:["false","true"],def:"false"}],
+      ["prix_exterieur","Prix facturé au voyageur",{type:"number",def:0}],
+      ["prix_public_exterieur","Prix public affiché sur le site",{type:"number",def:0}],
+      ["commission_exterieur","Commission",{type:"number",def:0}],
+      ["mode_commission_exterieur","Commission exprimée en",{opts:["pct","montant"],def:"pct"}],
+      ["s3","Reversement et règles",{section:1}],
+      ["net_partenaire","Net reversé au partenaire",{type:"number",def:0}],
+      ["cout","Coût de revient (prestation DPM)",{type:"number",def:0}],
+      ["validation","Validation des commandes",{opts:["auto","manuelle"],def:"auto"}],
+      ["preavis_heures","Préavis minimum (heures)",{type:"number"}],
+      ["s4","Disponibilité",{section:1}],
+      ["horaires","Horaires de la prestation",{horaires:1}],
+      ["visible_site","Visible sur le site",{opts:["false","true"],def:"false"}],
+      ["actif","Active",{opts:["true","false"],def:"true"}]],
+    valide:d=>{
+      if(d.type==="externe"&&!d.partenaire_id) return "Une prestation externe doit être rattachée à un partenaire.";
+      if(d.type==="interne"&&!d.proprietaire_id) return "Une prestation interne doit être rattachée à un propriétaire.";
+      if(d.type==="externe") d.proprietaire_id=null;
+      if(d.type==="interne") d.partenaire_id=null;
+      if(d.type==="dpm"){ d.partenaire_id=null; d.proprietaire_id=null; }
+      if(d.au_logement!==true&&d.a_l_exterieur!==true) return "Cochez au moins un lieu : au logement ou à l'extérieur.";
+      if(d.horaires){const h=d.horaires,ouv=Object.values(h.jours).filter(j=>j.ouvert);
+        if(!ouv.length) return "Horaires : cochez au moins un jour d'ouverture, ou choisissez « Toujours disponible ».";
+        if(h.mode==="plages"&&ouv.some(j=>j.a<=j.de)) return "Horaires : l'heure de fin doit être après l'heure de début.";
+        if(h.mode==="departs"&&!h.departs.length) return "Horaires : indiquez au moins une heure de départ, par exemple 09:00, 14:00.";}
+      ["prix_logement","prix_public_logement","commission_logement","prix_exterieur","prix_public_exterieur","commission_exterieur","net_partenaire","cout"].forEach(k=>{ if(d[k]==null||isNaN(d[k])) d[k]=0; if(d[k]<0) d[k]=0; });
+    }},
   intervenants:{title:"Intervenants",add:"Ajouter un intervenant",table:"intervenant",
     cols:[["nom","Nom"],["type","Rôle",v=>pill(v)],["tel","Téléphone"],["whatsapp","WhatsApp"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["type","Rôle",{opts:["menage","chauffeur","petit_dejeuner","maintenance","accueil","autre"],def:"menage"}],
@@ -860,6 +921,11 @@ const RUBRIQUES=[
     ["carte","Carte des annonces",{canauxcarte:1}],
     ["ical","Synchronisation iCal",{icalsync:1}],
     ["cronhist","Historique tâches auto",{cronhist:1}]]},
+  {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
+    ["presta","Prestations",{m:"prestations"}],
+    ["part","Partenaires",{m:"partenaires"}],
+    ["serv","Services internes",{m:"services_internes"}],
+    ["opt","Options par bien",{cgoptions:1}]]},
   {k:"branch",label:"Branchements partenaires",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
@@ -1385,6 +1451,7 @@ function goRub(rk,sk){
   if(t.photogalerie)return renderPhotosGalerie();
   if(t.statsbien)return renderStatsBien();
   if(t.scoreaso)return renderScoreASO();
+  if(t.cgoptions)return renderCgOptions();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -1720,8 +1787,9 @@ async function openForm(k,row){
       inp=`<div class="chk">`+o.opts.map((op,i)=>`<label><input type="checkbox" id="f_${key}__${i}" ${arr.includes(op)?"checked":""}>${esc(op)}</label>`).join("")+`</div>`;
     }else if(o.opts){
       const blank=(!o.req&&o.def==null)?'<option value="">—</option>':'';
-      inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
+      inp=`<select id="f_${key}">${blank}`+o.opts.map(op=>`<option ${String(v==null?o.def:v)===op?"selected":""}>${esc(op)}</option>`).join("")+`</select>`;
     }else if(o.file){ inp=`<input id="f_${key}" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">${v?` <a href="${esc(v)}" target="_blank" class="muted" style="font-size:11px">📎 fichier actuel</a>`:''}`; }
+    else if(o.horaires){ inp=cgHorairesHtml(key,v); }
     else if(o.long){ inp=`<textarea id="f_${key}" rows="3">${esc(v||"")}</textarea>`; }
     else { inp=`<input id="f_${key}" type="${o.type||"text"}" value="${v!=null?esc(v):(o.def!=null?o.def:"")}" ${o.req?"required":""}>`; }
     return `<div class="field"><label>${esc(label)}${o.req?" *":""}</label>${inp}</div>`;
@@ -1755,6 +1823,7 @@ async function openForm(k,row){
           d[key]=sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
         } else if(row[key]!=null){ d[key]=row[key]; }
         continue;}
+      if(o.horaires){ d[key]=cgHorairesLire(key); continue; }
       let val;
       if(o.multi){ val=o.opts.filter((op,i)=>{const el=document.getElementById(`f_${key}__${i}`);return el&&el.checked;}); }
       else { val=$("#f_"+key).value; if(val==="")val=null; if(val!=null&&o.type==="number")val=Number(val); if(val==="true")val=true; if(val==="false")val=false; }
@@ -1763,6 +1832,7 @@ async function openForm(k,row){
     const missing=m.fields.filter(f=>f[2]&&f[2].req).some(f=>{const o=f[2];const val=o.p?params[f[0]]:d[f[0]];return val==null||val==="";});
     if(missing){$("#fErr").textContent="Remplissez les champs obligatoires (*).";return;}
     if(Object.keys(params).length) d.parametres=params;
+    if(m.valide){const msgV=m.valide(d);if(msgV){$("#fErr").textContent=msgV;return;}}
     d.tenant_id=state.tenant.id;
     $("#fSave").disabled=true;
     let res;
@@ -2995,6 +3065,90 @@ async function renderTarifDyn(){
 }
 
 /* ========== SCORE ASO — Optimisation annonces plateformes ========== */
+/* ---------- CONCIERGERIE : horaires d'une prestation ---------- */
+/* Forme enregistrée : null = toujours disponible ; sinon {mode:"plages"|"departs", jours:{0..6:{ouvert,de,a}}, departs:["09:00",…]}
+   (0 = dimanche, heures entières), identique à celle de l'appli Conciergerie. */
+const CG_JOURS=[[1,"Lundi"],[2,"Mardi"],[3,"Mercredi"],[4,"Jeudi"],[5,"Vendredi"],[6,"Samedi"],[0,"Dimanche"]];
+function cgHorairesHtml(key,v){
+  const h=(v&&typeof v==="object")?v:null;
+  const mode=!h?"libre":(h.mode==="departs"?"departs":"plages");
+  const J=(h&&h.jours)||{};
+  const hs=n=>Array.from({length:25},(_,i)=>`<option ${i===n?"selected":""}>${i}</option>`).join("");
+  const rows=CG_JOURS.map(([d,lab])=>{const j=J[d]||{ouvert:true,de:9,a:19};
+    return `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap"><label style="min-width:105px;margin:0"><input type="checkbox" id="f_${key}__o${d}" ${j.ouvert?"checked":""}> ${lab}</label>
+      <span class="muted">de</span><select id="f_${key}__d${d}" style="width:auto">${hs(j.de==null?9:j.de)}</select><span class="muted">h à</span><select id="f_${key}__a${d}" style="width:auto">${hs(j.a==null?19:j.a)}</select><span class="muted">h</span></div>`;}).join("");
+  const o=(val,lab)=>`<option value="${val}" ${mode===val?"selected":""}>${lab}</option>`;
+  return `<select id="f_${key}__mode" onchange="cgHorairesMaj('${key}')">${o("libre","Toujours disponible (aucune contrainte)")}${o("plages","Plages d'ouverture par jour")}${o("departs","Heures de départ fixes")}</select>
+    <div id="f_${key}__grid" style="margin-top:8px;${mode==="libre"?"display:none":""}">${rows}</div>
+    <input id="f_${key}__dep" style="margin-top:8px;${mode==="departs"?"":"display:none"}" placeholder="Heures de départ, ex. 09:00, 14:00, 16:30" value="${esc(((h&&h.departs)||[]).join(", "))}">`;
+}
+function cgHorairesMaj(key){
+  const m=document.getElementById("f_"+key+"__mode").value;
+  document.getElementById("f_"+key+"__grid").style.display=(m==="libre")?"none":"";
+  document.getElementById("f_"+key+"__dep").style.display=(m==="departs")?"":"none";
+}
+function cgHorairesLire(key){
+  const m=document.getElementById("f_"+key+"__mode").value;
+  if(m==="libre")return null;
+  const jours={};
+  CG_JOURS.forEach(([d])=>{jours[d]={ouvert:document.getElementById(`f_${key}__o${d}`).checked,
+    de:Number(document.getElementById(`f_${key}__d${d}`).value),a:Number(document.getElementById(`f_${key}__a${d}`).value)};});
+  const h={mode:m,jours};
+  if(m==="departs"){h.departs=[...new Set(document.getElementById("f_"+key+"__dep").value.split(/[,;\s]+/).map(x=>x.trim().replace("h",":")).filter(x=>/^\d{1,2}:\d{2}$/.test(x))
+    .map(x=>{const[a,b]=x.split(":");return a.padStart(2,"0")+":"+b;}).filter(x=>Number(x.slice(0,2))<24&&Number(x.slice(3))<60))].sort();}
+  return h;
+}
+
+/* ---------- CONCIERGERIE : options par bien ---------- */
+async function renderCgOptions(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const [rb,rp,rl]=await Promise.all([
+    sb.from("bien").select("id,nom,proprietaire_id,type_logement").order("nom"),
+    sb.from("prestation").select("id,nom,type,categorie,proprietaire_id,partenaire_id,actif").order("nom"),
+    sb.from("bien_prestation").select("bien_id,prestation_id,visible_site")]);
+  const err=rb.error||rp.error||rl.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const biens=rb.data||[],prestas=rp.data||[],liens=rl.data||[];
+  if(!biens.length){$("#content").innerHTML=`<div class="panel"><div class="empty">Aucun bien — ajoutez d'abord un bien dans Annonces → Liste.</div></div>`;return;}
+  if(!state.cgBien||!biens.some(b=>b.id===state.cgBien))state.cgBien=biens[0].id;
+  const b=biens.find(x=>x.id===state.cgBien);
+  const applic=prestas.filter(p=>p.actif&&(p.type!=="interne"||p.proprietaire_id===b.proprietaire_id));
+  const miens=liens.filter(l=>l.bien_id===b.id);
+  const restreint=miens.length>0;
+  const lignes=applic.map(p=>{
+    const l=miens.find(x=>x.prestation_id===p.id);
+    const coche=!restreint||!!l;
+    return `<tr><td>${esc(p.nom)}</td><td>${esc(p.categorie||"—")}</td><td>${pill(p.type)}</td>
+      <td style="text-align:center"><input type="checkbox" class="cgP" data-p="${p.id}" ${coche?"checked":""}></td>
+      <td style="text-align:center"><input type="checkbox" class="cgS" data-p="${p.id}" ${l&&l.visible_site?"checked":""}></td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Options par bien</h3><span class="sp"></span>
+      <select id="cgBienSel">${biens.map(x=>`<option value="${x.id}" ${x.id===b.id?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select></div>
+    <p class="phnote">Choisissez les prestations proposées dans ce bien. ${restreint?`Sélection personnalisée : <b>${miens.length}</b> prestation(s) retenue(s).`:`Réglage par défaut : <b>toutes</b> les prestations applicables sont proposées.`} Les prestations internes n'apparaissent que pour les biens de leur propriétaire.</p>
+    ${applic.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Catégorie</th><th>Type</th><th style="text-align:center">Proposée</th><th style="text-align:center">Visible sur le site</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    <div style="padding:14px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cgSave">Enregistrer</button><button class="btn o" id="cgReset">Revenir au réglage par défaut</button><span class="err" id="cgErr"></span></div>`
+    :`<div class="empty">Aucune prestation active applicable à ce bien. Créez-en dans Conciergerie → Prestations.</div>`}</div>`;
+  $("#cgBienSel").onchange=e=>{state.cgBien=e.target.value;renderCgOptions();};
+  if(!applic.length)return;
+  const ecrire=async rows=>{
+    const del=await sb.from("bien_prestation").delete().eq("bien_id",b.id);
+    if(del.error){$("#cgErr").textContent=del.error.message;return false;}
+    if(rows.length){const ins=await sb.from("bien_prestation").insert(rows);
+      if(ins.error){$("#cgErr").textContent=ins.error.message;return false;}}
+    return true;};
+  $("#cgSave").onclick=async()=>{
+    const prop=[...document.querySelectorAll(".cgP")].filter(c=>c.checked).map(c=>c.dataset.p);
+    const site=new Set([...document.querySelectorAll(".cgS")].filter(c=>c.checked).map(c=>c.dataset.p));
+    if(!prop.length){$("#cgErr").textContent="Gardez au moins une prestation cochée. Pour ne rien proposer, désactivez les prestations.";return;}
+    const horsSel=[...site].filter(id=>!prop.includes(id));
+    if(horsSel.length){$("#cgErr").textContent="Une prestation visible sur le site doit aussi être proposée dans le bien.";return;}
+    const toutes=prop.length===applic.length&&site.size===0;
+    const rows=toutes?[]:prop.map(id=>({tenant_id:state.tenant.id,bien_id:b.id,prestation_id:id,visible_site:site.has(id)}));
+    $("#cgSave").disabled=true; const ok=await ecrire(rows); $("#cgSave").disabled=false;
+    if(ok){toast("Enregistré");logAction('modification','bien_prestation',b.id,'Options par bien');renderCgOptions();}
+  };
+  $("#cgReset").onclick=async()=>{ if(await ecrire([])){toast("Réglage par défaut rétabli");renderCgOptions();} };
+}
+
 async function renderScoreASO(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
