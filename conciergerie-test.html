@@ -3162,7 +3162,7 @@ async function renderCgComptes(){
   const comptes=rc.data||[],parts=rpa.data||[],props=rpr.data||[];
   const libRole={partenaire:"Partenaire",proprietaire:"Propriétaire"};
   const attente=comptes.filter(c=>c.statut==="en_attente").length;
-  const infos=c=>{const i=c.inscription||{};const t=Object.keys(i).filter(k=>i[k]!=null&&i[k]!==""&&typeof i[k]!=="object").map(k=>`${esc(k)} : ${esc(i[k])}`).join(" · ");
+  const infos=c=>{const i=c.inscription||{};const t=Object.keys(i).filter(k=>k!=="demande_le"&&i[k]!=null&&i[k]!==""&&typeof i[k]!=="object").map(k=>`${esc(k)} : ${esc(i[k])}`).join(" · ");
     return t?`<br><span class="muted" style="font-size:11px">${t}</span>`:"";};
   const lignes=comptes.map(c=>{
     const liste=c.role==="partenaire"?parts:props, cur=c.role==="partenaire"?c.partenaire_id:c.proprietaire_id;
