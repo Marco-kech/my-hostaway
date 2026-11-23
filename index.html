@@ -3203,9 +3203,9 @@ async function renderCgCommandes(){
       <div class="kpi"><div class="l">À reverser aux partenaires</div><div class="v" style="font-size:22px">${money(som("reversement"))}</div><div class="s">net dû aux prestataires</div></div>
       <div class="kpi"><div class="l">Part des propriétaires</div><div class="v" style="font-size:22px">${money(som("part_proprietaire"))}</div><div class="s">à porter sur leurs relevés</div></div>
     </div>
-    <div class="panel"><div class="phead"><h3>Commandes</h3>${attente?` <span class="pill gold">${attente} à traiter</span>`:""}<span class="sp"></span>
+    <div class="panel"><div class="phead" style="flex-wrap:wrap;row-gap:8px"><h3>Commandes</h3>${attente?` <span class="pill gold">${attente} à traiter</span>`:""}<span class="sp"></span>
       ${seg("attente","À traiter")} ${seg("ok","Confirmées")} ${seg("toutes","Toutes")}
-      <input type="month" id="cgcMois" value="${st.mois}" title="Mois des chiffres ci-dessus" style="margin-left:8px">
+      <input type="month" id="cgcMois" value="${st.mois}" title="Mois des chiffres ci-dessus" style="margin-left:8px;width:160px;flex:none">
       <button class="btn g sm" id="cgcAdd" style="margin-left:8px">+ Saisir une commande</button></div>
       <span class="err" id="cgcErr" style="display:block;padding:0 16px"></span>
       ${visibles.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Bien · voyageur</th><th>Date</th><th style="text-align:right">Qté</th><th style="text-align:right">Montant</th><th style="text-align:right">Conciergerie</th><th style="text-align:right">Partenaire</th><th style="text-align:right">Propriétaire</th><th>Statut</th><th>Règlement</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
@@ -3229,7 +3229,7 @@ async function renderCgCommandes(){
   document.querySelectorAll(".cgcReg").forEach(s=>s.onchange=()=>maj(s.dataset.id,{reglement:s.value},"Règlement mis à jour"));
   $("#cgcAdd").onclick=()=>{
     if(!biens.length){$("#cgcErr").textContent="Ajoutez d'abord un bien.";return;}
-    const optR=bid=>`<option value="">— sans réservation —</option>`+resas.filter(r=>r.bien_id===bid&&r.statut!=="annulee").map(r=>`<option value="${r.id}">${esc((par(voys,r.voyageur_id)||{}).nom||"Voyageur")} · ${fdate(r.arrivee)} → ${fdate(r.depart)}</option>`).join("");
+    const optR=bid=>`<option value="">— sans réservation —</option>`+resas.filter(r=>r.bien_id===bid&&["confirmee","terminee","en_attente"].includes(r.statut)).map(r=>`<option value="${r.id}">${esc((par(voys,r.voyageur_id)||{}).nom||"Voyageur")} · ${fdate(r.arrivee)} → ${fdate(r.depart)}</option>`).join("");
     ouvrir(`<div class="h"><h3>Saisir une commande</h3><button class="x" onclick="fermer()">×</button></div>
       <div class="b"><p class="muted" style="margin:0 0 10px">Pour une demande reçue par téléphone ou message. Le montant, la commission et le reversement sont calculés automatiquement à partir de la fiche de la prestation.</p>
         <div class="field"><label>Bien *</label><select id="cgaBien">${biens.map(b=>`<option value="${b.id}">${esc(b.nom||"—")}</option>`).join("")}</select></div>
