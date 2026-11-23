@@ -926,7 +926,8 @@ const RUBRIQUES=[
     ["part","Partenaires",{m:"partenaires"}],
     ["serv","Services internes",{m:"services_internes"}],
     ["opt","Options par bien",{cgoptions:1}],
-    ["cpt","Comptes",{cgcomptes:1}]]},
+    ["cpt","Comptes",{cgcomptes:1}],
+    ["liens","Liens voyageurs",{cgliens:1}]]},
   {k:"branch",label:"Branchements & outils",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
@@ -1454,6 +1455,7 @@ function goRub(rk,sk){
   if(t.scoreaso)return renderScoreASO();
   if(t.cgoptions)return renderCgOptions();
   if(t.cgcomptes)return renderCgComptes();
+  if(t.cgliens)return renderCgLiens();
   if(t.journalact)return renderJournal();
   if(t.encaissements)return renderEncaissements();
   if(t.checkinonline)return renderCheckinOnline();
@@ -3149,6 +3151,46 @@ async function renderCgOptions(){
     if(ok){toast("Enregistré");logAction('modification','bien_prestation',b.id,'Options par bien');renderCgOptions();}
   };
   $("#cgReset").onclick=async()=>{ if(await ecrire([])){toast("Réglage par défaut rétabli");renderCgOptions();} };
+}
+
+async function renderCgLiens(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const limite=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const [rr,rb,rv,rc]=await Promise.all([
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,acces_voyageur").in("statut",["confirmee","terminee"]).gte("depart",limite).order("arrivee"),
+    sb.from("bien").select("id,nom"),
+    sb.from("voyageur").select("id,nom"),
+    sb.from("commande").select("reservation_id,statut")]);
+  const err=rr.error||rb.error||rv.error||rc.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const resas=rr.data||[],biens=rb.data||[],voys=rv.data||[],cmds=rc.data||[];
+  const base=location.origin+location.pathname.replace(/[^/]*$/,"")+"sejour/#/sejour/";
+  const nom=(l,id)=>{const x=l.find(y=>y.id===id);return x?(x.nom||"—"):"—";};
+  const lignes=resas.map(r=>{
+    const n=cmds.filter(c=>c.reservation_id===r.id&&c.statut!=="annule"&&c.statut!=="refuse").length;
+    const lien=r.acces_voyageur?`<div style="display:flex;gap:6px;align-items:center"><input readonly value="${esc(base+r.acces_voyageur)}" style="font-size:12px;min-width:220px" onclick="this.select()">
+        <button class="btn o sm cglCopier" data-u="${esc(base+r.acces_voyageur)}">Copier</button>
+        <a class="btn o sm" href="${esc(base+r.acces_voyageur)}" target="_blank" rel="noopener">Ouvrir</a>
+        <button class="btn o sm cglOff" data-id="${r.id}">Désactiver</button></div>`
+      :`<button class="btn sm cglOn" data-id="${r.id}">Créer le lien</button>`;
+    return `<tr><td>${esc(nom(biens,r.bien_id))}</td><td>${esc(nom(voys,r.voyageur_id))}</td><td>${fdate(r.arrivee)} → ${fdate(r.depart)}</td><td>${pill(r.statut)}</td><td style="text-align:center">${n||"—"}</td><td>${lien}</td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Liens voyageurs</h3></div>
+    <p class="phnote">Chaque voyageur accède à son séjour par un lien personnel, sans compte : informations du logement (wifi, code de porte, arrivée), catalogue des prestations du bien, et ses demandes. Envoyez-lui le lien par message. Le lien ne fonctionne que pour une réservation confirmée ou terminée, jusqu'à 30 jours après le départ. « Désactiver » le coupe immédiatement.</p>
+    <span class="err" id="cglErr" style="display:block;padding:0 16px"></span>
+    ${resas.length?`<div style="overflow:auto"><table><thead><tr><th>Bien</th><th>Voyageur</th><th>Séjour</th><th>Statut</th><th style="text-align:center">Demandes</th><th>Lien du voyageur</th></tr></thead><tbody>${lignes}</tbody></table></div>`
+    :`<div class="empty">Aucune réservation confirmée en cours ou à venir.</div>`}</div>`;
+  const maj=async(id,val,msg)=>{
+    $("#cglErr").textContent="";
+    const {data,error}=await sb.from("reservation").update({acces_voyageur:val}).eq("id",id).select("id");
+    if(error){$("#cglErr").textContent=error.message;return;}
+    if(!data||!data.length){$("#cglErr").textContent="Modification refusée.";return;}
+    toast(msg);logAction('modification','reservation',id,msg);renderCgLiens();};
+  document.querySelectorAll(".cglOn").forEach(b=>b.onclick=()=>{
+    const o=new Uint8Array(16);crypto.getRandomValues(o);
+    maj(b.dataset.id,[...o].map(x=>x.toString(16).padStart(2,"0")).join(""),"Lien voyageur créé");});
+  document.querySelectorAll(".cglOff").forEach(b=>b.onclick=()=>maj(b.dataset.id,null,"Lien voyageur désactivé"));
+  document.querySelectorAll(".cglCopier").forEach(b=>b.onclick=async()=>{
+    try{await navigator.clipboard.writeText(b.dataset.u);toast("Lien copié");}catch(e){$("#cglErr").textContent="Copie impossible : sélectionnez le lien et copiez-le.";}});
 }
 
 async function renderCgComptes(){
