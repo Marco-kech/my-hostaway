@@ -1199,10 +1199,25 @@ async function renderInbox(){
   const keys=Object.keys(groups).sort((a,b)=>{const la=groups[a][groups[a].length-1].cree_le||'',lb=groups[b][groups[b].length-1].cree_le||'';return lb.localeCompare(la);});
   if(!state.inboxSel||!groups[state.inboxSel]) state.inboxSel=keys[0]||null;
   const titleFor=key=>{if(key==='autre')return 'Sans réservation';if(key.startsWith('r:'))return refName('reservation',key.slice(2));if(key.startsWith('v:')){const v=findVoy(key.slice(2));return v?v.nom:'Voyageur';}return key;};
+  /* Compteurs inbox enrichie */
+  let totalNonLu=0, totalUrgent=0;
+  const now=Date.now();
   const list=keys.map(key=>{const arr=groups[key],last=arr[arr.length-1],on=key===state.inboxSel;
-    return `<div class="ibx-item" data-key="${esc(key)}" style="padding:10px 12px;border-bottom:1px solid var(--line,#eee);cursor:pointer;${on?'background:rgba(201,162,74,.12)':''}">
-      <div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">${esc(titleFor(key))}</strong><span class="muted" style="font-size:11px">${fdate(last.cree_le)}</span></div>
+    /* Non lu = dernier message entrant sans réponse sortante après */
+    const lastIn=arr.filter(m=>m.sens==='entrant').pop();
+    const lastOut=arr.filter(m=>m.sens==='sortant').pop();
+    const nonLu=lastIn&&(!lastOut||lastOut.cree_le<lastIn.cree_le);
+    if(nonLu)totalNonLu++;
+    /* Urgent = entrant sans réponse depuis >24h */
+    const urgent=nonLu&&lastIn&&(now-new Date(lastIn.cree_le).getTime()>24*3600000);
+    if(urgent)totalUrgent++;
+    const badge=urgent?'<span style="background:#e74c3c;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px">URGENT</span>':(nonLu?'<span style="background:var(--dpm-or,#C9A227);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px">NEW</span>':'');
+    return `<div class="ibx-item" data-key="${esc(key)}" style="padding:10px 12px;border-bottom:1px solid var(--line,#eee);cursor:pointer;${on?'background:rgba(201,162,74,.12)':''}${urgent?';border-left:3px solid #e74c3c':''}">
+      <div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">${esc(titleFor(key))}${badge}</strong><span class="muted" style="font-size:11px">${fdate(last.cree_le)}</span></div>
       <div class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((last.corps||'').slice(0,50))}</div></div>`;}).join("")||'<div class="empty" style="padding:16px">Aucune conversation.</div>';
+  /* Badge dans le menu latéral */
+  const inboxMenuEl=document.querySelector('[data-rub="inbox"]');
+  if(inboxMenuEl&&totalNonLu>0){const existing=inboxMenuEl.querySelector('.inbox-badge');if(existing)existing.remove();inboxMenuEl.insertAdjacentHTML('beforeend',`<span class="inbox-badge" style="background:${totalUrgent>0?'#e74c3c':'var(--dpm-or,#C9A227)'};color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:auto">${totalNonLu}</span>`);}
   const sel=state.inboxSel, arr=sel?groups[sel]:[];
   const thread=(arr||[]).map(m=>{const out=m.sens==='sortant';
     return `<div style="display:flex;justify-content:${out?'flex-end':'flex-start'};margin:6px 0">
@@ -2159,6 +2174,14 @@ async function renderDashboard(){
   const msgEnvoyes=ms.filter(m=>m.sens==='sortant').length;
   const msgRecus=ms.filter(m=>m.sens==='entrant').length;
   const msgNonLus=ms.filter(m=>m.sens==='entrant'&&m.statut!=='lu').length;
+  /* Tâches en retard */
+  const {data:tachesRetard}=await sb.from("tache").select("id,titre,date_prevue,bien_id").lt("date_prevue",today).in("statut",["a_faire","accepte","en_cours"]).eq("archive",false).limit(20);
+  const nbRetard=(tachesRetard||[]).length;
+  /* Badge menu tâches */
+  const tacheMenuEl=document.querySelector('[data-rub="taches"]');
+  if(tacheMenuEl&&nbRetard>0){tacheMenuEl.insertAdjacentHTML('beforeend',`<span style="background:#e74c3c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:auto">${nbRetard}</span>`);}
+  /* Alerte toast si tâches en retard */
+  if(nbRetard>0)toast("⚠️ "+nbRetard+" tâche(s) en retard !");
   const moyEnv=(msgEnvoyes/30).toFixed(1), moyRec=(msgRecus/30).toFixed(1);
   const confRows=(resaMonth.data||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
   const revConfirmes=confRows.reduce((s,r)=>s+Number(r.prix_total||0),0);
@@ -2205,7 +2228,9 @@ async function renderDashboard(){
       <div class="kpi"><div class="l">Voyageurs séjournant</div><div class="v">${sejournant}</div><div class="s">actuellement sur place</div></div>
       <div class="kpi"><div class="l">À approuver</div><div class="v">${aApprouver}</div><div class="s">réservations en attente</div></div>
       <div class="kpi"><div class="l">Demandes en attente</div><div class="v">${demandes}</div><div class="s">à traiter</div></div>
+      <div class="kpi" style="${nbRetard>0?'border-color:#e74c3c':''}"><div class="l">Tâches en retard</div><div class="v" style="${nbRetard>0?'color:#e74c3c':''}">${nbRetard}</div><div class="s">${nbRetard>0?'<a href="#" onclick="goRub(\'taches\',\'kanban\');return false" style="color:#e74c3c">Voir →</a>':'à jour'}</div></div>
     </div>
+    ${nbRetard>0?`<div class="panel" style="border-left:3px solid #e74c3c"><div class="phead"><h3 style="color:#e74c3c">⚠️ Tâches en retard (${nbRetard})</h3></div><div style="padding:8px 14px">${(tachesRetard||[]).map(t=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span>${esc(t.titre)}</span><span class="muted">${esc(refName("bien",t.bien_id)||'')} · prévu ${fdate(t.date_prevue)}</span></div>`).join('')}</div></div>`:''}
     <div class="panel" style="margin-top:4px;background:linear-gradient(135deg,#14352A08,#C9A22708);border:1px solid #C9A22730">
       <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:12px">
@@ -2374,16 +2399,37 @@ async function renderCalendar(){
       const prefix=isConfirm?'':'⏳ ';
       return `<div class="${cls}">${prefix}${esc(refName("bien",r.bien_id))}</div>`;
     }).join("");
-    const bl=(blos||[]).filter(b=>iso>=b.debut&&iso<b.fin).map(b=>`<div class="ev b">Bloqué</div>`).join("");
-    cells+=`<div class="d"><div class="n">${d}</div>${evs}${bl}</div>`;
+    const bl=(blos||[]).filter(b=>iso>=b.debut&&iso<b.fin);
+    const blHtml=bl.map(b=>`<div class="ev b" data-unblock="${b.id}" style="cursor:pointer" title="Cliquer pour débloquer">🔒 ${esc(refName("bien",b.bien_id)||'Bloqué')}</div>`).join("");
+    const hasResa=(resa||[]).some(r=>iso>=r.arrivee&&iso<r.depart);
+    const freeClick=(!hasResa&&bl.length===0)?` data-block="${iso}" style="cursor:pointer" title="Cliquer pour bloquer cette date"`:'';
+    cells+=`<div class="d"${freeClick}><div class="n">${d}</div>${evs}${blHtml}</div>`;
   }
+  const bienSel=`<select id="calBienSel"><option value="">Tous les biens</option>${(state.opts.bien||[]).map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("")}</select>`;
   const label=calMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   $("#content").innerHTML=`<div class="panel"><div class="phead">
       <button class="btn o sm" id="calPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
-      <button class="btn o sm" id="calNext">›</button><span class="sp"></span><span class="muted">Réservations & blocages</span></div>
+      <button class="btn o sm" id="calNext">›</button><span class="sp"></span>${bienSel}<span class="muted" style="margin-left:8px">Cliquez une date libre pour bloquer</span></div>
       <div style="padding:14px"><div class="cal">${cells}</div></div></div>`;
   $("#calPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalendar();};
   $("#calNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalendar();};
+  /* Bloquer une date libre */
+  document.querySelectorAll("[data-block]").forEach(el=>el.onclick=async()=>{
+    const iso=el.dataset.block;
+    const bienId=document.getElementById("calBienSel")?.value;
+    if(!bienId){toast("Sélectionnez d'abord un bien dans le filtre");return;}
+    const fin=new Date(iso);fin.setDate(fin.getDate()+1);
+    const{error}=await sb.from("blocage").insert({tenant_id:state.tenant.id,bien_id:bienId,debut:iso,fin:fin.toISOString().slice(0,10),source:'manuel',motif:'Blocage manuel'});
+    if(error){toast("Erreur: "+error.message);return;}
+    toast("🔒 Date bloquée");renderCalendar();
+  });
+  /* Débloquer */
+  document.querySelectorAll("[data-unblock]").forEach(el=>el.onclick=async(e)=>{
+    e.stopPropagation();
+    const{error}=await sb.from("blocage").delete().eq("id",el.dataset.unblock);
+    if(error){toast("Erreur: "+error.message);return;}
+    toast("🔓 Date débloquée");renderCalendar();
+  });
 }
 
 /* ---------- CALENDAR (multiple : biens x jours) ---------- */
@@ -2580,6 +2626,16 @@ async function renderFinances(){
       <div class="kpi"><div class="l">Revenu moyen / séjour</div><div class="v" style="font-size:22px">${money(reel.length?aRev/reel.length:0)}</div></div>
       <div class="kpi"><div class="l">Total réservations</div><div class="v">${reel.length}</div></div>
     </div>
+    ${(()=>{
+      /* Graphique barres : revenus mensuels */
+      const parMois={};reel.forEach(r=>{const m=(r.arrivee||'').slice(0,7);if(m)parMois[m]=(parMois[m]||0)+Number(r.prix_total||0);});
+      const moisK=Object.keys(parMois).sort();
+      if(moisK.length<2)return '';
+      const maxV=Math.max(1,...moisK.map(k=>parMois[k]));
+      const bw=Math.min(60,Math.floor(680/moisK.length)-4);
+      const bars=moisK.map((k,i)=>{const h=Math.round(parMois[k]/maxV*180);const x=20+i*(bw+4);return `<rect x="${x}" y="${200-h}" width="${bw}" height="${h}" fill="#c9a24a" rx="3"><title>${k}: ${money(parMois[k])}</title></rect><text x="${x+bw/2}" y="218" fill="currentColor" font-size="10" text-anchor="middle">${k.slice(5)}</text>`;}).join('');
+      return `<div class="panel"><div class="phead"><h3>Revenus mensuels</h3></div><div style="padding:14px;overflow:auto"><svg viewBox="0 0 ${20+moisK.length*(bw+4)} 230" style="width:100%;max-width:${20+moisK.length*(bw+4)}px;height:auto"><line x1="20" y1="200" x2="${20+moisK.length*(bw+4)}" y2="200" stroke="currentColor" stroke-opacity=".2"/>${bars}</svg></div></div>`;
+    })()}
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
       ${widget('Revenus par canal',parCanal(reel,r=>Number(r.prix_total||0)),v=>money(v))}
       ${widget('Nuits réservées par canal',parCanal(reel,r=>nts(r.arrivee,r.depart)),v=>v)}
