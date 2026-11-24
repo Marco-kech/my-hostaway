@@ -777,6 +777,11 @@ const MODULES = {
       ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
       ["reference_canal","Réf. canal",{}],["prix_total","Prix total",{type:"number"}],
       ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show","sejour_proprietaire"],def:"confirmee"}],["raison_annulation","Raison d'annulation",{opts:["voyageur","hote","plateforme","double_reservation","autre"]}],
+      ["__sCIO","Check-in / Check-out",{section:1}],
+      ["heure_checkin","Heure d'arrivée prévue",{type:"time"}],
+      ["heure_checkout","Heure de départ prévue",{type:"time"}],
+      ["statut_paiement","Statut paiement",{opts:["en_attente","partiel","paye","rembourse","annule"],def:"en_attente"}],
+      ["montant_paye","Montant payé",{type:"number"}],
       ["__sDoc","Documents & pièces jointes",{section:1}],
       ["piece_identite","Pièce d'identité voyageur",{file:1}],
       ["contrat_signe","Contrat signé",{file:1}],
@@ -2671,7 +2676,7 @@ async function renderFinances(){
 function payForm(resaId){
   const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);
   const reste=(r.prix_total||0)-(r.montant_paye||0);
-  const payLink=location.origin+location.pathname+'#pay='+resaId;
+  const payLink=location.origin+location.pathname.replace(/[^/]*$/,'')+'pay.html#'+resaId;
   ouvrir(`<div class="h"><h3>Encaisser un paiement</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
       <p class="muted">Reste à encaisser : <b>${money(reste)}</b></p>
