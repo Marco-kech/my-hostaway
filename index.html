@@ -917,7 +917,7 @@ const MODULES = {
   modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
     cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","airbnb","booking","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
-      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["reservation","confirmation","modification","annulation","avant_arrivee","jour_arrivee","arrivee","pendant_sejour","veille_depart","jour_depart","depart","apres_depart","demande_avis","paiement_recu","rappel_paiement","checkin_incomplet"]}],["delai_h","Délai (heures)",{type:"number"}]]},
+      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
@@ -2518,17 +2518,17 @@ async function renderWhatsappConfig(){
   const v=await reglGet("whatsapp")||{};
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>WhatsApp Business API</h3></div>
     <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px;border-left:3px solid #e67e22"><b>Pas encore branché.</b> Ces réglages sont enregistrés mais rien ne les utilise pour l'instant. Les clés secrètes ne se saisissent pas ici.</div>
       <div class="phnote" style="margin-bottom:12px">Connectez votre compte WhatsApp Business pour envoyer des messages automatisés aux voyageurs. Nécessite un compte Meta Business vérifié et l'accès à l'API WhatsApp Cloud.</div>
       <div class="field"><label>Numéro WhatsApp Business</label><input id="waNum" value="${esc(v.numero||'')}" placeholder="+212 6XX XXX XXX"></div>
       <div class="field"><label>ID du compte WhatsApp Business</label><input id="waId" value="${esc(v.waba_id||'')}" placeholder="Meta Business Account ID"></div>
-      <div class="field"><label>Token d'accès (permanent)</label><input id="waToken" type="password" value="${esc(v.token||'')}" placeholder="EAA…"></div>
       <div class="field"><label>ID du numéro de téléphone</label><input id="waPhoneId" value="${esc(v.phone_id||'')}" placeholder="Phone Number ID"></div>
       <div class="field"><label>Statut de vérification</label>
         <div style="padding:8px;background:${v.verified?'#e8f5e9':'#fff3e0'};border-radius:8px;font-size:13px">${v.verified?'✅ Vérifié et actif':'⏳ En attente de vérification Meta — <a href="https://business.facebook.com" target="_blank">Vérifier sur Meta Business</a>'}</div></div>
       <div style="margin-top:12px"><button class="btn g" id="waSave">Enregistrer</button> <span class="ok" id="waOk"></span></div>
     </div></div>`;
   document.getElementById("waSave").onclick=async()=>{
-    const val={numero:$("#waNum").value,waba_id:$("#waId").value,token:$("#waToken").value,phone_id:$("#waPhoneId").value,verified:v.verified||false};
+    const val={numero:$("#waNum").value,waba_id:$("#waId").value,phone_id:$("#waPhoneId").value,verified:v.verified||false};
     const e=await reglSet("whatsapp",val);if(e){$("#waOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#waOk").textContent="Enregistré ✓";toast("Configuration WhatsApp enregistrée");
   };
@@ -2540,16 +2540,16 @@ async function renderSmsConfig(){
   const prov=v.provider||'twilio';
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Configuration SMS</h3></div>
     <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px;border-left:3px solid #e67e22"><b>Pas encore branché.</b> Ces réglages sont enregistrés mais rien ne les utilise pour l'instant. Les clés secrètes ne se saisissent pas ici.</div>
       <div class="phnote" style="margin-bottom:12px">Envoyez des SMS aux voyageurs pour les notifications urgentes (check-in, rappels de paiement). Choisissez votre fournisseur.</div>
       <div class="field"><label>Fournisseur</label><select id="smsProv"><option value="twilio" ${prov==='twilio'?'selected':''}>Twilio</option><option value="vonage" ${prov==='vonage'?'selected':''}>Vonage (Nexmo)</option><option value="orange" ${prov==='orange'?'selected':''}>Orange Business</option></select></div>
       <div class="field"><label>Account SID / API Key</label><input id="smsKey" value="${esc(v.api_key||'')}" placeholder="Account SID ou API Key"></div>
-      <div class="field"><label>Auth Token / Secret</label><input id="smsSecret" type="password" value="${esc(v.auth_token||'')}" placeholder="Auth Token"></div>
       <div class="field"><label>Numéro expéditeur</label><input id="smsFrom" value="${esc(v.from_number||'')}" placeholder="+212XXXXXXXXX ou nom court"></div>
       <div class="field"><label>Activer les SMS automatiques</label><select id="smsAuto"><option value="non" ${v.auto!=='oui'?'selected':''}>Non</option><option value="oui" ${v.auto==='oui'?'selected':''}>Oui</option></select></div>
       <div style="margin-top:12px"><button class="btn g" id="smsSave">Enregistrer</button> <span class="ok" id="smsOk"></span></div>
     </div></div>`;
   document.getElementById("smsSave").onclick=async()=>{
-    const val={provider:$("#smsProv").value,api_key:$("#smsKey").value,auth_token:$("#smsSecret").value,from_number:$("#smsFrom").value,auto:$("#smsAuto").value};
+    const val={provider:$("#smsProv").value,api_key:$("#smsKey").value,from_number:$("#smsFrom").value,auto:$("#smsAuto").value};
     const e=await reglSet("sms",val);if(e){$("#smsOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#smsOk").textContent="Enregistré ✓";toast("Configuration SMS enregistrée");
   };
@@ -4867,17 +4867,17 @@ async function renderPaypalConfig(){
   const mode=v.mode||'sandbox';
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Configuration PayPal</h3></div>
     <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px;border-left:3px solid #e67e22"><b>Pas encore branché.</b> Ces réglages sont enregistrés mais rien ne les utilise pour l'instant. Les clés secrètes ne se saisissent pas ici.</div>
       <div class="phnote" style="margin-bottom:12px">Connectez votre compte PayPal Business pour recevoir les paiements des voyageurs. Les paiements sont traités via l'API PayPal et crédités directement sur votre compte.</div>
       <div class="field"><label>Mode</label><select id="ppMode"><option value="sandbox" ${mode==='sandbox'?'selected':''}>Sandbox (test)</option><option value="live" ${mode==='live'?'selected':''}>Production (live)</option></select></div>
       <div class="field"><label>Client ID</label><input id="ppClient" value="${esc(v.client_id||'')}" placeholder="PayPal Client ID"></div>
-      <div class="field"><label>Secret</label><input id="ppSecret" type="password" value="${esc(v.secret||'')}" placeholder="PayPal Secret"></div>
       <div class="field"><label>Email PayPal (destinataire)</label><input id="ppEmail" value="${esc(v.email||'')}" placeholder="paiements@dpmconciergerie.com"></div>
       <div class="field"><label>Devise</label><select id="ppDevise"><option value="MAD" ${v.devise==='MAD'?'selected':''}>MAD (Dirham)</option><option value="EUR" ${v.devise==='EUR'?'selected':''}>EUR</option><option value="USD" ${v.devise==='USD'?'selected':''}>USD</option></select></div>
       <div class="field"><label>Paiement automatique à la réservation</label><select id="ppAuto"><option value="non" ${v.auto!=='oui'?'selected':''}>Non — paiement manuel</option><option value="oui" ${v.auto==='oui'?'selected':''}>Oui — lien envoyé automatiquement</option></select></div>
       <div style="margin-top:12px"><button class="btn g" id="ppSave">Enregistrer</button> <span class="ok" id="ppOk"></span></div>
     </div></div>`;
   document.getElementById("ppSave").onclick=async()=>{
-    const val={mode:$("#ppMode").value,client_id:$("#ppClient").value,secret:$("#ppSecret").value,email:$("#ppEmail").value,devise:$("#ppDevise").value,auto:$("#ppAuto").value};
+    const val={mode:$("#ppMode").value,client_id:$("#ppClient").value,email:$("#ppEmail").value,devise:$("#ppDevise").value,auto:$("#ppAuto").value};
     const e=await reglSet("paypal",val);if(e){$("#ppOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#ppOk").textContent="Enregistré ✓";toast("Configuration PayPal enregistrée");
   };
@@ -7220,6 +7220,7 @@ async function renderAssurance(){
   const actif=v.actif?'<span class="pill green">Activé</span>':'<span class="pill gray">Désactivé</span>';
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Assurance séjour ${actif}</h3></div>
     <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px;border-left:3px solid #e67e22"><b>Pas encore branché.</b> Ces réglages sont enregistrés mais rien ne les utilise pour l'instant. Les clés secrètes ne se saisissent pas ici.</div>
       <div class="phnote" style="margin-bottom:12px">Proposez une assurance annulation et dommages aux voyageurs. L'assurance est ajoutée en option lors de la réservation. Vous percevez une commission sur chaque souscription.</div>
       <div class="field"><label>Fournisseur</label><select id="asProv"><option value="interne" ${v.provider==='interne'?'selected':''}>Gestion interne (caution)</option><option value="safely" ${v.provider==='safely'?'selected':''}>Safely</option><option value="superhog" ${v.provider==='superhog'?'selected':''}>Superhog</option><option value="autre" ${v.provider==='autre'?'selected':''}>Autre</option></select></div>
       <div class="field"><label>Montant de la couverture (MAD)</label><input id="asMontant" type="number" value="${v.montant||50000}"></div>
@@ -7277,17 +7278,17 @@ async function renderCmiConfig(){
   const v=await reglGet("cmi")||{};
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Paiement par carte — CMI (Maroc)</h3></div>
     <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px;border-left:3px solid #e67e22"><b>Pas encore branché.</b> Ces réglages sont enregistrés mais rien ne les utilise pour l'instant. Les clés secrètes ne se saisissent pas ici.</div>
       <div class="phnote" style="margin-bottom:12px">Le Centre Monétique Interbancaire (CMI) permet d'accepter les paiements par carte bancaire au Maroc. Nécessite un contrat monétique avec votre banque et les clés fournies par CMI.</div>
       <div class="field"><label>Statut</label>
         <div style="padding:8px;background:${v.store_id?'#e8f5e9':'#fff3e0'};border-radius:8px;font-size:13px">${v.store_id?'✅ Configuré':'⏳ En attente — contactez votre banque pour le contrat monétique'}</div></div>
       <div class="field"><label>Store ID (CMI)</label><input id="cmiStore" value="${esc(v.store_id||'')}" placeholder="Fourni par CMI"></div>
-      <div class="field"><label>Clé secrète</label><input id="cmiKey" type="password" value="${esc(v.secret_key||'')}" placeholder="Clé de hachage CMI"></div>
       <div class="field"><label>URL de callback (retour)</label><input id="cmiCallback" value="${esc(v.callback_url||'')}" placeholder="https://votre-domaine.com/callback"></div>
       <div class="field"><label>Mode</label><select id="cmiMode"><option value="test" ${v.mode!=='live'?'selected':''}>Test</option><option value="live" ${v.mode==='live'?'selected':''}>Production</option></select></div>
       <div style="margin-top:12px"><button class="btn g" id="cmiSave">Enregistrer</button> <span class="ok" id="cmiOk"></span></div>
     </div></div>`;
   document.getElementById("cmiSave").onclick=async()=>{
-    const val={store_id:$("#cmiStore").value,secret_key:$("#cmiKey").value,callback_url:$("#cmiCallback").value,mode:$("#cmiMode").value};
+    const val={store_id:$("#cmiStore").value,callback_url:$("#cmiCallback").value,mode:$("#cmiMode").value};
     const e=await reglSet("cmi",val);if(e){$("#cmiOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#cmiOk").textContent="Enregistré ✓";toast("Configuration CMI enregistrée");
   };
