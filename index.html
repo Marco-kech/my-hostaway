@@ -1101,8 +1101,8 @@ const RUBRIQUES=[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
     ["serrhist","Historique accès",{serrhist:1}],
-    ["assur","Assurance",{ph:"Souscription (Safely) : détails de couverture, inscription."}],
-    ["market","Marketplace",{ph:"~220 partenaires par catégorie (canaux, serrures, ménage, paiement, tarification, CRM) : configurer / connecté."}]]},
+    ["assur","Assurance",{assurance:1}],
+    ["market","Marketplace",{marketplace:1}]]},
   {k:"users",label:"Utilisateurs & groupes",icon:"☺",subs:[
     ["u","Utilisateurs",{userslist:1}],
     ["g","Groupes & droits",{groupes:1}],
@@ -1115,10 +1115,10 @@ const RUBRIQUES=[
     ["param","Paramètres",{siteparams:1}],
     ["seo","SEO & Analytics",{seocfg:1}],
     ["guide","Livret d'accueil",{guidebook:1}],
-    ["trad","Traductions",{ph:"Traductions du site dans les 6 langues voyageurs — à venir."}]]},
+    ["trad","Traductions",{traductions:1}]]},
   {k:"params",label:"Paramètres",icon:"⚙",subs:[
     ["compte","Détails du compte",{paramcompte:1}],
-    ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
+    ["cmi","Paiement CMI",{cmicfg:1}],
     ["lang","Langues",{paramlangues:1}],
     ["integ","Intégrations",{emailcfg:1}],
     ["whatsapp","WhatsApp Business",{whatsappcfg:1}],
@@ -1669,6 +1669,10 @@ function goRub(rk,sk){
   if(t.whatsappcfg)return renderWhatsappConfig();
   if(t.smscfg)return renderSmsConfig();
   if(t.historique)return renderHistoriqueModifs();
+  if(t.assurance)return renderAssurance();
+  if(t.marketplace)return renderMarketplace();
+  if(t.traductions)return renderTraductions();
+  if(t.cmicfg)return renderCmiConfig();
   if(t.serrures)return renderSerrures();
   if(t.serrappareils)return renderSerrAppareils();
   if(t.serrhist)return renderSerrHist();
@@ -7190,6 +7194,85 @@ ctx.lineWidth=2;ctx.strokeStyle='#222';ctx.lineCap='round';
   w.document.write(html);w.document.close();
   setTimeout(()=>w.print(),500);
   toast("Contrat généré avec zone de signature — le voyageur peut signer au doigt ou à la souris");
+}
+
+/* ---------- ASSURANCE VOYAGEURS ---------- */
+async function renderAssurance(){
+  const v=await reglGet("assurance")||{};
+  const actif=v.actif?'<span class="pill green">Activé</span>':'<span class="pill gray">Désactivé</span>';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Assurance séjour ${actif}</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Proposez une assurance annulation et dommages aux voyageurs. L'assurance est ajoutée en option lors de la réservation. Vous percevez une commission sur chaque souscription.</div>
+      <div class="field"><label>Fournisseur</label><select id="asProv"><option value="interne" ${v.provider==='interne'?'selected':''}>Gestion interne (caution)</option><option value="safely" ${v.provider==='safely'?'selected':''}>Safely</option><option value="superhog" ${v.provider==='superhog'?'selected':''}>Superhog</option><option value="autre" ${v.provider==='autre'?'selected':''}>Autre</option></select></div>
+      <div class="field"><label>Montant de la couverture (MAD)</label><input id="asMontant" type="number" value="${v.montant||50000}"></div>
+      <div class="field"><label>Prime par séjour (MAD)</label><input id="asPrime" type="number" value="${v.prime||150}"></div>
+      <div class="field"><label>Commission DPM (%)</label><input id="asComm" type="number" value="${v.commission||20}"></div>
+      <label style="display:flex;gap:8px;align-items:center;margin:12px 0;font-weight:500"><input type="checkbox" id="asActif" ${v.actif?'checked':''} style="width:auto"> Activer l'assurance sur les nouvelles réservations</label>
+      <div style="margin-top:12px"><button class="btn g" id="asSave">Enregistrer</button> <span class="ok" id="asOk"></span></div>
+    </div></div>`;
+  document.getElementById("asSave").onclick=async()=>{
+    const val={provider:$("#asProv").value,montant:Number($("#asMontant").value),prime:Number($("#asPrime").value),commission:Number($("#asComm").value),actif:$("#asActif").checked};
+    const e=await reglSet("assurance",val);if(e){$("#asOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#asOk").textContent="Enregistré ✓";toast("Assurance configurée");
+  };
+}
+
+/* ---------- MARKETPLACE PARTENAIRES ---------- */
+async function renderMarketplace(){
+  const cats=[
+    {nom:"Canaux de distribution",items:["Airbnb","Booking.com","VRBO","Expedia","Abritel","TripAdvisor"],icon:"🌐"},
+    {nom:"Serrures connectées",items:["Nuki","Yale","August","Igloohome","TheKeys"],icon:"🔐"},
+    {nom:"Ménage & blanchisserie",items:["Properly","TurnoverBnB","Equipe interne DPM"],icon:"🧹"},
+    {nom:"Paiement",items:["PayPal","CMI (Maroc)","Stripe","Square"],icon:"💳"},
+    {nom:"Tarification dynamique",items:["PriceLabs","Wheelhouse","Beyond","Interne DPM"],icon:"📊"},
+    {nom:"Communication",items:["WhatsApp Business","Twilio SMS","Resend Email"],icon:"💬"},
+    {nom:"Comptabilité",items:["Export comptable DPM","Sage","QuickBooks"],icon:"📒"},
+    {nom:"Assurance",items:["Safely","Superhog","Caution interne"],icon:"🛡"},
+    {nom:"Transport",items:["Transferts DPM","Careem","Bolt"],icon:"🚗"},
+    {nom:"Expériences",items:["Excursions DPM","GetYourGuide","Viator"],icon:"🎯"},
+  ];
+  const cards=cats.map(c=>`<div class="panel"><div class="phead"><h3>${c.icon} ${esc(c.nom)}</h3></div>
+    <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px">${c.items.map(it=>`<span style="padding:6px 14px;border-radius:20px;background:var(--bg2);font-size:13px;cursor:default">${esc(it)}</span>`).join('')}</div></div>`).join('');
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">Connectez des services tiers pour enrichir votre gestion. Chaque intégration se configure dans sa section dédiée (Paramètres, Canaux, Branchements).</div>${cards}`;
+}
+
+/* ---------- TRADUCTIONS DU SITE ---------- */
+async function renderTraductions(){
+  const v=await reglGet("traductions")||{};
+  const langues=[["fr","Français 🇫🇷"],["en","English 🇬🇧"],["es","Español 🇪🇸"],["ar","العربية 🇲🇦"],["de","Deutsch 🇩🇪"],["it","Italiano 🇮🇹"]];
+  const clefs=["bienvenue","reserver","disponibilites","prix_nuit","par_nuit","arrivee","depart","voyageurs","rechercher","envoyer","commentaire","note","recommander"];
+  const defFR={bienvenue:"Bienvenue",reserver:"Réserver maintenant",disponibilites:"Disponibilités",prix_nuit:"Prix par nuit",par_nuit:"/ nuit",arrivee:"Arrivée",depart:"Départ",voyageurs:"Voyageurs",rechercher:"Rechercher",envoyer:"Envoyer",commentaire:"Commentaire",note:"Note",recommander:"Recommander"};
+  const rows=clefs.map(k=>`<tr><td style="font-weight:600;white-space:nowrap">${esc(k)}</td>${langues.map(([code])=>`<td><input data-trad="${code}_${k}" value="${esc((v[code]||{})[k]||(code==='fr'?defFR[k]||'':''))}" style="width:100%;font-size:12px"></td>`).join('')}</tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Traductions du moteur de réservation</h3><span class="sp"></span><button class="btn g" id="tradSave">Enregistrer</button></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Traduisez les textes affichés sur le moteur de réservation, le formulaire d'avis et la page de paiement dans 6 langues. Laissez vide pour utiliser le français par défaut.</div>
+      <div style="overflow:auto"><table class="tbl" style="font-size:12px"><thead><tr><th>Clé</th>${langues.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    </div></div>`;
+  document.getElementById("tradSave").onclick=async()=>{
+    const val={};langues.forEach(([code])=>{val[code]={};clefs.forEach(k=>{const el=document.querySelector(`[data-trad="${code}_${k}"]`);if(el&&el.value)val[code][k]=el.value;});});
+    const e=await reglSet("traductions",val);if(e){toast("Erreur: "+e.message);return;}toast("Traductions enregistrées ✓");
+  };
+}
+
+/* ---------- CONFIG CMI (CARTE MAROC) ---------- */
+async function renderCmiConfig(){
+  const v=await reglGet("cmi")||{};
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Paiement par carte — CMI (Maroc)</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Le Centre Monétique Interbancaire (CMI) permet d'accepter les paiements par carte bancaire au Maroc. Nécessite un contrat monétique avec votre banque et les clés fournies par CMI.</div>
+      <div class="field"><label>Statut</label>
+        <div style="padding:8px;background:${v.store_id?'#e8f5e9':'#fff3e0'};border-radius:8px;font-size:13px">${v.store_id?'✅ Configuré':'⏳ En attente — contactez votre banque pour le contrat monétique'}</div></div>
+      <div class="field"><label>Store ID (CMI)</label><input id="cmiStore" value="${esc(v.store_id||'')}" placeholder="Fourni par CMI"></div>
+      <div class="field"><label>Clé secrète</label><input id="cmiKey" type="password" value="${esc(v.secret_key||'')}" placeholder="Clé de hachage CMI"></div>
+      <div class="field"><label>URL de callback (retour)</label><input id="cmiCallback" value="${esc(v.callback_url||'')}" placeholder="https://votre-domaine.com/callback"></div>
+      <div class="field"><label>Mode</label><select id="cmiMode"><option value="test" ${v.mode!=='live'?'selected':''}>Test</option><option value="live" ${v.mode==='live'?'selected':''}>Production</option></select></div>
+      <div style="margin-top:12px"><button class="btn g" id="cmiSave">Enregistrer</button> <span class="ok" id="cmiOk"></span></div>
+    </div></div>`;
+  document.getElementById("cmiSave").onclick=async()=>{
+    const val={store_id:$("#cmiStore").value,secret_key:$("#cmiKey").value,callback_url:$("#cmiCallback").value,mode:$("#cmiMode").value};
+    const e=await reglSet("cmi",val);if(e){$("#cmiOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#cmiOk").textContent="Enregistré ✓";toast("Configuration CMI enregistrée");
+  };
 }
 
 /* ---------- RELEVÉ PROPRIÉTAIRE PDF ---------- */
