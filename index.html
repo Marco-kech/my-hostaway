@@ -1058,7 +1058,8 @@ const RUBRIQUES=[
     ["frais","Factures voyageurs",{factures:1}],
     ["auto","Dépôts de garantie",{depotgar:1}],
     ["doc","Modèles de document",{docmodeles:1}],
-    ["fparam","Paramètres de facturation",{factparams:1}]]},
+    ["fparam","Paramètres de facturation",{factparams:1}],
+    ["paypal","Paramètres PayPal",{paypalcfg:1}]]},
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
     ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
@@ -1594,6 +1595,7 @@ function goRub(rk,sk){
   if(t.paramtaxes)return renderParamTaxes();
   if(t.paramfin)return renderParamFinanciers();
   if(t.exportcompta)return renderExportCompta();
+  if(t.paypalcfg)return renderPaypalConfig();
   if(t.formules)return renderFormules();
   if(t.qualavis)return renderQualAvis();
   if(t.qualann)return renderQualAnn();
@@ -4634,6 +4636,29 @@ async function renderEmailConfig(){
   })();
 }
 
+/* ---------- PARAMÈTRES PAYPAL ---------- */
+async function renderPaypalConfig(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const v=await reglGet("paypal")||{};
+  const mode=v.mode||'sandbox';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Configuration PayPal</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Connectez votre compte PayPal Business pour recevoir les paiements des voyageurs. Les paiements sont traités via l'API PayPal et crédités directement sur votre compte.</div>
+      <div class="field"><label>Mode</label><select id="ppMode"><option value="sandbox" ${mode==='sandbox'?'selected':''}>Sandbox (test)</option><option value="live" ${mode==='live'?'selected':''}>Production (live)</option></select></div>
+      <div class="field"><label>Client ID</label><input id="ppClient" value="${esc(v.client_id||'')}" placeholder="PayPal Client ID"></div>
+      <div class="field"><label>Secret</label><input id="ppSecret" type="password" value="${esc(v.secret||'')}" placeholder="PayPal Secret"></div>
+      <div class="field"><label>Email PayPal (destinataire)</label><input id="ppEmail" value="${esc(v.email||'')}" placeholder="paiements@dpmconciergerie.com"></div>
+      <div class="field"><label>Devise</label><select id="ppDevise"><option value="MAD" ${v.devise==='MAD'?'selected':''}>MAD (Dirham)</option><option value="EUR" ${v.devise==='EUR'?'selected':''}>EUR</option><option value="USD" ${v.devise==='USD'?'selected':''}>USD</option></select></div>
+      <div class="field"><label>Paiement automatique à la réservation</label><select id="ppAuto"><option value="non" ${v.auto!=='oui'?'selected':''}>Non — paiement manuel</option><option value="oui" ${v.auto==='oui'?'selected':''}>Oui — lien envoyé automatiquement</option></select></div>
+      <div style="margin-top:12px"><button class="btn g" id="ppSave">Enregistrer</button> <span class="ok" id="ppOk"></span></div>
+    </div></div>`;
+  document.getElementById("ppSave").onclick=async()=>{
+    const val={mode:$("#ppMode").value,client_id:$("#ppClient").value,secret:$("#ppSecret").value,email:$("#ppEmail").value,devise:$("#ppDevise").value,auto:$("#ppAuto").value};
+    const e=await reglSet("paypal",val);if(e){$("#ppOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#ppOk").textContent="Enregistré ✓";toast("Configuration PayPal enregistrée");
+  };
+}
+
 /* ---------- ÉDITION EN MASSE DES ANNONCES (LOT 5) ---------- */
 async function renderEditMasse(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -5175,7 +5200,7 @@ async function renderApiKeys(){
 async function renderNotifCfg(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const v=await reglGet("notifications");
-  const cats=[["nouvelle_reservation","Nouvelle réservation"],["annulation","Annulation"],["message_voyageur","Message d'un voyageur"],["enregistrement","Enregistrement (check-in)"],["depart","Départ (check-out)"],["paiement","Paiement reçu"],["tache","Tâche créée / terminée"],["avis","Nouvel avis reçu"]];
+  const cats=[["nouvelle_reservation","Nouvelle réservation"],["modification_reservation","Modification de réservation"],["annulation","Annulation"],["message_voyageur","Message d'un voyageur"],["enregistrement","Enregistrement (check-in)"],["depart","Départ (check-out)"],["paiement","Paiement reçu"],["rappel_paiement","Rappel de paiement (reste dû)"],["tache","Tâche créée / terminée"],["tache_retard","Tâche en retard"],["avis","Nouvel avis reçu"],["ical_sync","Synchronisation iCal terminée"],["checkin_incomplet","Check-in en ligne incomplet"]];
   const chk=cats.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:500"><input type="checkbox" id="nf_${k}" ${(v[k]!==false)?'checked':''} style="width:auto"> ${l}</label>`).join("");
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Préférences de notifications</h3></div>
     <div style="padding:16px">
