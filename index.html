@@ -912,11 +912,11 @@ const MODULES = {
   messagerie:{title:"Conversations",add:"Nouveau message",table:"message",
     cols:[["reservation_id","Réservation",v=>refName("reservation",v)],["canal","Canal",v=>pill(v)],["sens","Sens",v=>pill(v)],["corps","Message",v=>esc((v||"").slice(0,60))],["statut","Statut",v=>pill(v)]],
     fields:[["reservation_id","Réservation",{ref:"reservation"}],["voyageur_id","Voyageur",{ref:"voyageur"}],
-      ["canal","Canal",{opts:["whatsapp","email","sms","interne"],def:"whatsapp"}],["sens","Sens",{opts:["sortant","entrant"],def:"sortant"}],
+      ["canal","Canal",{opts:["whatsapp","email","sms","airbnb","booking","interne"],def:"whatsapp"}],["sens","Sens",{opts:["sortant","entrant"],def:"sortant"}],
       ["corps","Message",{long:1,req:1}],["statut","Statut",{opts:["brouillon","envoye","recu","lu","echoue"],def:"envoye"}]]},
   modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
     cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
-    fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
+    fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","airbnb","booking","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
       ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["reservation","confirmation","modification","annulation","avant_arrivee","jour_arrivee","arrivee","pendant_sejour","veille_depart","jour_depart","depart","apres_depart","demande_avis","paiement_recu","rappel_paiement","checkin_incomplet"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
@@ -982,7 +982,11 @@ const MODULES = {
       ["__s3","Contenu",{section:1}],
       ["commentaire","Commentaire du voyageur",{long:1}],["note_interne","Note interne (non visible)",{long:1}],
       ["etiquettes","Étiquettes (séparées par des virgules)",{}],["afficher_site","Afficher dans le moteur de réservation",{opts:["true","false"],def:"false"}],
-      ["statut","Statut",{opts:["publie","en_attente","masque","programme"],def:"publie"}]]},
+      ["statut","Statut",{opts:["publie","en_attente","masque","programme"],def:"publie"}],
+      ["__s4","Réponse de l'hôte",{section:1}],
+      ["reponse_hote","Réponse publique",{long:1}],
+      ["reponse_date","Date de réponse",{type:"date"}],
+      ["reponse_par","Répondu par",{}]]},
 };
 const ROLE_LABELS={proprietaire_compte:"Propriétaire du compte",administrateur:"Administrateur",gestionnaire:"Gestionnaire",agent_menage:"Agent de ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner",proprietaire_bien:"Propriétaire d'un bien",partenaire:"Partenaire"};
 const PILLMAP={propre:"green",en_nettoyage:"gold",a_nettoyer:"red",pre_autorisation:"blue",depot_classique:"gold",capture:"green",libere:"blue",rembourse:"gray",emise:"blue",payee:"green",accepte:"blue",en_ligne:"green",masque:"gray",actif:"green",confirmee:"green",paye:"green",fait:"green",terminee:"blue",
@@ -2617,6 +2621,8 @@ async function renderFinances(){
       <span class="muted">Au</span><input id="afAu" type="date" value="${AF.au}" style="max-width:140px">
       <select id="afDR" style="max-width:170px">${drOpts}</select>
       <button class="btn o sm" id="afReset">Réinitialiser</button>
+      <button class="btn o sm" id="afSaveVue">💾 Sauvegarder vue</button>
+      <select id="afLoadVue" style="max-width:160px"><option value="">Vues sauvegardées…</option></select>
       <span class="sp"></span><span class="muted">${(resa||[]).length} réservation(s)</span>
     </div></div>
     <div class="kpis">
@@ -4614,6 +4620,18 @@ async function renderEmailConfig(){
     else if(v==="an"){AF.du=y+"-01-01";AF.au=y+"-12-31";}
     else{AF.du="";AF.au="";}renderFinances();};
   $("#afReset").onclick=()=>{state.anaF={bien:"",canal:"",du:"",au:""};renderFinances();};
+  /* Vues personnalisées */
+  (async()=>{
+    const vues=(await reglGet("vues_financieres"))||{liste:[]};
+    const sel=document.getElementById("afLoadVue");if(!sel)return;
+    (vues.liste||[]).forEach((v,i)=>{const o=document.createElement("option");o.value=i;o.textContent=v.nom;sel.appendChild(o);});
+    sel.onchange=()=>{const v=(vues.liste||[])[+sel.value];if(!v)return;state.anaF={...v.filtres};renderFinances();};
+    document.getElementById("afSaveVue").onclick=async()=>{
+      const nom=prompt("Nom de cette vue ?");if(!nom)return;
+      const nv={nom,filtres:{...AF}};vues.liste.push(nv);
+      await reglSet("vues_financieres",vues);toast("Vue « "+nom+" » sauvegardée");renderFinances();
+    };
+  })();
 }
 
 /* ---------- ÉDITION EN MASSE DES ANNONCES (LOT 5) ---------- */
@@ -4842,8 +4860,8 @@ async function renderAvisList(){
       <td>${a.canal?pill(a.canal):'—'}</td><td>${a.origine?pill(a.origine):'—'}</td>
       <td>${r.arrivee?fdate(r.arrivee):'—'}</td><td>${r.depart?fdate(r.depart):'—'}</td>
       <td>${pill(a.statut)}</td>
-      <td>${a.note_globale!=null?('★ '+a.note_globale):'—'}</td>
-      <td style="text-align:center">${a.afficher_site?'✓':'—'}</td>
+      <td>${a.note_globale!=null?('★ '+a.note_globale):'—'}${a.note_proprete||a.note_communication||a.note_emplacement||a.note_qualite_prix?`<div style="font-size:10px;color:#888;margin-top:2px">🧹${a.note_proprete||'—'} 💬${a.note_communication||'—'} 📍${a.note_emplacement||'—'} 💰${a.note_qualite_prix||'—'}</div>`:''}</td>
+      <td style="text-align:center">${a.reponse_hote?'<span title="Répondu" style="color:var(--ok)">✓</span>':'<span style="color:#e74c3c">✗</span>'}</td>
       <td>${esc(a.etiquettes||'')}</td>
       <td><div class="act"><button class="btn o sm" data-ed="${a.id}">Modifier</button><button class="btn d sm" data-del="${a.id}">×</button></div></td></tr>`;
   }).join("");
@@ -4861,7 +4879,7 @@ async function renderAvisList(){
       <input id="afQ" placeholder="Rechercher…" value="${esc(F.q)}" style="max-width:160px">
       <button class="btn o sm" id="afR">Réinitialiser</button>
       <span class="sp"></span><span class="muted">${list.length} sur ${(data||[]).length}</span></div>
-    <div style="overflow:auto">${list.length?`<table><thead><tr><th>Nom du voyageur</th><th>ID de réservation</th><th>Nom de l'annonce</th><th>Canal</th><th>Origine</th><th>Enregistrement</th><th>Départ</th><th>Statut</th><th>Avis global</th><th>Moteur</th><th>Étiquettes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun avis${(data||[]).length?" pour ces filtres":""}.</div>'}</div></div>`;
+    <div style="overflow:auto">${list.length?`<table><thead><tr><th>Nom du voyageur</th><th>ID de réservation</th><th>Nom de l'annonce</th><th>Canal</th><th>Origine</th><th>Enregistrement</th><th>Départ</th><th>Statut</th><th>Notes</th><th>Répondu</th><th>Étiquettes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun avis${(data||[]).length?" pour ces filtres":""}.</div>'}</div></div>`;
   const bind=(id,key,ev)=>{const el=$("#"+id);if(el)el["on"+(ev||"change")]=e=>{F[key]=e.target.value;renderAvisList();};};
   bind("afDu","du");bind("afAu","au");bind("afSt","statut");bind("afBien","bien");bind("afOr","origine");bind("afEt","etiq","input");bind("afQ","q","input");
   $("#afR").onclick=()=>{state.avisF=null;renderAvisList();};
