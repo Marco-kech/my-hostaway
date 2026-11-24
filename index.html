@@ -2699,13 +2699,20 @@ function payForm(resaId){
     $("#pSave").disabled=true;
     const {error}=await sb.from("paiement").insert({tenant_id:state.tenant.id,reservation_id:resaId,montant:isRemb?-Math.abs(montant):montant,moyen:$("#pMoy").value,reference:$("#pRef").value||null,type_paiement,notes:$("#pNotes").value||null,statut:"reussi"});
     if(!error&&isRemb){
-      /* Mettre à jour montant_paye sur la réservation */
       const newPaye=Math.max(0,(r.montant_paye||0)-Math.abs(montant));
       await sb.from("reservation").update({montant_paye:newPaye,statut_paiement:newPaye<=0?"rembourse":"partiel"}).eq("id",resaId);
     }
+    if(!error&&!isRemb){
+      const newPaye=(r.montant_paye||0)+montant;
+      const newSt=newPaye>=(r.prix_total||0)?"paye":"partiel";
+      await sb.from("reservation").update({montant_paye:newPaye,statut_paiement:newSt}).eq("id",resaId);
+    }
     $("#pSave").disabled=false;
     if(error){$("#pErr").textContent=error.message;return;}
-    fermer();toast(isRemb?"✅ Remboursement enregistré":"✅ Paiement enregistré");renderFinances();
+    fermer();toast(isRemb?"✅ Remboursement enregistré":"✅ Paiement enregistré");
+    /* Proposer le reçu */
+    if(!isRemb&&confirm("Générer un reçu de paiement ?")){genererRecuPDF(resaId,montant,$("#pMoy").value,$("#pRef").value);}
+    renderFinances();
   };
 }
 
@@ -6313,7 +6320,11 @@ async function renderStatsBien(){
         <div class="kpi"><div class="l">Nuits réservées</div><div class="v">${nuitsTotal}</div></div>
         <div class="kpi"><div class="l">Prix moy. / nuit</div><div class="v" style="font-size:22px">${money(prixMoyNuit)}</div></div>
         <div class="kpi"><div class="l">Réservations</div><div class="v">${conf.length}</div></div>
+        <div class="kpi"><div class="l">ADR</div><div class="v" style="font-size:22px">${money(prixMoyNuit)}</div><div class="s">Average Daily Rate</div></div>
+        <div class="kpi"><div class="l">RevPAR</div><div class="v" style="font-size:22px">${money(365>0?revTotal/365:0)}</div><div class="s">revenu / nuit dispo</div></div>
+        <div class="kpi"><div class="l">Taux occupation</div><div class="v">${Math.round(nuitsTotal/365*100)}%</div><div class="s">sur l'année</div></div>
         <div class="kpi"><div class="l">Note moyenne</div><div class="v">${noteMoy}${notes.length?' ★':''}</div><div class="s">${notes.length} avis</div></div>
+        <div class="kpi"><div class="l">Revenu / résa</div><div class="v" style="font-size:22px">${money(conf.length?revTotal/conf.length:0)}</div></div>
       </div>
       <div class="panel"><div class="phead"><h3>Revenus mensuels</h3></div><div style="padding:12px">${svgBarChart(chartData,{color:'#C9A227',suffix:' MAD'})}</div></div>
       <div class="panel"><div class="phead"><h3>Dernières réservations</h3></div><div style="overflow:auto">
@@ -6935,6 +6946,38 @@ ctx.lineWidth=2;ctx.strokeStyle='#222';ctx.lineCap='round';
   w.document.write(html);w.document.close();
   setTimeout(()=>w.print(),500);
   toast("Contrat généré avec zone de signature — le voyageur peut signer au doigt ou à la souris");
+}
+
+/* ---------- REÇU DE PAIEMENT PDF ---------- */
+async function genererRecuPDF(resaId,montant,moyen,reference){
+  const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);if(!r)return;
+  const cfg=await reglGet("facturation")||{};
+  const bien=(state.opts.bien||[]).find(b=>b.id===r.bien_id)||{};
+  const voy=(state.opts.voyageur||[]).find(v=>v.id===r.voyageur_id)||{};
+  const bg='#0f2d4a',acc='#c9a24a';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reçu de paiement</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:auto;font-size:13px;color:#222}
+.head{background:${bg};color:#fff;padding:20px;border-radius:10px;margin-bottom:20px;display:flex;justify-content:space-between}
+.head h1{font-size:18px;color:${acc}}
+table{width:100%;border-collapse:collapse;margin:12px 0}th,td{padding:8px 10px;border:1px solid #ddd;font-size:12.5px}th{background:#f5f5f5}
+.total{font-size:18px;font-weight:700;text-align:center;margin:20px 0;color:${bg}}
+.foot{text-align:center;margin-top:24px;font-size:10px;color:#999}
+@media print{body{padding:20px}}
+</style></head><body>
+<div class="head"><div><h1>REÇU DE PAIEMENT</h1><div style="font-size:11px;opacity:.8">${esc(cfg.societe||'DPM Conciergerie')}</div></div>
+<div style="text-align:right;font-size:12px">Date : ${new Date().toLocaleDateString('fr-FR')}</div></div>
+<table><tr><th>Voyageur</th><td>${esc(voy.nom||'—')}</td></tr>
+<tr><th>Bien</th><td>${esc(bien.nom||'—')}</td></tr>
+<tr><th>Séjour</th><td>${fdate(r.arrivee)} → ${fdate(r.depart)}</td></tr>
+<tr><th>Total réservation</th><td>${money(r.prix_total)}</td></tr></table>
+<div class="total">Montant reçu : ${money(montant)}</div>
+<table><tr><th>Moyen de paiement</th><td>${esc(moyen||'—')}</td></tr>
+${reference?'<tr><th>Référence</th><td>'+esc(reference)+'</td></tr>':''}
+<tr><th>Statut</th><td style="color:green;font-weight:700">✅ Payé</td></tr></table>
+<div class="foot">${esc(cfg.societe||'DPM Conciergerie')} ${cfg.tel?'· '+esc(cfg.tel):''} ${cfg.email?'· '+esc(cfg.email):''}</div>
+</body></html>`;
+  const w=window.open('','_blank','width=700,height=800');
+  w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
 }
 
 /* ---------- FACTURE PDF ---------- */
