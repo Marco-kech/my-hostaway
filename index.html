@@ -5499,6 +5499,82 @@ ${cfg.signature?'Instructions supplémentaires : '+cfg.signature:''}`;
 }
 
 /* ---------- MESSAGES AUTOMATISES ---------- */
+/* ---------- PARCOURS DU VOYAGEUR : trois messages automatiques (bienvenue, guide, rappel) ---------- */
+const PV_ETAPES={bienvenue:"Bienvenue (à la confirmation)",guide:"Guide du séjour",rappel:"Rappel avant l'arrivée"};
+async function renderParcours(){
+  const box=document.getElementById("pvPanel"); if(!box)return;
+  box.innerHTML=`<div class="panel"><div class="center"><span class="spin"></span></div></div>`;
+  const tid=state.tenant.id;
+  const [rg,ra,rh]=await Promise.all([
+    sb.from("parcours_reglage").select("*").eq("tenant_id",tid).maybeSingle(),
+    sb.rpc("parcours_apercu",{p_tenant:tid}),
+    sb.from("parcours_envoi").select("id,reservation_id,etape,canal,statut,detail,cree_le").order("cree_le",{ascending:false}).limit(30)]);
+  if(!document.getElementById("pvPanel"))return;
+  const err=rg.error||ra.error||rh.error;
+  if(err||!rg.data){box.innerHTML=`<div class="panel"><div class="empty">Parcours du voyageur : ${esc(err?err.message:"réglage introuvable")}</div></div>`;return;}
+  const g=rg.data, apercu=ra.data||[], hist=rh.data||[];
+  await Promise.all([loadOpts("reservation"),loadOpts("voyageur"),loadOpts("bien")]);
+  const nomResa=id=>{const r=(state.opts.reservation||[]).find(x=>x.id===id);return r?(refName("voyageur",r.voyageur_id)+" — "+fdate(r.arrivee)):"—";};
+  const canalLib={plateforme:"Messagerie de la plateforme",whatsapp:"WhatsApp",aucun:"Aucun canal"};
+  const lignesA=apercu.map((a,i)=>`<tr><td><b>${esc(a.voyageur||"—")}</b><br><span class="muted" style="font-size:11px">${esc(a.bien||"")}</span></td><td>${fdate(a.arrivee)}</td><td>${esc(PV_ETAPES[a.etape]||a.etape)}</td><td>${esc(canalLib[a.canal]||a.canal)}${a.note?`<br><span class="muted" style="font-size:11px">${esc(a.note)}</span>`:""}</td><td><button class="btn o sm pvVoir" data-i="${i}">Lire</button></td></tr>`).join("");
+  const lignesH=hist.map(h=>`<tr><td>${fdate(h.cree_le)}</td><td>${esc(nomResa(h.reservation_id))}</td><td>${esc(PV_ETAPES[h.etape]||h.etape)}</td><td>${esc(canalLib[h.canal]||h.canal)}</td><td>${pill(h.statut==="envoye"?"envoye":(h.statut==="saute"?"ignore":"erreur"))}${h.detail?`<br><span class="muted" style="font-size:11px">${esc(h.detail)}</span>`:""}</td><td>${h.statut==="erreur"?`<button class="btn o sm pvRe" data-id="${h.id}">Réessayer</button>`:""}</td></tr>`).join("");
+  const textes=g.textes||{};
+  box.innerHTML=`<div class="panel"><div class="phead"><h3>Parcours du voyageur</h3><span class="sp"></span>
+      <span class="pill ${g.actif?"green":"gold"}">${g.actif?"Envoi automatique allumé":"Envoi automatique éteint"}</span>
+      <button class="btn ${g.actif?"o":"g"} sm" id="pvSwitch" style="margin-left:8px">${g.actif?"Éteindre":"Allumer"}</button></div>
+    <p class="phnote">Trois messages par séjour : la bienvenue avec la fiche voyageur dès la confirmation, le guide du séjour ${g.jours_guide} jours avant l'arrivée, un rappel ${g.jours_rappel} jours avant. Ils partent par la messagerie de la plateforme (Airbnb, Booking). L'envoi par WhatsApp sera ajouté quand le numéro sera branché. Envois entre ${g.heure_debut} h et ${g.heure_fin} h (heure du Maroc), un contrôle toutes les 30 minutes. <b>Tant que l'envoi est éteint, rien ne part.</b></p>
+    <span class="err" id="pvErr" style="display:block;padding:0 16px"></span>
+    <h4 style="margin:10px 16px 6px">Ce qui partirait maintenant (${apercu.length})</h4>
+    ${apercu.length?`<div style="overflow:auto"><table><thead><tr><th>Voyageur</th><th>Arrivée</th><th>Message</th><th>Canal</th><th></th></tr></thead><tbody>${lignesA}</tbody></table></div>`:`<div class="empty">Aucun message à envoyer pour l'instant.</div>`}
+    <h4 style="margin:14px 16px 6px">Derniers envois (${hist.length})</h4>
+    ${hist.length?`<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Séjour</th><th>Message</th><th>Canal</th><th>Résultat</th><th></th></tr></thead><tbody>${lignesH}</tbody></table></div>`:`<div class="empty">Aucun envoi automatique pour l'instant.</div>`}
+    <div style="padding:12px 16px"><button class="btn o sm" id="pvRegl">Réglages et textes</button></div></div>`;
+  const maj=async(patch,msg)=>{const {data,error}=await sb.from("parcours_reglage").update({...patch,maj:new Date().toISOString()}).eq("tenant_id",tid).select("tenant_id");
+    if(error){$("#pvErr").textContent=error.message;return false;}
+    if(!data||!data.length){$("#pvErr").textContent="Réglage réservé à l'administrateur du compte.";return false;}
+    toast(msg);logAction('modification','parcours_reglage',tid,msg);return true;};
+  $("#pvSwitch").onclick=()=>{
+    if(g.actif){maj({actif:false},"Envoi automatique éteint").then(ok=>ok&&renderParcours());return;}
+    ouvrir(`<div class="h"><h3>Allumer l'envoi automatique ?</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p>Dès le prochain contrôle (dans les 30 minutes, entre ${g.heure_debut} h et ${g.heure_fin} h), <b>${apercu.filter(a=>a.canal!=="aucun").length} message(s)</b> partiront vers de vrais voyageurs, puis les suivants au fil des réservations.</p><p class="muted">Vous pouvez relire chaque message avec le bouton « Lire » avant d'allumer.</p></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pvOui">Allumer</button></div>`);
+    $("#pvOui").onclick=async()=>{const ok=await maj({actif:true},"Envoi automatique allumé");fermer();if(ok)renderParcours();};};
+  document.querySelectorAll(".pvVoir").forEach(b=>b.onclick=()=>{const a=apercu[Number(b.dataset.i)];
+    ouvrir(`<div class="h"><h3>${esc(PV_ETAPES[a.etape]||a.etape)} — ${esc(a.voyageur||"")}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted" style="margin-top:0">Canal : ${esc(canalLib[a.canal]||a.canal)}</p><div style="white-space:pre-wrap;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13.5px;overflow-wrap:anywhere">${esc(a.texte||"")}</div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);});
+  document.querySelectorAll(".pvRe").forEach(b=>b.onclick=async()=>{const {data,error}=await sb.from("parcours_envoi").delete().eq("id",b.dataset.id).select("id");
+    if(error||!data||!data.length){$("#pvErr").textContent=error?error.message:"Action réservée à l'administrateur du compte.";return;}
+    toast("Le message sera renvoyé au prochain contrôle");renderParcours();});
+  $("#pvRegl").onclick=async()=>{
+    const {data:def}=await sb.rpc("parcours_textes_defaut");
+    const d=def||{}, T=(e,l)=>((textes[e]||{})[l]!=null?(textes[e]||{})[l]:((d[e]||{})[l]||""));
+    const zone=(e,l,lib)=>`<div class="field"><label>${lib}</label><textarea id="pvT_${e}_${l}" rows="7" style="font-size:12.5px">${esc(T(e,l))}</textarea></div>`;
+    ouvrir(`<div class="h"><h3>Réglages du parcours voyageur</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b">
+        <div class="row2"><div class="field"><label>Guide du séjour : jours avant l'arrivée</label><input id="pvJG" type="number" min="1" max="120" value="${g.jours_guide}"></div>
+          <div class="field"><label>Rappel : jours avant l'arrivée</label><input id="pvJR" type="number" min="0" max="30" value="${g.jours_rappel}"></div></div>
+        <div class="row2"><div class="field"><label>Envois à partir de (heure)</label><input id="pvHD" type="number" min="0" max="23" value="${g.heure_debut}"></div>
+          <div class="field"><label>Envois jusqu'à (heure)</label><input id="pvHF" type="number" min="1" max="24" value="${g.heure_fin}"></div></div>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;cursor:pointer"><input id="pvLA" type="checkbox" style="margin-top:3px;width:auto" ${g.lien_bienvenue_airbnb?"checked":""}><span>Mettre le lien de la fiche voyageur dès le message de bienvenue sur Airbnb (par prudence, laissé décoché : le lien part avec le guide du séjour).</span></label>
+        <p class="phnote" style="margin:0 0 10px">Balises : {prenom} {bien} {arrivee} {depart} {lien_fiche} {lien_app}. Une ligne dont le lien n'existe pas (fiche déjà remplie, par exemple) est retirée toute seule. Sans langue connue pour le voyageur, le message part en français puis en anglais.</p>
+        ${Object.keys(PV_ETAPES).map(e=>`<h4 style="margin:10px 0 6px">${esc(PV_ETAPES[e])}</h4>${zone(e,"fr","Français")}${zone(e,"en","Anglais")}`).join("")}
+        <div class="err" id="pvRErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pvROk">Enregistrer</button></div>`);
+    $("#pvROk").onclick=async()=>{
+      const n=id=>Number(document.getElementById(id).value), jg=n("pvJG"), jr=n("pvJR"), hd=n("pvHD"), hf=n("pvHF"), e=$("#pvRErr");
+      if(!(jg>=1&&jg<=120)||!(jr>=0&&jr<=30)||jr>=jg){e.textContent="Le rappel doit être plus proche de l'arrivée que le guide (par exemple 15 et 3).";return;}
+      if(!(hd>=0&&hd<=23)||!(hf>=1&&hf<=24)||hd>=hf){e.textContent="L'heure de début doit être avant l'heure de fin.";return;}
+      const nt={}; let vide=false;
+      for(const et of Object.keys(PV_ETAPES)){nt[et]={};for(const l of ["fr","en"]){const v=document.getElementById(`pvT_${et}_${l}`).value.trim(); if(!v)vide=true; nt[et][l]=v;}}
+      if(vide){e.textContent="Un texte est vide : remettez un message ou annulez.";return;}
+      $("#pvROk").disabled=true;
+      const {data,error}=await sb.from("parcours_reglage").update({jours_guide:jg,jours_rappel:jr,heure_debut:hd,heure_fin:hf,lien_bienvenue_airbnb:document.getElementById("pvLA").checked,textes:nt,maj:new Date().toISOString()}).eq("tenant_id",tid).select("tenant_id");
+      if(error||!data||!data.length){e.textContent=error?error.message:"Réglage réservé à l'administrateur du compte.";$("#pvROk").disabled=false;return;}
+      fermer();toast("Réglages enregistrés");logAction('modification','parcours_reglage',tid,'Réglages du parcours voyageur');renderParcours();};
+  };
+}
+
 async function renderAutoMsg(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
@@ -5515,7 +5591,7 @@ async function renderAutoMsg(){
   (modeles||[]).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
   const EVL={avant_arrivee:"Avant l'arrivée",arrivee:"À l'arrivée",depart:"Au départ",apres_depart:"Après le départ",reservation:"À la réservation"};
   const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td></tr>`).join("");
-  $("#content").innerHTML=`
+  $("#content").innerHTML=`<div id="pvPanel"></div>
     <div class="panel"><div class="phead"><h3>Règles de messages automatisés</h3><span class="sp"></span><span class="muted">${(modeles||[]).length} règle(s)</span></div>
       <div style="overflow:auto">${(modeles&&modeles.length)?`<table><thead><tr><th>Modèle</th><th>Événement</th><th>Canal</th><th>Délai</th></tr></thead><tbody>${rulesRows}</tbody></table>`:'<div class="empty">Aucun modèle avec événement. Ajoutez-en dans « Modèles de message » en renseignant un événement.</div>'}</div></div>
     <div class="panel"><div class="phead"><h3>Programmer les messages</h3></div>
@@ -5523,6 +5599,7 @@ async function renderAutoMsg(){
         <div class="phnote">Pour chaque règle et chaque réservation à venir (sans doublon), crée un message <b>brouillon</b> personnalisé (nom du voyageur, bien), visible dans <b>Conversations</b>. Rien n'est envoyé tout seul : tu relis puis tu envoies.</div>
         <div style="margin-top:12px"><button class="btn g" id="pmBtn" ${planned.length?'':'disabled'}>${planned.length?('Préparer '+planned.length+' message(s)'):'Tout est à jour'}</button> <span class="ok" id="pmOk"></span></div>
       </div></div>`;
+  renderParcours();
   const pb=$("#pmBtn"); if(pb&&planned.length) pb.onclick=async()=>{pb.disabled=true;const {error}=await sb.from("message").insert(planned);pb.disabled=false;if(error){$("#pmOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}toast(planned.length+" message(s) préparés");renderAutoMsg();};
 }
 
