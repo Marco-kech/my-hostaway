@@ -716,9 +716,9 @@ const MODULES = {
       ["remise_mensuelle_pct","Remise mensuelle (%)",{type:"number"}],
       ["remise_mensuelle_seuil","Seuil remise mensuelle (jours, défaut 30)",{type:"number",def:30}],
       ["politique_annulation","Politique d'annulation (défaut)",{opts:["flexible","moderee","stricte","non_remboursable"],def:"moderee",p:1}],
-      ["politique_annulation_canaux.airbnb","Annulation Airbnb",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
-      ["politique_annulation_canaux.booking","Annulation Booking",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
-      ["politique_annulation_canaux.vrbo","Annulation VRBO",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
+      ["politique_annulation_canaux.airbnb","Annulation Airbnb (vide = défaut)",{opts:["flexible","moderee","stricte","non_remboursable"]}],
+      ["politique_annulation_canaux.booking","Annulation Booking (vide = défaut)",{opts:["flexible","moderee","stricte","non_remboursable"]}],
+      ["politique_annulation_canaux.vrbo","Annulation VRBO (vide = défaut)",{opts:["flexible","moderee","stricte","non_remboursable"]}],
       ["__s5b","Majorations par canal",{section:1}],
       ["majoration_canaux.airbnb","Majoration Airbnb (%)",{type:"number"}],
       ["majoration_canaux.booking","Majoration Booking (%)",{type:"number"}],
@@ -737,8 +737,6 @@ const MODULES = {
       ["instructions_arrivee","Instructions d'arrivée",{long:1,p:1}],
       ["contact_urgence","Contact d'urgence sur place",{p:1}],
       ["__s6b","Chambres & lits",{section:1}],
-      ["nb_chambres","Nombre de chambres",{type:"number"}],
-      ["nb_salles_bain","Nombre de salles de bain",{type:"number"}],
       ["types_lits","",{type:"json_array",label_add:"+ Ajouter une chambre",fields:[["chambre","Chambre"],["type_lit","Type de lit",{opts:["lit_double","lit_simple","lit_king","lit_queen","canape_lit","lit_superpose","lit_bebe"]}],["quantite","Qté",{type:"number",def:1}]]}],
       ["__s7","Équipements 🌐",{section:1}],
       ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Parking gratuit","Lave-linge","Sèche-linge","TV","TV câble/satellite","Jacuzzi","Balcon / Terrasse","Jardin","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue","Vue mer","Vue montagne","Fer à repasser","Sèche-cheveux","Machine à café","Micro-ondes","Lave-vaisselle","Barbecue","Coffre-fort","Détecteur fumée","Extincteur","Kit premiers secours"]}],
@@ -780,10 +778,7 @@ const MODULES = {
       ["__sCIO","Check-in / Check-out",{section:1}],
       ["heure_checkin","Heure d'arrivée prévue",{type:"time"}],
       ["heure_checkout","Heure de départ prévue",{type:"time"}],
-      ["statut_paiement","Statut paiement",{opts:["en_attente","partiel","paye","rembourse","annule"],def:"en_attente"}],
-      ["montant_paye","Montant payé",{type:"number"}],
       ["__sDoc","Documents & pièces jointes",{section:1}],
-      ["piece_identite","Pièce d'identité voyageur",{file:1}],
       ["contrat_signe","Contrat signé",{file:1}],
       ["autre_document","Autre document",{file:1}],
       ["notes","Notes",{long:1}]]},
@@ -1124,7 +1119,6 @@ const RUBRIQUES=[
     ["whatsapp","WhatsApp Business",{whatsappcfg:1}],
     ["sms","SMS",{smscfg:1}],
     ["webhook","Webhooks",{webhooks:1}],
-    ["historique","Historique des modifications",{historique:1}],
     ["api","API",{apikeys:1}],
     ["notif","Notifications",{notifcfg:1}],
     ["journal","Journal d'activité",{journalact:1}],
@@ -1233,7 +1227,7 @@ async function renderInbox(){
       <div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">${esc(titleFor(key))}${badge}</strong><span class="muted" style="font-size:11px">${fdate(last.cree_le)}</span></div>
       <div class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((last.corps||'').slice(0,50))}</div></div>`;}).join("")||'<div class="empty" style="padding:16px">Aucune conversation.</div>';
   /* Badge dans le menu latéral */
-  const inboxMenuEl=document.querySelector('[data-rub="inbox"]');
+  const inboxMenuEl=document.querySelector('#nav [data-rk="inbox"]');
   if(inboxMenuEl&&totalNonLu>0){const existing=inboxMenuEl.querySelector('.inbox-badge');if(existing)existing.remove();inboxMenuEl.insertAdjacentHTML('beforeend',`<span class="inbox-badge" style="background:${totalUrgent>0?'#e74c3c':'var(--dpm-or,#C9A227)'};color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:auto">${totalNonLu}</span>`);}
   const sel=state.inboxSel, arr=sel?groups[sel]:[];
   const thread=(arr||[]).map(m=>{const out=m.sens==='sortant';
@@ -1669,7 +1663,6 @@ function goRub(rk,sk){
   if(t.importtarifs)return renderImportTarifs();
   if(t.whatsappcfg)return renderWhatsappConfig();
   if(t.smscfg)return renderSmsConfig();
-  if(t.historique)return renderHistoriqueModifs();
   if(t.aboutapp)return renderAbout();
   if(t.assurance)return renderAssurance();
   if(t.marketplace)return renderMarketplace();
@@ -2110,7 +2103,7 @@ async function openForm(k,row){
       /* json_array → lire le tableau dynamique */
       if(o.type==='json_array'){ d[key]=jaReadValues('ja_'+key,key); continue; }
       /* Dotted keys → stocker dans l'objet parent */
-      if(key.includes('.')){const[parent,child]=key.split('.');if(!d[parent])d[parent]={...(row[parent]||{})};let v=$("#f_"+key).value;if(v==="")v=null;if(v!=null&&o.type==="number")v=Number(v);d[parent][child]=v;continue;}
+      if(key.includes('.')){const[parent,child]=key.split('.');if(!d[parent])d[parent]={...(row[parent]||{})};const elD=document.getElementById("f_"+key);let v=elD?elD.value:null;if(v==="")v=null;if(v!=null&&o.type==="number")v=Number(v);d[parent][child]=v;continue;}
       if(o.file){const el=document.getElementById('f_'+key);const file=el&&el.files&&el.files[0];
         if(file){const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=state.tenant.id+'/'+key+'_'+Date.now()+'_'+safe;
           const up=await sb.storage.from('uploads').upload(path,file,{upsert:true});
@@ -2150,8 +2143,6 @@ async function openForm(k,row){
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
     invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table);
-    /* Webhook : notifier les endpoints configurés */
-    fireWebhook(row.id?'update':'create',m.table,d);
     goRub(state.rub,state.sub);
   };
 }
@@ -2163,7 +2154,7 @@ async function delRow(k,id){
   $("#dOk").onclick=async()=>{
     const {error}=await sb.from(m.table).delete().eq("id",id);
     if(error){$("#dErr").textContent=error.message;return;}
-    invalidate(m.table);fermer();toast("Supprimé");logAction('suppression',m.table,id,m.table);fireWebhook('delete',m.table,{id});goRub(state.rub,state.sub);
+    invalidate(m.table);fermer();toast("Supprimé");logAction('suppression',m.table,id,m.table);goRub(state.rub,state.sub);
   };
 }
 
@@ -2222,8 +2213,8 @@ async function renderDashboard(){
   const {data:tachesRetard}=await sb.from("tache").select("id,titre,date_prevue,bien_id").lt("date_prevue",today).in("statut",["a_faire","accepte","en_cours"]).eq("archive",false).limit(20);
   const nbRetard=(tachesRetard||[]).length;
   /* Badge menu tâches */
-  const tacheMenuEl=document.querySelector('[data-rub="taches"]');
-  if(tacheMenuEl&&nbRetard>0){tacheMenuEl.insertAdjacentHTML('beforeend',`<span style="background:#e74c3c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:auto">${nbRetard}</span>`);}
+  const tacheMenuEl=document.querySelector('#nav [data-rk="taches"]');
+  if(tacheMenuEl&&nbRetard>0&&!tacheMenuEl.querySelector('.tache-badge')){tacheMenuEl.insertAdjacentHTML('beforeend',`<span class="tache-badge" style="background:#e74c3c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:auto">${nbRetard}</span>`);}
   /* Alerte toast si tâches en retard */
   if(nbRetard>0)toast("⚠️ "+nbRetard+" tâche(s) en retard !");
   const moyEnv=(msgEnvoyes/30).toFixed(1), moyRec=(msgRecus/30).toFixed(1);
@@ -2564,26 +2555,6 @@ async function renderSmsConfig(){
   };
 }
 
-/* ---------- HISTORIQUE DES MODIFICATIONS ---------- */
-async function renderHistoriqueModifs(){
-  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  const {data,error}=await sb.from("journal_activite").select("*").order("cree_le",{ascending:false}).limit(100);
-  if(error){
-    /* Si la table n'existe pas, utiliser le journal existant */
-    const {data:j}=await sb.from("journal").select("*").order("cree_le",{ascending:false}).limit(100);
-    if(!j||!j.length){
-      $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Historique des modifications</h3></div>
-        <div style="padding:16px"><div class="phnote">L'historique enregistre automatiquement les modifications importantes : création/modification de réservation, modification de bien, paiements, relevés, etc.</div>
-        <p class="muted" style="margin-top:12px">Aucune entrée pour le moment.</p></div></div>`;
-      return;
-    }
-  }
-  const list=data||[];
-  const rows=list.map(e=>`<tr><td class="muted" style="font-size:11px;white-space:nowrap">${fdate(e.cree_le)}</td><td>${pill(e.type||e.action||'')}</td><td>${esc(e.description||e.details||'')}</td><td class="muted" style="font-size:11px">${esc(e.utilisateur||e.user_email||'')}</td></tr>`).join('');
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Historique des modifications</h3><span class="sp"></span><span class="muted">${list.length} entrée(s)</span></div>
-    <div style="overflow:auto;max-height:600px"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Utilisateur</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucune entrée</td></tr>'}</tbody></table></div></div>`;
-}
-
 /* ---------- RAPPORT HEBDOMADAIRE ---------- */
 async function genererRapportHebdo(){
   toast("⏳ Génération du rapport…");
@@ -2681,7 +2652,7 @@ async function renderCalendar(){
     const bienId=document.getElementById("calBienSel")?.value;
     if(!bienId){toast("Sélectionnez d'abord un bien dans le filtre");return;}
     const fin=new Date(iso);fin.setDate(fin.getDate()+1);
-    const{error}=await sb.from("blocage").insert({tenant_id:state.tenant.id,bien_id:bienId,debut:iso,fin:fin.toISOString().slice(0,10),source:'manuel',motif:'Blocage manuel'});
+    const{error}=await sb.from("blocage").insert({tenant_id:state.tenant.id,bien_id:bienId,debut:iso,fin:fin.toISOString().slice(0,10),motif:'Blocage manuel'});
     if(error){toast("Erreur: "+error.message);return;}
     toast("🔒 Date bloquée");renderCalendar();
   });
@@ -2923,6 +2894,30 @@ async function renderFinances(){
     </div></div>`;
   state.cache=state.cache||{};state.cache.resaFin=resa||[];
   document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>payForm(b.dataset.pay));
+  $("#afBien").onchange=e=>{AF.bien=e.target.value;renderFinances();};
+  $("#afCanal").onchange=e=>{AF.canal=e.target.value;renderFinances();};
+  $("#afDu").onchange=e=>{AF.du=e.target.value;renderFinances();};
+  $("#afAu").onchange=e=>{AF.au=e.target.value;renderFinances();};
+  $("#afDR").onchange=e=>{const v=e.target.value;const n=new Date(),y=n.getFullYear(),m=n.getMonth();
+    if(v==="7j"){AF.du=new Date(Date.now()-7*864e5).toISOString().slice(0,10);AF.au=n.toISOString().slice(0,10);}
+    else if(v==="30j"){AF.du=new Date(Date.now()-30*864e5).toISOString().slice(0,10);AF.au=n.toISOString().slice(0,10);}
+    else if(v==="mois"){AF.du=new Date(y,m,1).toISOString().slice(0,10);AF.au=new Date(y,m+1,0).toISOString().slice(0,10);}
+    else if(v==="trim"){const q=Math.floor(m/3)*3;AF.du=new Date(y,q,1).toISOString().slice(0,10);AF.au=new Date(y,q+3,0).toISOString().slice(0,10);}
+    else if(v==="an"){AF.du=y+"-01-01";AF.au=y+"-12-31";}
+    else{AF.du="";AF.au="";}renderFinances();};
+  $("#afReset").onclick=()=>{state.anaF={bien:"",canal:"",du:"",au:""};renderFinances();};
+  /* Vues personnalisées */
+  (async()=>{
+    const vues=(await reglGet("vues_financieres"))||{liste:[]};
+    const sel=document.getElementById("afLoadVue");if(!sel)return;
+    (vues.liste||[]).forEach((v,i)=>{const o=document.createElement("option");o.value=i;o.textContent=v.nom;sel.appendChild(o);});
+    sel.onchange=()=>{const v=(vues.liste||[])[+sel.value];if(!v)return;state.anaF={...v.filtres};renderFinances();};
+    document.getElementById("afSaveVue").onclick=async()=>{
+      const nom=prompt("Nom de cette vue ?");if(!nom)return;
+      const nv={nom,filtres:{...AF}};vues.liste.push(nv);
+      await reglSet("vues_financieres",vues);toast("Vue « "+nom+" » sauvegardée");renderFinances();
+    };
+  })();
 }
 function payForm(resaId){
   const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);
@@ -2936,7 +2931,6 @@ function payForm(resaId){
       <div class="field"><label>Montant *</label><input id="pM" type="number" value="${reste>0?reste:""}"></div>
       <div class="field"><label>Moyen</label><select id="pMoy"><option value="paypal">PayPal</option><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="lien_paiement">Lien de paiement</option><option value="autre">Autre</option></select></div>
       <div class="field"><label>Référence</label><input id="pRef" placeholder="N° de transaction PayPal / virement"></div>
-      <div class="field"><label>Type</label><select id="pType"><option value="encaissement">Encaissement</option><option value="remboursement">Remboursement</option><option value="depot_garantie">Dépôt de garantie</option><option value="retenue_caution">Retenue sur caution</option></select></div>
       <div class="field"><label>Notes</label><input id="pNotes" placeholder="Facultatif"></div>
       <div class="err" id="pErr"></div>
     </div>
@@ -2945,24 +2939,15 @@ function payForm(resaId){
   $("#pSave").onclick=async()=>{
     const montant=Number($("#pM").value);
     if(!montant||montant<=0){$("#pErr").textContent="Montant invalide.";return;}
-    const type_paiement=$("#pType").value;
-    const isRemb=type_paiement==='remboursement';
+    const type_paiement='encaissement', isRemb=false;
     $("#pSave").disabled=true;
     const {error}=await sb.from("paiement").insert({tenant_id:state.tenant.id,reservation_id:resaId,montant:isRemb?-Math.abs(montant):montant,moyen:$("#pMoy").value,reference:$("#pRef").value||null,type_paiement,notes:$("#pNotes").value||null,statut:"reussi"});
-    if(!error&&isRemb){
-      const newPaye=Math.max(0,(r.montant_paye||0)-Math.abs(montant));
-      await sb.from("reservation").update({montant_paye:newPaye,statut_paiement:newPaye<=0?"rembourse":"partiel"}).eq("id",resaId);
-    }
-    if(!error&&!isRemb){
-      const newPaye=(r.montant_paye||0)+montant;
-      const newSt=newPaye>=(r.prix_total||0)?"paye":"partiel";
-      await sb.from("reservation").update({montant_paye:newPaye,statut_paiement:newSt}).eq("id",resaId);
-    }
     $("#pSave").disabled=false;
     if(error){$("#pErr").textContent=error.message;return;}
+    const moyRecu=$("#pMoy").value, refRecu=$("#pRef").value;
     fermer();toast(isRemb?"✅ Remboursement enregistré":"✅ Paiement enregistré");
     /* Proposer le reçu */
-    if(!isRemb&&confirm("Générer un reçu de paiement ?")){genererRecuPDF(resaId,montant,$("#pMoy").value,$("#pRef").value);}
+    if(!isRemb&&confirm("Générer un reçu de paiement ?")){genererRecuPDF(resaId,montant,moyRecu,refRecu);}
     renderFinances();
   };
 }
@@ -3289,7 +3274,7 @@ async function renderTarifDyn(){
         <div>🏪 Prix &gt;15% sous marché → <strong>+8%</strong></div>
         <div>🔒 Prix toujours entre <strong>min et max</strong></div>
       </div>
-      <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <button class="btn o" id="tdApply">⚡ Appliquer à tous les biens</button> <span class="ok" id="tdOk"></span></div>
+      <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <span class="ok" id="tdOk"></span></div>
     </div>
     <div id="tdSimulResult" style="padding:0 16px 16px"></div>
   </div>
@@ -3374,18 +3359,6 @@ async function renderTarifDyn(){
     const e=await reglSet("tarif_dyn",out);
     if(e){$("#tdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#tdOk").textContent="Enregistré ✓"; toast("Tarification dynamique enregistrée");
-  };
-  /* Appliquer à tous les biens */
-  document.getElementById("tdApply").onclick=async()=>{
-    const btn=document.getElementById("tdApply");btn.disabled=true;btn.textContent="⏳ Calcul...";
-    let count=0;
-    for(const b of biens){
-      const prix=await appliquerTarifDyn(b.id);
-      if(prix!=null)count++;
-    }
-    btn.disabled=false;btn.textContent="⚡ Appliquer à tous les biens";
-    toast("⚡ Tarification dynamique appliquée à "+count+" bien(s)");
-    renderTarifDyn();
   };
   /* --- CRUD Concurrents --- */
   const biensOpts=biens.map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("");
@@ -4885,30 +4858,6 @@ async function renderEmailConfig(){
   $("#emSave").onclick=async()=>{const valeur={provider:$("#emProv").value,api_key:$("#emKey").value.trim(),sender_name:$("#emName").value.trim(),sender_email:$("#emFrom").value.trim(),reply_to:$("#emReply").value.trim()};const e=await reglSet("email",valeur);if(e){$("#emOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#emOk").textContent="Enregistré ✓";toast("Configuration e-mail enregistrée");renderEmailConfig();};
   $("#emTest").onclick=async()=>{const to=prompt("Envoyer un e-mail de test à :",$("#emFrom").value||"");if(!to)return;$("#emOk").textContent="Envoi…";const res=await envoyerBrevo(to,"Test DPM Conciergerie","<div style='font-family:sans-serif'><h2 style='color:#14352A'>✓ Configuration e-mail réussie</h2><p>Ceci est un e-mail de test depuis votre application <b>My Hostaway — DPM Conciergerie</b>.</p><p style='color:#64756c;font-size:13px'>Envoyé via Brevo le "+new Date().toLocaleString('fr-FR')+"</p></div>");if(res.error){$("#emOk").innerHTML='<span class="err">'+esc(res.error)+'</span>';toast("Échec de l'envoi test");}else{$("#emOk").textContent="E-mail de test envoyé ✓";toast("E-mail de test envoyé");}};
 
-  $("#afBien").onchange=e=>{AF.bien=e.target.value;renderFinances();};
-  $("#afCanal").onchange=e=>{AF.canal=e.target.value;renderFinances();};
-  $("#afDu").onchange=e=>{AF.du=e.target.value;renderFinances();};
-  $("#afAu").onchange=e=>{AF.au=e.target.value;renderFinances();};
-  $("#afDR").onchange=e=>{const v=e.target.value;const n=new Date(),y=n.getFullYear(),m=n.getMonth();
-    if(v==="7j"){AF.du=new Date(Date.now()-7*864e5).toISOString().slice(0,10);AF.au=n.toISOString().slice(0,10);}
-    else if(v==="30j"){AF.du=new Date(Date.now()-30*864e5).toISOString().slice(0,10);AF.au=n.toISOString().slice(0,10);}
-    else if(v==="mois"){AF.du=new Date(y,m,1).toISOString().slice(0,10);AF.au=new Date(y,m+1,0).toISOString().slice(0,10);}
-    else if(v==="trim"){const q=Math.floor(m/3)*3;AF.du=new Date(y,q,1).toISOString().slice(0,10);AF.au=new Date(y,q+3,0).toISOString().slice(0,10);}
-    else if(v==="an"){AF.du=y+"-01-01";AF.au=y+"-12-31";}
-    else{AF.du="";AF.au="";}renderFinances();};
-  $("#afReset").onclick=()=>{state.anaF={bien:"",canal:"",du:"",au:""};renderFinances();};
-  /* Vues personnalisées */
-  (async()=>{
-    const vues=(await reglGet("vues_financieres"))||{liste:[]};
-    const sel=document.getElementById("afLoadVue");if(!sel)return;
-    (vues.liste||[]).forEach((v,i)=>{const o=document.createElement("option");o.value=i;o.textContent=v.nom;sel.appendChild(o);});
-    sel.onchange=()=>{const v=(vues.liste||[])[+sel.value];if(!v)return;state.anaF={...v.filtres};renderFinances();};
-    document.getElementById("afSaveVue").onclick=async()=>{
-      const nom=prompt("Nom de cette vue ?");if(!nom)return;
-      const nv={nom,filtres:{...AF}};vues.liste.push(nv);
-      await reglSet("vues_financieres",vues);toast("Vue « "+nom+" » sauvegardée");renderFinances();
-    };
-  })();
 }
 
 /* ---------- PARAMÈTRES PAYPAL ---------- */
@@ -5161,7 +5110,7 @@ async function renderAvisList(){
       <td>${r.arrivee?fdate(r.arrivee):'—'}</td><td>${r.depart?fdate(r.depart):'—'}</td>
       <td>${pill(a.statut)}</td>
       <td>${a.note_globale!=null?('★ '+a.note_globale):'—'}${a.note_proprete||a.note_communication||a.note_emplacement||a.note_qualite_prix?`<div style="font-size:10px;color:#888;margin-top:2px">🧹${a.note_proprete||'—'} 💬${a.note_communication||'—'} 📍${a.note_emplacement||'—'} 💰${a.note_qualite_prix||'—'}</div>`:''}</td>
-      <td style="text-align:center">${a.reponse_hote?'<span title="Répondu" style="color:var(--ok)">✓</span>':'<span style="color:#e74c3c">✗</span>'}</td>
+      <td style="text-align:center">${a.afficher_site?'✓':'—'}</td><td style="text-align:center">${a.reponse_hote?'✓':'—'}</td>
       <td>${esc(a.etiquettes||'')}</td>
       <td><div class="act"><button class="btn o sm" data-ed="${a.id}">Modifier</button><button class="btn d sm" data-del="${a.id}">×</button></div></td></tr>`;
   }).join("");
@@ -5179,7 +5128,7 @@ async function renderAvisList(){
       <input id="afQ" placeholder="Rechercher…" value="${esc(F.q)}" style="max-width:160px">
       <button class="btn o sm" id="afR">Réinitialiser</button>
       <span class="sp"></span><span class="muted">${list.length} sur ${(data||[]).length}</span></div>
-    <div style="overflow:auto">${list.length?`<table><thead><tr><th>Nom du voyageur</th><th>ID de réservation</th><th>Nom de l'annonce</th><th>Canal</th><th>Origine</th><th>Enregistrement</th><th>Départ</th><th>Statut</th><th>Notes</th><th>Répondu</th><th>Étiquettes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun avis${(data||[]).length?" pour ces filtres":""}.</div>'}</div></div>`;
+    <div style="overflow:auto">${list.length?`<table><thead><tr><th>Nom du voyageur</th><th>ID de réservation</th><th>Nom de l'annonce</th><th>Canal</th><th>Origine</th><th>Enregistrement</th><th>Départ</th><th>Statut</th><th>Avis global</th><th>Moteur</th><th>Répondu</th><th>Étiquettes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">Aucun avis${(data||[]).length?" pour ces filtres":""}.</div>'}</div></div>`;
   const bind=(id,key,ev)=>{const el=$("#"+id);if(el)el["on"+(ev||"change")]=e=>{F[key]=e.target.value;renderAvisList();};};
   bind("afDu","du");bind("afAu","au");bind("afSt","statut");bind("afBien","bien");bind("afOr","origine");bind("afEt","etiq","input");bind("afQ","q","input");
   $("#afR").onclick=()=>{state.avisF=null;renderAvisList();};
@@ -5511,6 +5460,8 @@ async function renderImportBiens(){
     prets=rows.slice(1).map((line,i)=>{
       const cols=line.split(sep);const obj={tenant_id:state.tenant.id,statut:'brouillon'};
       hdr.forEach((h,j)=>{const k=kmap[h];if(k&&cols[j])obj[k]=(['capacite','nb_chambres','nb_salles_bain','prix_nuit_base','frais_menage'].includes(k))?Number(cols[j]):cols[j].trim();});
+      if(obj.description!=null){obj.parametres={description:obj.description};delete obj.description;}
+      if(obj.nb_salles_bain!=null){obj.nb_sdb=obj.nb_salles_bain;delete obj.nb_salles_bain;}
       if(!obj.nom){errs.push("Ligne "+(i+2)+": nom manquant");return null;}
       return obj;
     }).filter(Boolean);
@@ -6138,7 +6089,7 @@ async function releveDetail(id){
     if(!prop||!prop.email){toast("Pas d'email pour ce propriétaire");return;}
     sendBtn.disabled=true;sendBtn.textContent='⏳ Envoi...';
     const corps=`Bonjour ${prop.nom},\n\nVeuillez trouver ci-joint votre relevé de gestion locative pour la période du ${r.periode_debut} au ${r.periode_fin}.\n\nMontant net à reverser : ${Number(r.montant_net||0).toLocaleString('fr-FR')} MAD\n\nCordialement,\nDPM Conciergerie`;
-    const {error}=await sb.from("message").insert({tenant_id:state.tenant.id,canal:'email',sens:'sortant',corps,statut:'brouillon',notes:'Relevé propriétaire '+r.nom});
+    const {error}=await sb.from("message").insert({tenant_id:state.tenant.id,canal:'email',sens:'sortant',corps,statut:'brouillon'});
     sendBtn.disabled=false;sendBtn.textContent='📧 Envoyer au propriétaire';
     if(error){toast("Erreur: "+error.message);return;}
     toast("📧 Brouillon créé dans Conversations — vérifiez et envoyez");
@@ -6703,9 +6654,7 @@ async function calcPrixSaisonnier(bienId,arrivee,depart,nbPersonnes){
   else if(remHebdoPct>0&&nuits>=remHebdoSeuil)remisePct=remHebdoPct;
   const sousTotal=totalNuits+suppPersonnes;
   const remise=remisePct>0?Math.round(sousTotal*remisePct/100):0;
-  const fraisMenage=bien?Number(bien.frais_menage||0):0;
-  const taxeSejour=bien?Number(bien.taxe_sejour_nuit||0)*nuits:0;
-  return Math.round(sousTotal-remise+fraisMenage+taxeSejour);
+  return Math.round(sousTotal-remise);
 }
 
 /* ---------- CHECK-IN EN LIGNE ---------- */
@@ -6834,54 +6783,6 @@ async function logAction(action,entite,entite_id,details){
   try{await sb.from("journal").insert({tenant_id:state.tenant.id,user_id:state.user.id,action,entite,entite_id,details});}catch(e){console.warn("logAction",e);}
 }
 
-/* ---------- WEBHOOKS : ENVOYER LES EVENTS ---------- */
-async function fireWebhook(event,table,data){
-  try{
-    const cfg=await reglGet("webhooks");
-    const hooks=(cfg&&cfg.liste)?cfg.liste:[];
-    if(!hooks.length)return;
-    const payload={event,table,data,timestamp:new Date().toISOString(),tenant_id:state.tenant.id};
-    hooks.forEach(h=>{
-      if(h.events&&!h.events.includes(event)&&!h.events.includes('*'))return;
-      fetch(h.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(()=>{});
-    });
-  }catch(e){console.warn("fireWebhook",e);}
-}
-
-/* ---------- TARIFICATION DYNAMIQUE : APPLIQUER AUTO ---------- */
-async function appliquerTarifDyn(bienId){
-  try{
-    const bien=(state.opts.bien||[]).find(b=>b.id===bienId);if(!bien)return;
-    const cfg=await reglGet("tarif_dynamique");if(!cfg||!cfg.actif)return;
-    const today=new Date().toISOString().slice(0,10);
-    const in14=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
-    /* Taux d'occupation 14 jours */
-    const {data:resas}=await sb.from("reservation").select("arrivee,depart").eq("bien_id",bienId).in("statut",["confirmee"]).lte("arrivee",in14).gte("depart",today);
-    let occ=0;(resas||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),new Date(today)));const d=new Date(Math.min(new Date(r.depart),new Date(in14)));occ+=Math.max(0,(d-a)/864e5);});
-    const tauxOcc=occ/14;
-    const base=Number(bien.prix_nuit_base||0);
-    const min=Number(cfg.prix_min||Math.round(base*0.7));
-    const max=Number(cfg.prix_max||Math.round(base*1.5));
-    /* Ajustement : +20% si occ>80%, -15% si occ<30%, sinon proportionnel */
-    let coef=1;
-    if(tauxOcc>0.8)coef=1.2;
-    else if(tauxOcc<0.3)coef=0.85;
-    else coef=0.9+tauxOcc*0.4;
-    /* Week-end +10% */
-    const dow=new Date().getDay();
-    if(dow===5||dow===6)coef*=1.1;
-    /* Last minute : si arrivée <3j, -10% */
-    const nextResa=(resas||[]).find(r=>r.arrivee>=today);
-    if(!nextResa){const daysToNext=14;if(daysToNext<3)coef*=0.9;}
-    let prix=Math.round(base*coef);
-    prix=Math.max(min,Math.min(max,prix));
-    /* Écrire le tarif pour les 14 prochains jours */
-    const existing=await sb.from("tarif").select("id").eq("bien_id",bienId).eq("source","dynamique").gte("fin",today);
-    if(existing.data&&existing.data.length){await sb.from("tarif").delete().in("id",existing.data.map(t=>t.id));}
-    await sb.from("tarif").insert({tenant_id:state.tenant.id,bien_id:bienId,debut:today,fin:in14,prix_nuit:prix,priorite:5,nom:"Tarif dynamique",source:"dynamique"});
-    return prix;
-  }catch(e){console.warn("appliquerTarifDyn",e);return null;}
-}
 async function renderJournal(){
   $("#topAdd").hidden=true;
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -7039,7 +6940,7 @@ async function ficheReservation(id){
           ${f('Reste','<span style="color:'+(reste>0?'var(--danger)':'var(--ok)')+'">'+money(reste)+'</span>')}
           ${f('Statut paiement',pill(r.statut_paiement))}
           ${r.financier_fige?.fige_le?f('Figé le',fdate(r.financier_fige.fige_le)):''}
-          <div class="fsec" style="margin-top:12px">Décomposition du prix</div>
+          <div class="fsec" style="margin-top:12px">Estimation au tarif de base (indicatif)</div>
           ${(()=>{
             const ff=r.financier_fige||bien;
             const pnb=Number(ff.prix_nuit_base||0);
@@ -7062,16 +6963,15 @@ async function ficheReservation(id){
             const majCanaux=ff.majoration_canaux||{};
             const majPct=Number(majCanaux[(r.canal||'').toLowerCase()]||0);
             const majMontant=majPct>0?Math.round((sousT-remise)*majPct/100):0;
-            const calcTotal=sousT-remise+fm+ts+majMontant;
+            const calcTotal=sousT-remise+majMontant;
             let h='';
             h+=f(pnb+' × '+nuits+' nuits',money(baseNuits));
             if(suppPers>0)h+=f('Suppl. '+(nbP-cap)+' pers. × '+nuits+' nuits','+'+money(suppPers));
             if(remise>0)h+=f('Remise '+remLabel,'<span style="color:var(--ok)">−'+money(remise)+'</span>');
-            if(fm>0)h+=f('Frais de ménage','+'+money(fm));
-            if(ts>0)h+=f('Taxe de séjour','+'+money(ts));
             if(majMontant>0)h+=f('Majoration '+r.canal+' ('+majPct+'%)','+'+money(majMontant));
-            h+=f('<b>Calculé</b>','<b>'+money(calcTotal)+'</b>');
-            if(Math.abs(calcTotal-(r.prix_total||0))>1)h+=`<div style="font-size:11px;color:var(--danger);padding:4px 0">⚠️ Écart de ${money(Math.abs(calcTotal-(r.prix_total||0)))} avec le prix saisi</div>`;
+            h+=f('<b>Hébergement estimé</b>','<b>'+money(calcTotal)+'</b>');
+            if(fm>0)h+=f('Ménage (en sus)',money(fm));
+            if(ts>0)h+=f('Taxe de séjour (en sus)',money(ts));
             return h;
           })()}
         </div>
@@ -7086,9 +6986,10 @@ async function ficheReservation(id){
     <div class="f">
       <button class="btn o" onclick="fermer()">Fermer</button>
       <button class="btn o" onclick="fermer();genererContrat('${id}')">📄 Contrat</button>
-      <button class="btn o" onclick="fermer();openForm('reservations',${JSON.stringify(r).replace(/'/g,"\\'")})">Modifier</button>
+      <button class="btn o" id="frEdit">Modifier</button>
       <button class="btn g" onclick="fermer();payForm('${id}')">💳 Paiement</button>
     </div>`);
+  {const be=document.getElementById("frEdit");if(be)be.onclick=()=>{fermer();openForm('reservations',r);};}
   /* Bouton Actualiser profil — appelle getReservation individuel via channel-bridge */
   const rpBtn=document.getElementById("refreshProfile");
   if(rpBtn&&r.source_id){
@@ -7187,10 +7088,11 @@ async function ficheBien(id){
       ${(resas&&resas.length)?`<div class="fsec" style="margin-top:12px">Dernières réservations</div>${resas.map(r=>`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)">${refName("voyageur",r.voyageur_id)} — ${fdate(r.arrivee)} → ${fdate(r.depart)} — ${money(r.prix_total)}</div>`).join("")}`:''}
     </div>
     <div class="f"><button class="btn o" onclick="fermer()">Fermer</button>
-      <button class="btn o" onclick="fermer();openForm('biens',${JSON.stringify(b).replace(/'/g,"\\'")})">✏️ Modifier</button>
+      <button class="btn o" id="fbEdit">✏️ Modifier</button>
       <button class="btn o" id="dupBien">📋 Dupliquer</button></div>`);
+  document.getElementById("fbEdit").onclick=()=>{fermer();openForm('biens',b);};
   document.getElementById("dupBien").onclick=async()=>{
-    const dup={...b};delete dup.id;delete dup.cree_le;delete dup.maj_le;dup.nom=(b.nom||'')+" (copie)";dup.statut="brouillon";
+    const dup={...b};delete dup.id;delete dup.cree_le;delete dup.maj_le;delete dup.source_id;delete dup.donnees_source;dup.nom=(b.nom||'')+" (copie)";dup.statut="brouillon";
     const {data:nd,error}=await sb.from("bien").insert(dup).select().single();
     if(error){toast("Erreur: "+error.message);return;}
     toast("✅ Annonce dupliquée");fermer();goRub("annonces","liste");
@@ -7221,7 +7123,7 @@ th{background:#f5f5f5;font-weight:700}
 .sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
 .sig div{border-top:1px solid #999;padding-top:8px;text-align:center;font-size:12px;color:#666}
 .foot{text-align:center;margin-top:30px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}
-@media print{body{padding:20px}@page{margin:15mm}}
+@media print{body{padding:20px}@page{margin:15mm}.np{display:none}}
 </style></head><body>
 <div class="head"><div><h1>Contrat de location saisonnière</h1><div class="sub">${esc(cfg.hote||'DPM Conciergerie')} ${cfg.fiscal?'· ICE : '+esc(cfg.fiscal):''}</div></div><div style="text-align:right;font-size:12px">N° ${esc(String(resaId).slice(0,8).toUpperCase())}<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
 
@@ -7252,7 +7154,7 @@ ${(bien.parametres||{}).caution?'<tr><th>Caution</th><td>'+Number(bien.parametre
 <h2>Conditions générales</h2>
 <p>Le locataire s'engage à occuper les lieux en bon père de famille, à respecter le règlement intérieur et la capacité maximale du logement. Le bien est loué meublé et équipé. Tout dommage constaté sera déduit de la caution. Le bailleur s'engage à mettre le bien à disposition dans un état de propreté et d'entretien conforme.</p>
 
-<div class="sig"><div>Le bailleur<br><br><br><br>${esc(cfg.hote||'DPM Conciergerie')}</div><div>Le locataire<br><canvas id="sigPad" width="300" height="120" style="border:1px solid #ccc;border-radius:4px;cursor:crosshair;touch-action:none"></canvas><br><button onclick="document.getElementById('sigPad').getContext('2d').clearRect(0,0,300,120)" style="font-size:11px;cursor:pointer;border:1px solid #ccc;background:#f5f5f5;padding:2px 10px;border-radius:4px">Effacer</button><br>${esc(voy.nom||'')}</div></div>
+<div class="sig"><div>Le bailleur<br><br><br><br>${esc(cfg.hote||'DPM Conciergerie')}</div><div>Le locataire<br><canvas id="sigPad" width="300" height="120" style="border:1px solid #ccc;border-radius:4px;cursor:crosshair;touch-action:none"></canvas><br><button class="np" onclick="document.getElementById('sigPad').getContext('2d').clearRect(0,0,300,120)" style="font-size:11px;cursor:pointer;border:1px solid #ccc;background:#f5f5f5;padding:2px 10px;border-radius:4px">Effacer</button> <button class="np" onclick="window.print()" style="font-size:11px;cursor:pointer;border:1px solid #ccc;background:#f5f5f5;padding:2px 10px;border-radius:4px">Imprimer / PDF</button><br>${esc(voy.nom||'')}</div></div>
 
 <div class="foot">${esc(cfg.infos||cfg.hote||'DPM Conciergerie')} ${cfg.tel?'· '+esc(cfg.tel):''} ${cfg.email?'· '+esc(cfg.email):''}</div>
 <`+`script>
@@ -7270,7 +7172,6 @@ ctx.lineWidth=2;ctx.strokeStyle='#222';ctx.lineCap='round';
 </body></html>`;
   const w=window.open('','_blank','width=800,height=1000');
   w.document.write(html);w.document.close();
-  setTimeout(()=>w.print(),500);
   toast("Contrat généré avec zone de signature — le voyageur peut signer au doigt ou à la souris");
 }
 
@@ -7280,25 +7181,25 @@ function renderAbout(){
   const nbSub=RUBRIQUES.reduce((s,r)=>s+(r.subs?r.subs.length:0),0);
   const nbMod=Object.keys(MODULES).length;
   const features=[
-    ["Tableau de bord","KPIs, tendances, alertes, tâches en retard, rapport hebdomadaire","✅"],
-    ["Calendrier","Mensuel, multiple, annuel, dates bloquées, tarifs saisonniers","✅"],
-    ["Réservations","CRUD, import CSV, coupons, check-in en ligne, livre d'or","✅"],
-    ["Annonces","CRUD, étiquettes, photos, scores ASO, édition en masse, duplication, import CSV","✅"],
-    ["Messagerie","Conversations, modèles, messages auto (16 déclencheurs, 35 variables), campagnes, récurrents","✅"],
-    ["Tâches","Kanban, checklists enrichies (templates), tâches auto, notifications retard","✅"],
-    ["Avis","Gestion, notes par catégorie, réponse hôte, avis auto, page publique livre d'or","✅"],
-    ["Rapports","Analytique, activité, occupation, prévisionnel, rapport mensuel, export comptable","✅"],
-    ["Dépenses","Dépenses/suppléments, catégories, vues personnalisées, automatisations","✅"],
-    ["Paiements","PayPal, CMI, encaissements, remboursements, factures PDF, reçus PDF, dépôts garantie","✅"],
-    ["Relevés propriétaire","Génération, PDF, envoi email, automatiques, dashboard propriétaire","✅"],
-    ["Tarification","Dynamique (occupation, jour, délai, concurrence), saisonnière, remises, majorations canal","✅"],
-    ["Canaux","Carte multi-canal, iCal sync, import tarifs, historique tâches auto","✅"],
-    ["Site de réservation","Design, pages, annonces, aperçu, SEO, traductions 6 langues, cookies RGPD, Book Now","✅"],
-    ["Conciergerie","Commandes, prestations, partenaires, services internes, options par bien, liens voyageurs","✅"],
-    ["Documents","Contrat signable, facture PDF, reçu PDF, relevé PDF, rapport hebdo/mensuel","✅"],
-    ["Intégrations","Email, WhatsApp Business, SMS, webhooks, API keys, Host Tools bridge","✅"],
-    ["Paramètres","Compte, langues, notifications (13 catégories), PayPal, CMI, assurance, marketplace","✅"],
-    ["Pages publiques","Formulaire d'avis, livre d'or, page paiement, widget calendrier WordPress","✅"],
+    ["Tableau de bord","KPIs, tendances, alertes, tâches en retard, rapport hebdomadaire","à vérifier"],
+    ["Calendrier","Mensuel, multiple, annuel, dates bloquées, tarifs saisonniers","à vérifier"],
+    ["Réservations","CRUD, import CSV, coupons, check-in en ligne, livre d'or","à vérifier"],
+    ["Annonces","CRUD, étiquettes, photos, scores ASO, édition en masse, duplication, import CSV","à vérifier"],
+    ["Messagerie","Conversations, modèles, messages auto (16 déclencheurs, 35 variables), campagnes, récurrents","à vérifier"],
+    ["Tâches","Kanban, checklists enrichies (templates), tâches auto, notifications retard","à vérifier"],
+    ["Avis","Gestion, notes par catégorie, réponse hôte, avis auto, page publique livre d'or","à vérifier"],
+    ["Rapports","Analytique, activité, occupation, prévisionnel, rapport mensuel, export comptable","à vérifier"],
+    ["Dépenses","Dépenses/suppléments, catégories, vues personnalisées, automatisations","à vérifier"],
+    ["Paiements","PayPal, CMI, encaissements, remboursements, factures PDF, reçus PDF, dépôts garantie","à vérifier"],
+    ["Relevés propriétaire","Génération, PDF, envoi email, automatiques, dashboard propriétaire","à vérifier"],
+    ["Tarification","Dynamique (occupation, jour, délai, concurrence), saisonnière, remises, majorations canal","à vérifier"],
+    ["Canaux","Carte multi-canal, iCal sync, import tarifs, historique tâches auto","à vérifier"],
+    ["Site de réservation","Design, pages, annonces, aperçu, SEO, traductions 6 langues, cookies RGPD, Book Now","à vérifier"],
+    ["Conciergerie","Commandes, prestations, partenaires, services internes, options par bien, liens voyageurs","à vérifier"],
+    ["Documents","Contrat signable, facture PDF, reçu PDF, relevé PDF, rapport hebdo/mensuel","à vérifier"],
+    ["Intégrations","Email, WhatsApp Business, SMS, webhooks, API keys, Host Tools bridge","à vérifier"],
+    ["Paramètres","Compte, langues, notifications (13 catégories), PayPal, CMI, assurance, marketplace","à vérifier"],
+    ["Pages publiques","Formulaire d'avis, livre d'or, page paiement, widget calendrier WordPress","à vérifier"],
   ];
   const rows=features.map(([f,d,s])=>`<tr><td><b>${esc(f)}</b></td><td style="font-size:12px">${esc(d)}</td><td style="text-align:center">${s}</td></tr>`).join('');
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>My Hostaway — DPM Conciergerie</h3></div>
@@ -7307,7 +7208,7 @@ function renderAbout(){
         <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbRub}</div><div class="muted" style="font-size:11px">Rubriques</div></div>
         <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbSub}</div><div class="muted" style="font-size:11px">Sous-onglets</div></div>
         <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbMod}</div><div class="muted" style="font-size:11px">Modules</div></div>
-        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#27ae60">100%</div><div class="muted" style="font-size:11px">Couverture</div></div>
+        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">v2</div><div class="muted" style="font-size:11px">En cours de vérification</div></div>
       </div>
       <table class="tbl"><thead><tr><th>Fonctionnalité</th><th>Détail</th><th>Statut</th></tr></thead><tbody>${rows}</tbody></table>
       <div style="margin-top:16px;font-size:12px;color:#888">Version 2.0 — Novembre 2026 · Basé sur Hostaway · Supabase + GitHub Pages<br>Développé pour DPM Conciergerie, Marrakech</div>
@@ -7397,8 +7298,8 @@ async function renderCmiConfig(){
 function genererRelevePDF(r,lignes){
   const prop=(state.opts.proprietaire||[]).find(p=>p.id===r.proprietaire_id)||{};
   const bg='#14352A',acc='#C9A227';
-  const rows=(lignes||[]).map(l=>`<tr><td>${l.libelle||''}</td><td style="text-align:right">${Number(l.montant_brut||0).toLocaleString('fr-FR')} MAD</td><td style="text-align:right">${Number(l.commission||0).toLocaleString('fr-FR')} MAD</td><td style="text-align:right"><b>${Number(l.montant_net||0).toLocaleString('fr-FR')} MAD</b></td></tr>`).join('');
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relevé — ${prop.nom||''}</title>
+  const rows=(lignes||[]).map(l=>`<tr><td>${esc(l.libelle||'')}</td><td style="text-align:right">${Number(l.montant_brut||0).toLocaleString('fr-FR')} MAD</td><td style="text-align:right">${Number(l.commission||0).toLocaleString('fr-FR')} MAD</td><td style="text-align:right"><b>${Number(l.montant_net||0).toLocaleString('fr-FR')} MAD</b></td></tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relevé — ${esc(prop.nom||'')}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:auto;font-size:13px;color:#222}
 .head{background:${bg};color:#fff;padding:24px;border-radius:10px;margin-bottom:20px;display:flex;justify-content:space-between}
 .head h1{font-size:20px;color:${acc}}
@@ -7412,9 +7313,9 @@ table{width:100%;border-collapse:collapse;margin:8px 0}th,td{padding:7px 10px;bo
 @media print{body{padding:20px}@page{margin:15mm}}
 </style></head><body>
 <div class="head"><div><h1>RELEVÉ PROPRIÉTAIRE</h1><div style="font-size:11px;opacity:.8">DPM Conciergerie</div></div>
-<div style="text-align:right;font-size:12px"><b>${r.nom||'Relevé'}</b><br>${r.periode_debut?r.periode_debut+' → '+r.periode_fin:''}<br>Généré le ${new Date().toLocaleDateString('fr-FR')}</div></div>
+<div style="text-align:right;font-size:12px"><b>${esc(r.nom||'Relevé')}</b><br>${r.periode_debut?r.periode_debut+' → '+r.periode_fin:''}<br>Généré le ${new Date().toLocaleDateString('fr-FR')}</div></div>
 <h2>Propriétaire</h2>
-<table><tr><th>Nom</th><td>${prop.nom||'—'}</td></tr>${prop.email?'<tr><th>Email</th><td>'+prop.email+'</td></tr>':''}${prop.tel?'<tr><th>Téléphone</th><td>'+prop.tel+'</td></tr>':''}</table>
+<table><tr><th>Nom</th><td>${esc(prop.nom||'—')}</td></tr>${prop.email?'<tr><th>Email</th><td>'+esc(prop.email)+'</td></tr>':''}${prop.tel?'<tr><th>Téléphone</th><td>'+esc(prop.tel)+'</td></tr>':''}</table>
 <div class="totals"><div><div class="n">${Number(r.montant_brut||0).toLocaleString('fr-FR')} MAD</div><div class="l">Revenus bruts</div></div>
 <div><div class="n">${Number(r.commission||0).toLocaleString('fr-FR')} MAD</div><div class="l">Commission DPM</div></div>
 <div><div class="n">${Number(r.frais||0).toLocaleString('fr-FR')} MAD</div><div class="l">Dépenses</div></div>
@@ -7642,7 +7543,7 @@ document.addEventListener('keydown',e=>{
     if(RUBRIQUES[idx]){e.preventDefault();goRub(RUBRIQUES[idx].k);return;}
   }
   /* Alt+D → Dashboard */
-  if(e.altKey&&e.key==='d'){e.preventDefault();goRub('dashboard');return;}
+  if(e.altKey&&e.key==='d'){e.preventDefault();goRub('apercu');return;}
   /* Alt+T → Dark mode toggle */
   if(e.altKey&&e.key==='t'){e.preventDefault();const dt=document.getElementById('darkToggle');if(dt)dt.click();return;}
   /* Alt+P → Print */
