@@ -736,6 +736,10 @@ const MODULES = {
       ["wifi_mdp","Wifi — mot de passe",{p:1}],
       ["instructions_arrivee","Instructions d'arrivée",{long:1,p:1}],
       ["contact_urgence","Contact d'urgence sur place",{p:1}],
+      ["__s6b","Chambres & lits",{section:1}],
+      ["nb_chambres","Nombre de chambres",{type:"number"}],
+      ["nb_salles_bain","Nombre de salles de bain",{type:"number"}],
+      ["types_lits","",{type:"json_array",label_add:"+ Ajouter une chambre",fields:[["chambre","Chambre"],["type_lit","Type de lit",{opts:["lit_double","lit_simple","lit_king","lit_queen","canape_lit","lit_superpose","lit_bebe"]}],["quantite","Qté",{type:"number",def:1}]]}],
       ["__s7","Équipements 🌐",{section:1}],
       ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Parking gratuit","Lave-linge","Sèche-linge","TV","TV câble/satellite","Jacuzzi","Balcon / Terrasse","Jardin","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue","Vue mer","Vue montagne","Fer à repasser","Sèche-cheveux","Machine à café","Micro-ondes","Lave-vaisselle","Barbecue","Coffre-fort","Détecteur fumée","Extincteur","Kit premiers secours"]}],
       ["__s8","Conditions & règlement",{section:1}],
@@ -766,7 +770,12 @@ const MODULES = {
       ["arrivee","Arrivée",{type:"date",req:1}],["depart","Départ",{type:"date",req:1}],
       ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
       ["reference_canal","Réf. canal",{}],["prix_total","Prix total",{type:"number"}],
-      ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show","sejour_proprietaire"],def:"confirmee"}],["raison_annulation","Raison d'annulation",{opts:["voyageur","hote","plateforme","double_reservation","autre"]}],["notes","Notes",{long:1}]]},
+      ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show","sejour_proprietaire"],def:"confirmee"}],["raison_annulation","Raison d'annulation",{opts:["voyageur","hote","plateforme","double_reservation","autre"]}],
+      ["__sDoc","Documents & pièces jointes",{section:1}],
+      ["piece_identite","Pièce d'identité voyageur",{file:1}],
+      ["contrat_signe","Contrat signé",{file:1}],
+      ["autre_document","Autre document",{file:1}],
+      ["notes","Notes",{long:1}]]},
   coupons:{title:"Coupons",add:"Ajouter un coupon",table:"coupon",
     cols:[["code","Code"],["type","Type",v=>pill(v)],["valeur","Valeur"],["sejour_min","Séjour min",v=>v?v+" nuits":""],["validite_fin","Validité",v=>fdate(v)],["utilisations_max","Max"],["utilisations","Utilisé"],["statut","Statut",v=>pill(v)]],
     fields:[["code","Code du coupon",{req:1}],
@@ -902,7 +911,7 @@ const MODULES = {
   modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
     cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
-      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation"]}],["delai_h","Délai (heures)",{type:"number"}]]},
+      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["reservation","confirmation","modification","annulation","avant_arrivee","jour_arrivee","arrivee","pendant_sejour","veille_depart","jour_depart","depart","apres_depart","demande_avis","paiement_recu","rappel_paiement","checkin_incomplet"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
@@ -5825,10 +5834,44 @@ async function renderAutoMsg(){
     sb.from("message").select("reservation_id,corps"),
   ]);
   const seen=new Set((existing||[]).map(m=>m.reservation_id+"|"+(m.corps||"")));
-  const sub=(txt,r)=>(txt||"").replace(/\{nom\}/g,(refName("voyageur",r.voyageur_id)||"")).replace(/\{bien\}/g,(refName("bien",r.bien_id)||""));
+  const sub=(txt,r)=>{
+    const bien=(state.opts.bien||[]).find(b=>b.id===r.bien_id)||{};
+    const voy=(state.opts.voyageur||[]).find(v=>v.id===r.voyageur_id)||{};
+    const nuits=r.arrivee&&r.depart?Math.max(1,Math.round((new Date(r.depart)-new Date(r.arrivee))/864e5)):0;
+    const p=bien.parametres||{};
+    return(txt||"")
+      .replace(/\{nom\}/g,voy.nom||'')
+      .replace(/\{prenom\}/g,(voy.nom||'').split(' ')[0])
+      .replace(/\{email\}/g,voy.email||'')
+      .replace(/\{tel\}/g,voy.tel||'')
+      .replace(/\{bien\}/g,bien.nom||'')
+      .replace(/\{adresse\}/g,bien.adresse||'')
+      .replace(/\{ville\}/g,p.ville||'')
+      .replace(/\{arrivee\}/g,r.arrivee?fdate(r.arrivee):'')
+      .replace(/\{depart\}/g,r.depart?fdate(r.depart):'')
+      .replace(/\{nuits\}/g,String(nuits))
+      .replace(/\{prix_total\}/g,money(r.prix_total||0))
+      .replace(/\{canal\}/g,r.canal||'')
+      .replace(/\{nb_personnes\}/g,String(r.nb_personnes||''))
+      .replace(/\{heure_arrivee\}/g,p.heure_arrivee||bien.heure_arrivee||'15:00')
+      .replace(/\{heure_depart\}/g,p.heure_depart||bien.heure_depart||'11:00')
+      .replace(/\{code_porte\}/g,p.code_porte||'')
+      .replace(/\{wifi_nom\}/g,p.wifi_nom||'')
+      .replace(/\{wifi_mdp\}/g,p.wifi_mdp||'')
+      .replace(/\{instructions_arrivee\}/g,p.instructions_arrivee||'')
+      .replace(/\{contact_urgence\}/g,p.contact_urgence||'')
+      .replace(/\{caution\}/g,money(p.caution||bien.caution||0))
+      .replace(/\{ref_canal\}/g,r.reference_canal||'')
+      .replace(/\{lien_checkin\}/g,location.origin+location.pathname.replace(/[^/]*$/,'')+'sejour/#/sejour/'+r.id)
+      .replace(/\{lien_avis\}/g,location.origin+location.pathname.replace(/[^/]*$/,'')+'sejour/#/avis/'+r.id)
+      .replace(/\{montant_paye\}/g,money(r.montant_paye||0))
+      .replace(/\{reste_du\}/g,money((r.prix_total||0)-(r.montant_paye||0)))
+      .replace(/\{reglement\}/g,p.reglement_interieur||'')
+      .replace(/\{date_aujourdhui\}/g,new Date().toLocaleDateString('fr-FR'));
+  };
   const planned=[];
   (modeles||[]).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
-  const EVL={avant_arrivee:"Avant l'arrivée",arrivee:"À l'arrivée",depart:"Au départ",apres_depart:"Après le départ",reservation:"À la réservation"};
+  const EVL={reservation:"À la réservation",confirmation:"Confirmation",modification:"Modification",annulation:"Annulation",avant_arrivee:"Avant l'arrivée",jour_arrivee:"Jour d'arrivée",arrivee:"À l'arrivée",pendant_sejour:"Pendant le séjour",veille_depart:"Veille du départ",jour_depart:"Jour du départ",depart:"Au départ",apres_depart:"Après le départ",demande_avis:"Demande d'avis",paiement_recu:"Paiement reçu",rappel_paiement:"Rappel de paiement",checkin_incomplet:"Check-in incomplet"};
   const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td></tr>`).join("");
   $("#content").innerHTML=`<div id="pvPanel"></div>
     <div class="panel"><div class="phead"><h3>Règles de messages automatisés</h3><span class="sp"></span><span class="muted">${(modeles||[]).length} règle(s)</span></div>
@@ -6475,6 +6518,7 @@ async function ficheReservation(id){
       ${(extras&&extras.length)?`<div class="fsec" style="margin-top:12px">Extras (${extras.length})</div>${extras.map(e=>`<div style="font-size:12.5px;padding:4px 0">${esc(e.nom)} × ${e.quantite} = ${money(e.prix_unitaire*e.quantite)}</div>`).join("")}`:''}
       ${ci?`<div class="fsec" style="margin-top:12px">Check-in en ligne</div><div>${ci.statut==='rempli'?'<span class="pill green">Rempli</span> le '+fdate(ci.rempli_le):'<span class="pill gold">En attente</span>'}</div>`:''}
       ${(messages&&messages.length)?`<div class="fsec" style="margin-top:12px">Derniers messages</div>${messages.map(m=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)"><span class="muted">${fdate(m.cree_le)}</span> ${pill(m.canal)} ${m.sens==='sortant'?'→':'←'} ${esc((m.corps||'').slice(0,80))}</div>`).join("")}`:''}
+      ${(r.piece_identite||r.contrat_signe||r.autre_document)?`<div class="fsec" style="margin-top:12px">Documents</div><div style="display:flex;gap:8px;flex-wrap:wrap">${r.piece_identite?`<a href="${esc(r.piece_identite)}" target="_blank" class="btn o" style="font-size:12px">🪪 Pièce d'identité</a>`:''}${r.contrat_signe?`<a href="${esc(r.contrat_signe)}" target="_blank" class="btn o" style="font-size:12px">📝 Contrat signé</a>`:''}${r.autre_document?`<a href="${esc(r.autre_document)}" target="_blank" class="btn o" style="font-size:12px">📎 Document</a>`:''}</div>`:''}
       ${r.notes?`<div class="fsec" style="margin-top:12px">Notes</div><p style="font-size:13px">${esc(r.notes)}</p>`:''}
     </div>
     <div class="f">
