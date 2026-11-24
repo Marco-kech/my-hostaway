@@ -1128,7 +1128,8 @@ const RUBRIQUES=[
     ["api","API",{apikeys:1}],
     ["notif","Notifications",{notifcfg:1}],
     ["journal","Journal d'activité",{journalact:1}],
-    ["annul","Politiques d'annulation",{polannul:1}]]},
+    ["annul","Politiques d'annulation",{polannul:1}],
+    ["about","À propos",{aboutapp:1}]]},
 ];
 
 /* ---------- NAV ---------- */
@@ -1669,6 +1670,7 @@ function goRub(rk,sk){
   if(t.whatsappcfg)return renderWhatsappConfig();
   if(t.smscfg)return renderSmsConfig();
   if(t.historique)return renderHistoriqueModifs();
+  if(t.aboutapp)return renderAbout();
   if(t.assurance)return renderAssurance();
   if(t.marketplace)return renderMarketplace();
   if(t.traductions)return renderTraductions();
@@ -7194,6 +7196,46 @@ ctx.lineWidth=2;ctx.strokeStyle='#222';ctx.lineCap='round';
   w.document.write(html);w.document.close();
   setTimeout(()=>w.print(),500);
   toast("Contrat généré avec zone de signature — le voyageur peut signer au doigt ou à la souris");
+}
+
+/* ---------- À PROPOS DE L'APPLICATION ---------- */
+function renderAbout(){
+  const nbRub=RUBRIQUES.length;
+  const nbSub=RUBRIQUES.reduce((s,r)=>s+(r.subs?r.subs.length:0),0);
+  const nbMod=Object.keys(MODULES).length;
+  const features=[
+    ["Tableau de bord","KPIs, tendances, alertes, tâches en retard, rapport hebdomadaire","✅"],
+    ["Calendrier","Mensuel, multiple, annuel, dates bloquées, tarifs saisonniers","✅"],
+    ["Réservations","CRUD, import CSV, coupons, check-in en ligne, livre d'or","✅"],
+    ["Annonces","CRUD, étiquettes, photos, scores ASO, édition en masse, duplication, import CSV","✅"],
+    ["Messagerie","Conversations, modèles, messages auto (16 déclencheurs, 35 variables), campagnes, récurrents","✅"],
+    ["Tâches","Kanban, checklists enrichies (templates), tâches auto, notifications retard","✅"],
+    ["Avis","Gestion, notes par catégorie, réponse hôte, avis auto, page publique livre d'or","✅"],
+    ["Rapports","Analytique, activité, occupation, prévisionnel, rapport mensuel, export comptable","✅"],
+    ["Dépenses","Dépenses/suppléments, catégories, vues personnalisées, automatisations","✅"],
+    ["Paiements","PayPal, CMI, encaissements, remboursements, factures PDF, reçus PDF, dépôts garantie","✅"],
+    ["Relevés propriétaire","Génération, PDF, envoi email, automatiques, dashboard propriétaire","✅"],
+    ["Tarification","Dynamique (occupation, jour, délai, concurrence), saisonnière, remises, majorations canal","✅"],
+    ["Canaux","Carte multi-canal, iCal sync, import tarifs, historique tâches auto","✅"],
+    ["Site de réservation","Design, pages, annonces, aperçu, SEO, traductions 6 langues, cookies RGPD, Book Now","✅"],
+    ["Conciergerie","Commandes, prestations, partenaires, services internes, options par bien, liens voyageurs","✅"],
+    ["Documents","Contrat signable, facture PDF, reçu PDF, relevé PDF, rapport hebdo/mensuel","✅"],
+    ["Intégrations","Email, WhatsApp Business, SMS, webhooks, API keys, Host Tools bridge","✅"],
+    ["Paramètres","Compte, langues, notifications (13 catégories), PayPal, CMI, assurance, marketplace","✅"],
+    ["Pages publiques","Formulaire d'avis, livre d'or, page paiement, widget calendrier WordPress","✅"],
+  ];
+  const rows=features.map(([f,d,s])=>`<tr><td><b>${esc(f)}</b></td><td style="font-size:12px">${esc(d)}</td><td style="text-align:center">${s}</td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>My Hostaway — DPM Conciergerie</h3></div>
+    <div style="padding:16px">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbRub}</div><div class="muted" style="font-size:11px">Rubriques</div></div>
+        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbSub}</div><div class="muted" style="font-size:11px">Sous-onglets</div></div>
+        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--brand2)">${nbMod}</div><div class="muted" style="font-size:11px">Modules</div></div>
+        <div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#27ae60">100%</div><div class="muted" style="font-size:11px">Couverture</div></div>
+      </div>
+      <table class="tbl"><thead><tr><th>Fonctionnalité</th><th>Détail</th><th>Statut</th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:16px;font-size:12px;color:#888">Version 2.0 — Novembre 2026 · Basé sur Hostaway · Supabase + GitHub Pages<br>Développé pour DPM Conciergerie, Marrakech</div>
+    </div></div>`;
 }
 
 /* ---------- ASSURANCE VOYAGEURS ---------- */
