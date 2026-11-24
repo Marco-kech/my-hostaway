@@ -3456,7 +3456,7 @@ async function renderCgComptes(){
     const liste=c.role==="partenaire"?parts:props, cur=c.role==="partenaire"?c.partenaire_id:c.proprietaire_id;
     const sel=`<select class="cgFiche" data-id="${c.id}" ${c.statut==="actif"?"disabled":""}><option value="">— choisir la fiche —</option>${liste.map(x=>`<option value="${x.id}" ${x.id===cur?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select>`;
     const act=c.statut==="actif"
-      ?`<button class="btn o sm cgOff" data-id="${c.id}">Désactiver</button>`
+      ?`<button class="btn sm cgVoir" data-id="${c.id}">Voir comme</button> <button class="btn o sm cgOff" data-id="${c.id}">Désactiver</button>`
       :`<button class="btn sm cgOn" data-id="${c.id}">${c.statut==="desactive"?"Réactiver":"Valider"}</button>${c.statut==="en_attente"?` <button class="btn o sm cgOff" data-id="${c.id}">Refuser</button>`:""}`;
     return `<tr><td><b>${esc(c.nom||"—")}</b>${infos(c)}</td><td>${esc(c.email||"—")}</td><td>${esc(libRole[c.role]||c.role)}</td>
       <td>${fdate((c.cree_le||"").slice(0,10))}</td><td>${sel}</td><td>${pill(c.statut==="desactive"?"inactif":c.statut)}</td><td style="white-space:nowrap">${act}</td></tr>`;}).join("");
@@ -3479,6 +3479,60 @@ async function renderCgComptes(){
     const patch=c.role==="partenaire"?{statut:"actif",partenaire_id:f,proprietaire_id:null}:{statut:"actif",proprietaire_id:f,partenaire_id:null};
     maj(c.id,patch,"Compte validé");});
   document.querySelectorAll(".cgOff").forEach(b=>b.onclick=()=>maj(b.dataset.id,{statut:"desactive"},"Compte désactivé"));
+  document.querySelectorAll(".cgVoir").forEach(b=>b.onclick=()=>cgVoirComme(comptes.find(x=>x.id===b.dataset.id),parts,props));
+}
+
+/* « Voir comme » : l'administrateur consulte, en lecture seule, les données qu'un compte
+   partenaire ou propriétaire voit dans son propre espace. Aucune écriture, aucun changement de session. */
+async function cgVoirComme(c,parts,props){
+  if(!c)return;
+  const estPart=c.role==="partenaire", fid=estPart?c.partenaire_id:c.proprietaire_id;
+  const fiche=((estPart?parts:props).find(x=>x.id===fid)||{}).nom||"—";
+  const tete=`<div class="h"><h3>Voir comme : ${esc(c.nom||c.email||"compte")}</h3><button class="x" onclick="fermer()">×</button></div>`;
+  ouvrir(tete+`<div class="b"><div class="center"><span class="spin"></span></div></div>`);
+  const tab=(tetes,lignes,vide)=>lignes.length?`<div style="overflow:auto"><table><thead><tr>${tetes.map(t=>`<th>${t}</th>`).join("")}</tr></thead><tbody>${lignes.join("")}</tbody></table></div>`:`<div class="empty">${vide}</div>`;
+  const titre=(t,n)=>`<h4 style="margin:16px 0 6px">${t} <span class="muted" style="font-weight:400">(${n})</span></h4>`;
+  let corps="", erreur=null;
+  if(estPart){
+    const rp=await sb.from("prestation").select("id,nom,categorie,actif,net_partenaire").eq("partenaire_id",fid).order("nom");
+    const prests=rp.data||[]; erreur=rp.error;
+    let cmds=[],biens={};
+    if(!erreur&&prests.length){
+      const rc=await sb.from("commande").select("id,date,heure,quantite,statut,reversement,prestation_id,bien_id").in("prestation_id",prests.map(p=>p.id)).order("date",{ascending:false}).limit(50);
+      cmds=rc.data||[]; erreur=rc.error;
+      const ids=[...new Set(cmds.map(x=>x.bien_id).filter(Boolean))];
+      if(!erreur&&ids.length){const rb=await sb.from("bien").select("id,nom").in("id",ids);(rb.data||[]).forEach(x=>biens[x.id]=x.nom);}
+    }
+    const nomP={};prests.forEach(p=>nomP[p.id]=p.nom);
+    corps=titre("Ses prestations",prests.length)
+      +tab(["Prestation","Catégorie","Net partenaire","État"],prests.map(p=>`<tr><td><b>${esc(p.nom)}</b></td><td>${esc(p.categorie||"—")}</td><td>${money(p.net_partenaire)}</td><td>${pill(p.actif?"actif":"inactif")}</td></tr>`),"Aucune prestation rattachée à cette fiche.")
+      +titre("Ses commandes",cmds.length)
+      +tab(["Date","Prestation","Bien","Qté","Son reversement","Statut"],cmds.map(x=>`<tr><td>${fdate(x.date)}${x.heure?" "+esc(x.heure):""}</td><td>${esc(nomP[x.prestation_id]||"—")}</td><td>${esc(biens[x.bien_id]||"—")}</td><td>${x.quantite}</td><td>${money(x.reversement)}</td><td>${pill(x.statut)}</td></tr>`),"Aucune commande pour ses prestations.");
+  }else{
+    const rb=await sb.from("bien").select("id,nom").eq("proprietaire_id",fid).order("nom");
+    const biens=rb.data||[]; erreur=rb.error;
+    const nomB={};biens.forEach(b=>nomB[b.id]=b.nom);
+    let resas=[],cmds=[],nomP={};
+    if(!erreur&&biens.length){
+      const ids=biens.map(b=>b.id);
+      const [rr,rc]=await Promise.all([
+        sb.from("reservation").select("id,bien_id,arrivee,depart,statut,prix_total").in("bien_id",ids).order("arrivee",{ascending:false}).limit(50),
+        sb.from("commande").select("id,date,quantite,statut,part_proprietaire,prestation_id,bien_id").in("bien_id",ids).order("date",{ascending:false}).limit(50)]);
+      resas=rr.data||[]; cmds=rc.data||[]; erreur=rr.error||rc.error;
+      const pids=[...new Set(cmds.map(x=>x.prestation_id))];
+      if(!erreur&&pids.length){const rp=await sb.from("prestation").select("id,nom").in("id",pids);(rp.data||[]).forEach(x=>nomP[x.id]=x.nom);}
+    }
+    corps=titre("Ses biens",biens.length)
+      +tab(["Bien"],biens.map(b=>`<tr><td><b>${esc(b.nom)}</b></td></tr>`),"Aucun bien rattaché à ce propriétaire.")
+      +titre("Ses séjours",resas.length)
+      +tab(["Bien","Arrivée","Départ","Montant","Statut"],resas.map(r=>`<tr><td>${esc(nomB[r.bien_id]||"—")}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.statut)}</td></tr>`),"Aucun séjour sur ses biens.")
+      +titre("Commandes sur ses biens",cmds.length)
+      +tab(["Date","Prestation","Bien","Qté","Sa part","Statut"],cmds.map(x=>`<tr><td>${fdate(x.date)}</td><td>${esc(nomP[x.prestation_id]||"—")}</td><td>${esc(nomB[x.bien_id]||"—")}</td><td>${x.quantite}</td><td>${money(x.part_proprietaire)}</td><td>${pill(x.statut)}</td></tr>`),"Aucune commande sur ses biens.");
+  }
+  if(erreur){corps=`<div class="empty">Erreur : ${esc(erreur.message)}</div>`;}
+  const lien=estPart?"partenaire/":"proprietaire/";
+  ouvrir(tete+`<div class="b"><p class="phnote" style="margin:0 0 4px">Aperçu en lecture seule des données de la fiche <b>${esc(fiche)}</b> (${estPart?"partenaire":"propriétaire"}), telles que ce compte les retrouve dans son espace. La présentation de son espace est différente : <a href="${lien}" target="_blank" rel="noopener">ouvrir l'espace ${estPart?"partenaire":"propriétaire"}</a>.</p>${corps}</div>
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
 }
 
 async function renderScoreASO(){
