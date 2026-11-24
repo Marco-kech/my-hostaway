@@ -1052,7 +1052,9 @@ const RUBRIQUES=[
     ["form","Formules",{formules:1}],
     ["tax","Taxes",{paramtaxes:1}],
     ["paramfin","Paramètres financiers",{paramfin:1}],
-    ["export","Export comptable",{exportcompta:1}]]},
+    ["export","Export comptable",{exportcompta:1}],
+    ["previs","Prévisionnel",{previsionnel:1}],
+    ["mensuel","Rapport mensuel",{rapportmensuel:1}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
     ["dep","Dépenses",{depfiltre:"depense"}],
     ["sup","Suppléments",{depfiltre:"supplement"}],
@@ -1083,7 +1085,8 @@ const RUBRIQUES=[
     ["liste","Canaux connectés",{m:"canaux"}],
     ["carte","Carte des annonces",{canauxcarte:1}],
     ["ical","Synchronisation iCal",{icalsync:1}],
-    ["cronhist","Historique tâches auto",{cronhist:1}]]},
+    ["cronhist","Historique tâches auto",{cronhist:1}],
+    ["imptarifs","Importer des tarifs",{importtarifs:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
     ["cmd","Commandes",{cgcommandes:1}],
     ["stat","Statistiques",{cgstats:1}],
@@ -1118,7 +1121,10 @@ const RUBRIQUES=[
     ["cmi","Paiement CMI",{ph:"Connexion CMI (banque DPM) pour l'encaissement des cartes au Maroc — extension à brancher sur ton accord (contrat monétique + clés CMI)."}],
     ["lang","Langues",{paramlangues:1}],
     ["integ","Intégrations",{emailcfg:1}],
+    ["whatsapp","WhatsApp Business",{whatsappcfg:1}],
+    ["sms","SMS",{smscfg:1}],
     ["webhook","Webhooks",{webhooks:1}],
+    ["historique","Historique des modifications",{historique:1}],
     ["api","API",{apikeys:1}],
     ["notif","Notifications",{notifcfg:1}],
     ["journal","Journal d'activité",{journalact:1}],
@@ -1657,6 +1663,12 @@ function goRub(rk,sk){
   if(t.grpannonces)return renderGroupesAnnonces();
   if(t.seocfg)return renderSeoConfig();
   if(t.guidebook)return renderGuidebook();
+  if(t.previsionnel)return renderPrevisionnel();
+  if(t.rapportmensuel)return renderRapportMensuel();
+  if(t.importtarifs)return renderImportTarifs();
+  if(t.whatsappcfg)return renderWhatsappConfig();
+  if(t.smscfg)return renderSmsConfig();
+  if(t.historique)return renderHistoriqueModifs();
   if(t.serrures)return renderSerrures();
   if(t.serrappareils)return renderSerrAppareils();
   if(t.serrhist)return renderSerrHist();
@@ -2384,6 +2396,171 @@ async function renderDashboard(){
       }
     };
   }
+}
+
+/* ---------- PRÉVISIONNEL (revenus attendus sur les prochains mois) ---------- */
+async function renderPrevisionnel(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const today=new Date();const y=today.getFullYear();
+  const {data:resas}=await sb.from("reservation").select("arrivee,depart,prix_total,statut,bien_id").in("statut",["confirmee","en_attente"]).gte("depart",today.toISOString().slice(0,10));
+  const mois=[];
+  for(let i=0;i<6;i++){const d=new Date(y,today.getMonth()+i,1);const ms=d.toISOString().slice(0,10);const me=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+    const mr=(resas||[]).filter(r=>r.arrivee<=me&&r.depart>=ms);
+    const rev=mr.reduce((s,r)=>s+Number(r.prix_total||0),0);
+    const nuits=mr.reduce((s,r)=>{const a=new Date(Math.max(new Date(r.arrivee),d));const e=new Date(Math.min(new Date(r.depart),new Date(d.getFullYear(),d.getMonth()+1,0)));return s+Math.max(0,Math.round((e-a)/864e5));},0);
+    const daysM=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+    const nbB=(state.opts.bien||[]).length;
+    const taux=nbB?Math.round(nuits/(daysM*nbB)*100):0;
+    mois.push({label:d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}),rev,nuits,resas:mr.length,taux});
+  }
+  const maxRev=Math.max(1,...mois.map(m=>m.rev));
+  const bars=mois.map((m,i)=>{const h=Math.round(m.rev/maxRev*160);return `<rect x="${20+i*80}" y="${180-h}" width="60" height="${h}" fill="#C9A227" rx="4"><title>${m.label}: ${money(m.rev)}</title></rect><text x="${50+i*80}" y="198" fill="currentColor" font-size="11" text-anchor="middle">${m.label}</text>`;}).join('');
+  const rows=mois.map(m=>`<tr><td><b>${m.label}</b></td><td style="text-align:right">${money(m.rev)}</td><td style="text-align:center">${m.resas}</td><td style="text-align:center">${m.nuits}</td><td style="text-align:center">${m.taux}%</td></tr>`).join('');
+  const totRev=mois.reduce((s,m)=>s+m.rev,0);
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Prévisionnel 6 mois</h3><span class="sp"></span><span class="muted">Basé sur les réservations confirmées + en attente</span></div>
+    <div style="padding:14px"><svg viewBox="0 0 ${20+mois.length*80} 210" style="width:100%;max-width:500px;height:auto"><line x1="20" y1="180" x2="${20+mois.length*80}" y2="180" stroke="currentColor" stroke-opacity=".2"/>${bars}</svg></div>
+    <div style="overflow:auto"><table class="tbl"><thead><tr><th>Mois</th><th style="text-align:right">Revenu prévu</th><th style="text-align:center">Réservations</th><th style="text-align:center">Nuits</th><th style="text-align:center">Taux occ.</th></tr></thead>
+    <tbody>${rows}<tr style="font-weight:700;border-top:2px solid var(--line)"><td>TOTAL</td><td style="text-align:right">${money(totRev)}</td><td colspan="3"></td></tr></tbody></table></div></div>`;
+}
+
+/* ---------- RAPPORT MENSUEL ---------- */
+async function renderRapportMensuel(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const today=new Date();
+  const mois=today.getMonth(),annee=today.getFullYear();
+  const du=new Date(annee,mois,1).toISOString().slice(0,10);
+  const au=new Date(annee,mois+1,0).toISOString().slice(0,10);
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  const [{data:resas},{data:paiements},{data:depenses},{data:avis},{data:taches}]=await Promise.all([
+    sb.from("reservation").select("*").neq("statut","annulee").gte("arrivee",du).lte("arrivee",au),
+    sb.from("paiement").select("montant").eq("statut","reussi").gte("paye_le",du).lte("paye_le",au),
+    sb.from("depense").select("montant,type").gte("date_op",du).lte("date_op",au),
+    sb.from("avis").select("note_globale").gte("cree_le",du+"T00:00:00"),
+    sb.from("tache").select("statut").gte("date_prevue",du).lte("date_prevue",au)
+  ]);
+  const conf=(resas||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
+  const revBrut=conf.reduce((s,r)=>s+Number(r.prix_total||0),0);
+  const enc=(paiements||[]).reduce((s,p)=>s+Number(p.montant||0),0);
+  const dep=(depenses||[]).filter(d=>d.type==='depense').reduce((s,d)=>s+Number(d.montant||0),0);
+  const nbAvis=(avis||[]).length;const noteMoy=nbAvis?((avis||[]).reduce((s,a)=>s+(a.note_globale||0),0)/nbAvis).toFixed(1):'—';
+  const tFaites=(taches||[]).filter(t=>t.statut==='fait').length;
+  const moLabel=new Date(annee,mois).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Rapport mensuel — ${moLabel}</h3><span class="sp"></span><button class="btn o sm" onclick="window.print()">🖨 Imprimer</button></div>
+    <div style="padding:16px">
+      <div class="kpis">
+        <div class="kpi"><div class="l">Revenus bruts</div><div class="v" style="font-size:22px">${money(revBrut)}</div></div>
+        <div class="kpi"><div class="l">Encaissé</div><div class="v" style="font-size:22px">${money(enc)}</div></div>
+        <div class="kpi"><div class="l">Dépenses</div><div class="v" style="font-size:22px">${money(dep)}</div></div>
+        <div class="kpi"><div class="l">Résultat net</div><div class="v" style="font-size:22px;color:${(revBrut-dep)>=0?'var(--ok)':'var(--danger)'}">${money(revBrut-dep)}</div></div>
+        <div class="kpi"><div class="l">Réservations</div><div class="v">${conf.length}</div></div>
+        <div class="kpi"><div class="l">Tâches terminées</div><div class="v">${tFaites}/${(taches||[]).length}</div></div>
+        <div class="kpi"><div class="l">Avis reçus</div><div class="v">${nbAvis}</div></div>
+        <div class="kpi"><div class="l">Note moyenne</div><div class="v">${noteMoy}${nbAvis?' ★':''}</div></div>
+      </div>
+      ${conf.length?`<div class="fsec" style="margin-top:16px">Réservations du mois</div><div style="overflow:auto"><table class="tbl"><thead><tr><th>Voyageur</th><th>Bien</th><th>Arrivée</th><th>Départ</th><th>Total</th><th>Canal</th></tr></thead><tbody>${conf.map(r=>`<tr><td>${refName("voyageur",r.voyageur_id)}</td><td>${refName("bien",r.bien_id)}</td><td>${fdate(r.arrivee)}</td><td>${fdate(r.depart)}</td><td>${money(r.prix_total)}</td><td>${pill(r.canal)}</td></tr>`).join('')}</tbody></table></div>`:''}
+    </div></div>`;
+}
+
+/* ---------- IMPORT TARIFS SAISONNIERS (CSV) ---------- */
+async function renderImportTarifs(){
+  await loadOpts("bien");
+  const bOpts=(state.opts.bien||[]).map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Importer des tarifs saisonniers</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">CSV avec colonnes : <b>debut</b> (AAAA-MM-JJ), <b>fin</b>, <b>prix_nuit</b>, <b>priorite</b> (optionnel, défaut 1), <b>nom</b> (optionnel).</div>
+      <div class="field"><label>Bien *</label><select id="itBien"><option value="">— Choisir —</option>${bOpts}</select></div>
+      <div class="field"><input type="file" id="itFile" accept=".csv,text/csv"></div>
+      <div id="itPrev" class="muted"></div><div class="err" id="itErr"></div>
+      <button class="btn g" id="itOk" disabled>Importer</button>
+    </div></div>`;
+  let prets=[];
+  document.querySelector("#itFile").onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    const bid=document.querySelector("#itBien").value;
+    if(!bid){document.querySelector("#itErr").textContent="Sélectionnez un bien d'abord.";return;}
+    const txt=await f.text();
+    const rows=txt.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());
+    if(rows.length<2){document.querySelector("#itErr").textContent="Fichier vide.";return;}
+    const sep=rows[0].includes(';')?';':',';
+    const hdr=rows[0].split(sep).map(h=>h.trim().toLowerCase());
+    prets=rows.slice(1).map((line,i)=>{
+      const cols=line.split(sep);const obj={tenant_id:state.tenant.id,bien_id:bid};
+      hdr.forEach((h,j)=>{if(h==='debut')obj.debut=cols[j];else if(h==='fin')obj.fin=cols[j];else if(h==='prix_nuit')obj.prix_nuit=Number(cols[j]);else if(h==='priorite')obj.priorite=Number(cols[j]||1);else if(h==='nom')obj.nom=cols[j];});
+      if(!obj.debut||!obj.fin||!obj.prix_nuit)return null;
+      obj.priorite=obj.priorite||1;return obj;
+    }).filter(Boolean);
+    document.querySelector("#itPrev").textContent=prets.length+" tarif(s) prêt(s)";
+    document.querySelector("#itOk").disabled=!prets.length;
+  };
+  document.querySelector("#itOk").onclick=async()=>{
+    document.querySelector("#itOk").disabled=true;
+    const {error}=await sb.from("tarif").insert(prets);
+    if(error){document.querySelector("#itErr").textContent=error.message;document.querySelector("#itOk").disabled=false;return;}
+    toast(prets.length+" tarif(s) importé(s)");renderImportTarifs();
+  };
+}
+
+/* ---------- CONFIG WHATSAPP BUSINESS ---------- */
+async function renderWhatsappConfig(){
+  const v=await reglGet("whatsapp")||{};
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>WhatsApp Business API</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Connectez votre compte WhatsApp Business pour envoyer des messages automatisés aux voyageurs. Nécessite un compte Meta Business vérifié et l'accès à l'API WhatsApp Cloud.</div>
+      <div class="field"><label>Numéro WhatsApp Business</label><input id="waNum" value="${esc(v.numero||'')}" placeholder="+212 6XX XXX XXX"></div>
+      <div class="field"><label>ID du compte WhatsApp Business</label><input id="waId" value="${esc(v.waba_id||'')}" placeholder="Meta Business Account ID"></div>
+      <div class="field"><label>Token d'accès (permanent)</label><input id="waToken" type="password" value="${esc(v.token||'')}" placeholder="EAA…"></div>
+      <div class="field"><label>ID du numéro de téléphone</label><input id="waPhoneId" value="${esc(v.phone_id||'')}" placeholder="Phone Number ID"></div>
+      <div class="field"><label>Statut de vérification</label>
+        <div style="padding:8px;background:${v.verified?'#e8f5e9':'#fff3e0'};border-radius:8px;font-size:13px">${v.verified?'✅ Vérifié et actif':'⏳ En attente de vérification Meta — <a href="https://business.facebook.com" target="_blank">Vérifier sur Meta Business</a>'}</div></div>
+      <div style="margin-top:12px"><button class="btn g" id="waSave">Enregistrer</button> <span class="ok" id="waOk"></span></div>
+    </div></div>`;
+  document.getElementById("waSave").onclick=async()=>{
+    const val={numero:$("#waNum").value,waba_id:$("#waId").value,token:$("#waToken").value,phone_id:$("#waPhoneId").value,verified:v.verified||false};
+    const e=await reglSet("whatsapp",val);if(e){$("#waOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#waOk").textContent="Enregistré ✓";toast("Configuration WhatsApp enregistrée");
+  };
+}
+
+/* ---------- CONFIG SMS ---------- */
+async function renderSmsConfig(){
+  const v=await reglGet("sms")||{};
+  const prov=v.provider||'twilio';
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Configuration SMS</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Envoyez des SMS aux voyageurs pour les notifications urgentes (check-in, rappels de paiement). Choisissez votre fournisseur.</div>
+      <div class="field"><label>Fournisseur</label><select id="smsProv"><option value="twilio" ${prov==='twilio'?'selected':''}>Twilio</option><option value="vonage" ${prov==='vonage'?'selected':''}>Vonage (Nexmo)</option><option value="orange" ${prov==='orange'?'selected':''}>Orange Business</option></select></div>
+      <div class="field"><label>Account SID / API Key</label><input id="smsKey" value="${esc(v.api_key||'')}" placeholder="Account SID ou API Key"></div>
+      <div class="field"><label>Auth Token / Secret</label><input id="smsSecret" type="password" value="${esc(v.auth_token||'')}" placeholder="Auth Token"></div>
+      <div class="field"><label>Numéro expéditeur</label><input id="smsFrom" value="${esc(v.from_number||'')}" placeholder="+212XXXXXXXXX ou nom court"></div>
+      <div class="field"><label>Activer les SMS automatiques</label><select id="smsAuto"><option value="non" ${v.auto!=='oui'?'selected':''}>Non</option><option value="oui" ${v.auto==='oui'?'selected':''}>Oui</option></select></div>
+      <div style="margin-top:12px"><button class="btn g" id="smsSave">Enregistrer</button> <span class="ok" id="smsOk"></span></div>
+    </div></div>`;
+  document.getElementById("smsSave").onclick=async()=>{
+    const val={provider:$("#smsProv").value,api_key:$("#smsKey").value,auth_token:$("#smsSecret").value,from_number:$("#smsFrom").value,auto:$("#smsAuto").value};
+    const e=await reglSet("sms",val);if(e){$("#smsOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    $("#smsOk").textContent="Enregistré ✓";toast("Configuration SMS enregistrée");
+  };
+}
+
+/* ---------- HISTORIQUE DES MODIFICATIONS ---------- */
+async function renderHistoriqueModifs(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const {data,error}=await sb.from("journal_activite").select("*").order("cree_le",{ascending:false}).limit(100);
+  if(error){
+    /* Si la table n'existe pas, utiliser le journal existant */
+    const {data:j}=await sb.from("journal").select("*").order("cree_le",{ascending:false}).limit(100);
+    if(!j||!j.length){
+      $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Historique des modifications</h3></div>
+        <div style="padding:16px"><div class="phnote">L'historique enregistre automatiquement les modifications importantes : création/modification de réservation, modification de bien, paiements, relevés, etc.</div>
+        <p class="muted" style="margin-top:12px">Aucune entrée pour le moment.</p></div></div>`;
+      return;
+    }
+  }
+  const list=data||[];
+  const rows=list.map(e=>`<tr><td class="muted" style="font-size:11px;white-space:nowrap">${fdate(e.cree_le)}</td><td>${pill(e.type||e.action||'')}</td><td>${esc(e.description||e.details||'')}</td><td class="muted" style="font-size:11px">${esc(e.utilisateur||e.user_email||'')}</td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Historique des modifications</h3><span class="sp"></span><span class="muted">${list.length} entrée(s)</span></div>
+    <div style="overflow:auto;max-height:600px"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Utilisateur</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucune entrée</td></tr>'}</tbody></table></div></div>`;
 }
 
 /* ---------- RAPPORT HEBDOMADAIRE ---------- */
