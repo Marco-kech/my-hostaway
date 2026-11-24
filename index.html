@@ -6360,6 +6360,14 @@ async function ficheBien(id){
     sb.from("bien_photo").select("url").eq("bien_id",id).order("ordre").limit(6),
     sb.from("tache").select("titre,statut,date_prevue").eq("bien_id",id).eq("archive",false).order("date_prevue").limit(5)
   ]);
+  /* LOT 1.2 — Charger les étiquettes du bien */
+  let bienEtiqHtml='';
+  try{
+    const allEtiq=await loadEtiquettes();
+    const eids=await loadBienEtiquettes(id);
+    const tags=eids.map(eid=>allEtiq.find(e=>e.id===eid)).filter(Boolean);
+    if(tags.length)bienEtiqHtml=`<div style="margin:8px 0;display:flex;flex-wrap:wrap;gap:4px">${tags.map(e=>`<span style="background:${esc(e.couleur||'#C9A227')}22;color:${esc(e.couleur||'#C9A227')};border:1px solid ${esc(e.couleur||'#C9A227')}44;padding:2px 8px;border-radius:12px;font-size:11px">${esc(e.nom)}</span>`).join('')}</div>`;
+  }catch(e){}
   const conf=(resas||[]).filter(r=>r.statut==='confirmee'||r.statut==='terminee');
   const rev=conf.reduce((s,r)=>s+Number(r.prix_total||0),0);
   const notes=(avis||[]).map(a=>Number(a.note)).filter(n=>n>0);
@@ -6370,6 +6378,7 @@ async function ficheBien(id){
   ouvrir(`<div class="h"><h3>${esc(b.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b" style="max-height:70vh;overflow:auto">
       <div style="margin-bottom:12px">${photoHtml}</div>
+      ${bienEtiqHtml}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
           <div class="fsec">Informations</div>
