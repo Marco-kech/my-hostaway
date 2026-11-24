@@ -5066,7 +5066,7 @@ async function renderFactures(){
     <td style="text-align:right">${money(f.montant_ht)}</td><td style="text-align:right">${f.tva_pct}%</td>
     <td style="text-align:right"><b>${money(f.montant_ttc)}</b></td>
     <td>${stF(f.statut)}</td><td>${f.envoyee?'✓':'—'}</td><td>${f.soumise_dgfip?'✓':'—'}</td>
-    <td><div class="act"><button class="btn o sm" data-fe="${f.id}">Modifier</button><button class="btn d sm" data-fd="${f.id}">×</button></div></td></tr>`).join("");
+    <td><div class="act"><button class="btn o sm" data-fpdf="${f.id}">📄 PDF</button><button class="btn o sm" data-fe="${f.id}">Modifier</button><button class="btn d sm" data-fd="${f.id}">×</button></div></td></tr>`).join("");
   const totalTTC=(data||[]).reduce((s,f)=>s+Number(f.montant_ttc||0),0);
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Factures voyageurs</h3><span class="sp"></span>
       <button class="btn o sm" id="faCsv">⬇ CSV</button>
@@ -5084,6 +5084,7 @@ async function renderFactures(){
     a.href=url;a.download='Factures.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
   document.querySelectorAll("[data-fe]").forEach(b=>b.onclick=()=>openForm("factures",(state.cache.factures||[]).find(x=>x.id===b.dataset.fe)));
   document.querySelectorAll("[data-fd]").forEach(b=>b.onclick=()=>delRow("factures",b.dataset.fd));
+  document.querySelectorAll("[data-fpdf]").forEach(b=>b.onclick=()=>genererFacturePDF(b.dataset.fpdf));
 }
 async function renderFactureParams(){
   const v=await reglGet("facturation");
@@ -6178,7 +6179,10 @@ function checklistForm(id){
   ouvrir(`<div class="h"><h3>${id?"Modifier le":"Nouveau"} modèle</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
       <div class="field"><label>Nom du modèle *</label><input id="clNom" value="${esc(c.nom)}" placeholder="Ménage standard"></div>
+      <div class="field"><label>Type</label><select id="clType"><option value="menage" ${c.type==='menage'?'selected':''}>Ménage</option><option value="checkin" ${c.type==='checkin'?'selected':''}>Check-in</option><option value="checkout" ${c.type==='checkout'?'selected':''}>Check-out</option><option value="inspection" ${c.type==='inspection'?'selected':''}>Inspection</option><option value="maintenance" ${c.type==='maintenance'?'selected':''}>Maintenance</option></select></div>
+      <div class="field"><label>Bien associé (vide = tous)</label><select id="clBien"><option value="">Tous les biens</option>${(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${c.bien_id===b.id?'selected':''}>${esc(b.nom)}</option>`).join('')}</select></div>
       <div class="field"><label>Points de contrôle (un par ligne)</label><textarea id="clItems" rows="8" placeholder="Nettoyer la cuisine&#10;Changer les draps&#10;Vérifier les serviettes">${esc((c.items||[]).join("\n"))}</textarea></div>
+      <div style="margin-bottom:8px"><button class="btn o sm" id="clTpl">📋 Charger un modèle pré-rempli</button></div>
       <div class="err" id="clErr"></div>
     </div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="clSave">Enregistrer</button></div>`);
@@ -6186,14 +6190,25 @@ function checklistForm(id){
     const nom=$("#clNom").value.trim();
     const items=$("#clItems").value.split("\n").map(s=>s.trim()).filter(Boolean);
     if(!nom){$("#clErr").textContent="Donnez un nom au modèle.";return;}
+    const type=$("#clType").value;
+    const bien_id=$("#clBien").value||null;
     $("#clSave").disabled=true;
     let res;
-    if(id) res=await sb.from("modele_checklist").update({nom,items}).eq("id",id);
-    else res=await sb.from("modele_checklist").insert({tenant_id:state.tenant.id,nom,items});
+    if(id) res=await sb.from("modele_checklist").update({nom,items,type,bien_id}).eq("id",id);
+    else res=await sb.from("modele_checklist").insert({tenant_id:state.tenant.id,nom,items,type,bien_id});
     $("#clSave").disabled=false;
     if(res.error){$("#clErr").textContent=res.error.message;return;}
     fermer(); toast("Enregistré"); renderChecklists();
   };
+  /* Templates pré-remplis */
+  const TEMPLATES={
+    menage:"Salon & séjour — Aspirateur + serpillière\nSalon — Dépoussiérer meubles et étagères\nCuisine — Nettoyer plan de travail et évier\nCuisine — Vérifier frigo (vider/nettoyer)\nCuisine — Poubelles vidées\nSDB — Nettoyer douche/baignoire\nSDB — Nettoyer WC\nSDB — Remplacer serviettes\nChambres — Changer draps et taies\nChambres — Aspirateur et poussières\nBalcon/Terrasse — Nettoyage sol\nEntrée — Nettoyage et rangement\nVérifier produits d'accueil (savon, shampooing)\nVérifier stock papier toilette\nFermer fenêtres et volets",
+    checkin:"Vérifier propreté générale\nAllumer climatisation/chauffage\nPréparer clés / code porte\nVérifier wifi fonctionne\nDéposer livret d'accueil\nAccueillir le voyageur\nFaire le tour du logement\nExpliquer les équipements\nRécupérer pièce d'identité\nFaire signer le contrat",
+    checkout:"Vérifier l'état du logement\nCompter les clés\nRelever compteurs\nVérifier dégâts éventuels\nPhotos de contrôle\nDemander un avis au voyageur\nLibérer la caution si OK",
+    inspection:"Vérifier état général murs et sols\nVérifier plomberie (fuites)\nVérifier électricité (prises, ampoules)\nVérifier serrures et fenêtres\nVérifier électroménager\nVérifier mobilier\nPhotos de l'état\nNotes de maintenance à prévoir"
+  };
+  const tplBtn=document.getElementById("clTpl");
+  if(tplBtn)tplBtn.onclick=()=>{const type=$("#clType").value;const tpl=TEMPLATES[type];if(tpl)$("#clItems").value=tpl;else toast("Pas de modèle pour ce type");};
 }
 function checklistDel(id){
   ouvrir(`<div class="h"><h3>Supprimer ?</h3><button class="x" onclick="fermer()">×</button></div>
@@ -6922,6 +6937,50 @@ ctx.lineWidth=2;ctx.strokeStyle='#222';ctx.lineCap='round';
   toast("Contrat généré avec zone de signature — le voyageur peut signer au doigt ou à la souris");
 }
 
+/* ---------- FACTURE PDF ---------- */
+async function genererFacturePDF(factureId){
+  const f=(state.cache.factures||[]).find(x=>x.id===factureId);
+  if(!f){toast("Facture introuvable");return;}
+  await Promise.all([loadOpts("bien"),loadOpts("voyageur")]);
+  const cfg=await reglGet("facturation")||{};
+  const bien=(state.opts.bien||[]).find(b=>b.id===f.bien_id)||{};
+  const voy=(state.opts.voyageur||[]).find(v=>v.id===f.voyageur_id)||{};
+  const bg=cfg.bg||'#0f2d4a', acc=cfg.acc||'#c9a24a';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Facture ${esc(f.numero)}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:auto;font-size:13px;line-height:1.6;color:#222}
+.head{background:${bg};color:#fff;padding:24px;border-radius:10px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}
+.head h1{font-size:20px;color:${acc}}.head .sub{font-size:11px;opacity:.8}
+h2{color:${bg};font-size:14px;margin:16px 0 6px;border-bottom:2px solid ${acc};padding-bottom:3px}
+table{width:100%;border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:7px 10px;border:1px solid #ddd;font-size:12px}th{background:#f5f5f5;font-weight:700}
+.total td{font-weight:700;font-size:14px;border-top:2px solid ${bg}}
+.foot{text-align:center;margin-top:30px;font-size:10px;color:#999;border-top:1px solid #eee;padding-top:10px}
+@media print{body{padding:20px}@page{margin:15mm}}
+</style></head><body>
+<div class="head"><div><h1>FACTURE</h1><div class="sub">${esc(cfg.societe||'DPM Conciergerie')}<br>${cfg.siret?'ICE / SIRET : '+esc(cfg.siret):''}</div></div>
+<div style="text-align:right;font-size:12px"><b>${esc(f.numero)}</b><br>Date : ${fdate(f.date_facture)}<br>${f.date_echeance?'Échéance : '+fdate(f.date_echeance):''}</div></div>
+<h2>Destinataire</h2>
+<table><tr><td>${esc(voy.nom||'—')}<br>${voy.email?esc(voy.email)+'<br>':''}${voy.tel?esc(voy.tel):''}</td></tr></table>
+<h2>Détails</h2>
+<table><thead><tr><th>Description</th><th style="text-align:right">Montant</th></tr></thead><tbody>
+<tr><td>Séjour — ${esc(bien.nom||'')}</td><td style="text-align:right">${Number(f.montant_ht||0).toLocaleString('fr-FR')} MAD</td></tr>
+${f.notes?f.notes.split('\\n').filter(l=>l.trim()).map(l=>`<tr><td>${esc(l)}</td><td></td></tr>`).join(''):''}
+</tbody>
+<tfoot>
+<tr><td style="text-align:right">Sous-total HT</td><td style="text-align:right">${Number(f.montant_ht||0).toLocaleString('fr-FR')} MAD</td></tr>
+<tr><td style="text-align:right">TVA (${f.tva_pct||0}%)</td><td style="text-align:right">${Number(f.montant_tva||0).toLocaleString('fr-FR')} MAD</td></tr>
+<tr class="total"><td style="text-align:right">TOTAL TTC</td><td style="text-align:right">${Number(f.montant_ttc||0).toLocaleString('fr-FR')} MAD</td></tr>
+</tfoot></table>
+<h2>Conditions de paiement</h2>
+<p>${esc(cfg.conditions||'Paiement à réception de la facture. Virement bancaire ou PayPal.')}</p>
+${cfg.rib?'<p style="margin-top:6px"><b>RIB :</b> '+esc(cfg.rib)+'</p>':''}
+<div class="foot">${esc(cfg.societe||'DPM Conciergerie')} ${cfg.adresse?'· '+esc(cfg.adresse):''} ${cfg.tel?'· '+esc(cfg.tel):''} ${cfg.email?'· '+esc(cfg.email):''}</div>
+</body></html>`;
+  const w=window.open('','_blank','width=800,height=1000');
+  w.document.write(html);w.document.close();
+  setTimeout(()=>w.print(),500);
+  toast("Facture "+f.numero+" — imprimez ou enregistrez en PDF");
+}
+
 /* ---------- TEMPLATES MESSAGES PRÉDÉFINIS ---------- */
 async function initTemplatesMsg(){
   try{
@@ -7051,6 +7110,17 @@ document.addEventListener('keydown',e=>{
     const nd=document.getElementById('notifDrop');if(nd&&!nd.hidden){nd.hidden=true;e.preventDefault();return;}}
   if(e.key==='/'){e.preventDefault();const gs=document.getElementById('globalSearch');if(gs)gs.focus();return;}
   if(e.key==='n'&&!e.ctrlKey&&!e.metaKey){const tb=document.getElementById('topAdd');if(tb&&!tb.hidden){tb.click();e.preventDefault();return;}}
+  /* Navigation rapide : Alt+1→9 pour les rubriques */
+  if(e.altKey&&e.key>='1'&&e.key<='9'){
+    const idx=parseInt(e.key)-1;
+    if(RUBRIQUES[idx]){e.preventDefault();goRub(RUBRIQUES[idx].k);return;}
+  }
+  /* Alt+D → Dashboard */
+  if(e.altKey&&e.key==='d'){e.preventDefault();goRub('dashboard');return;}
+  /* Alt+T → Dark mode toggle */
+  if(e.altKey&&e.key==='t'){e.preventDefault();const dt=document.getElementById('darkToggle');if(dt)dt.click();return;}
+  /* Alt+P → Print */
+  if(e.altKey&&e.key==='p'){e.preventDefault();window.print();return;}
 });
 
 /* ========== NOUVELLES FONCTIONNALITÉS (Nov 2026) ========== */
