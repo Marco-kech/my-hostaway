@@ -1022,7 +1022,8 @@ const RUBRIQUES=[
     ["cp","Champs personnalisés",{champperso:"bien"}],
     ["aso","Score ASO",{scoreaso:1}],
     ["grp","Groupes d'annonces",{grpannonces:1}],
-    ["masse","Édition en masse",{editmasse:1}]]},
+    ["masse","Édition en masse",{editmasse:1}],
+    ["import","Importer (CSV)",{importbiens:1}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["agenda","Agenda",{agendataches:1}],
@@ -1583,6 +1584,7 @@ function goRub(rk,sk){
   if(t.cronhist)return renderCronHist();
   if(t.emailcfg)return renderEmailConfig();
   if(t.editmasse)return renderEditMasse();
+  if(t.importbiens)return renderImportBiens();
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
   if(t.apikeys)return renderApiKeys();
@@ -5112,6 +5114,43 @@ async function renderNotifCfg(){
     document.querySelector("#nfOk").textContent="Enregistré ✓";toast("Notifications enregistrées");};
 }
 
+/* ---------- IMPORT CSV BIENS (LOT 8) ---------- */
+async function renderImportBiens(){
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Importer des annonces (CSV)</h3></div>
+    <div style="padding:16px">
+      <div class="phnote" style="margin-bottom:12px">Fichier CSV avec en-têtes. Colonnes reconnues : <b>Nom</b>, <b>Adresse</b>, <b>Ville</b>, <b>Type</b> (appartement/villa/riad/maison/studio), <b>Capacité</b>, <b>Chambres</b>, <b>SDB</b>, <b>Prix_nuit</b>, <b>Frais_menage</b>, <b>Description</b>.</div>
+      <div class="field"><input type="file" id="ibFile" accept=".csv,text/csv"></div>
+      <div id="ibPrev" class="muted"></div><div class="err" id="ibErr"></div>
+      <button class="btn g" id="ibOk" disabled>Importer</button>
+    </div></div>`;
+  let prets=[];
+  document.querySelector("#ibFile").onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    const txt=await f.text();
+    const rows=txt.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());
+    if(rows.length<2){document.querySelector("#ibErr").textContent="Fichier vide.";return;}
+    const sep=rows[0].includes(';')?';':',';
+    const hdr=rows[0].split(sep).map(h=>h.trim().toLowerCase().replace(/[^a-z_]/g,''));
+    const kmap={nom:'nom',adresse:'adresse',ville:'ville',type:'type',capacite:'capacite',chambres:'nb_chambres',sdb:'nb_salles_bain',prix_nuit:'prix_nuit_base',frais_menage:'frais_menage',description:'description'};
+    const errs=[];
+    prets=rows.slice(1).map((line,i)=>{
+      const cols=line.split(sep);const obj={tenant_id:state.tenant.id,statut:'brouillon'};
+      hdr.forEach((h,j)=>{const k=kmap[h];if(k&&cols[j])obj[k]=(['capacite','nb_chambres','nb_salles_bain','prix_nuit_base','frais_menage'].includes(k))?Number(cols[j]):cols[j].trim();});
+      if(!obj.nom){errs.push("Ligne "+(i+2)+": nom manquant");return null;}
+      return obj;
+    }).filter(Boolean);
+    document.querySelector("#ibErr").textContent=errs.slice(0,5).join(" · ");
+    document.querySelector("#ibPrev").textContent=prets.length+" bien(s) prêt(s)"+(errs.length?", "+errs.length+" ignoré(s)":"");
+    document.querySelector("#ibOk").disabled=!prets.length;
+  };
+  document.querySelector("#ibOk").onclick=async()=>{
+    document.querySelector("#ibOk").disabled=true;
+    const {error}=await sb.from("bien").insert(prets);
+    if(error){document.querySelector("#ibErr").textContent=error.message;document.querySelector("#ibOk").disabled=false;return;}
+    toast(prets.length+" bien(s) importé(s)");invalidate("bien");renderImportBiens();
+  };
+}
+
 async function renderSiteDesign(){
   const v=await reglGet("site_design");
   const c=(id,lab,val)=>`<div class="field" style="flex:1;min-width:120px"><label>${lab}</label><input id="${id}" type="color" value="${val||'#000000'}" style="height:38px;padding:2px;cursor:pointer"></div>`;
@@ -5224,10 +5263,15 @@ async function renderSiteParams(){
         ${chk('spRev','Afficher les avis',v.avis!==false)}
         ${chk('spInst','Autoriser la réservation instantanée',v.instant)}
         ${chk('spReq','Autoriser les demandes de réservation',v.demandes!==false)}
+        ${chk('spCookies','Bannière de cookies (RGPD/CNDP)',v.cookies!==false)}
+        ${chk('spBookNow','Bouton « Book Now » sur chaque annonce',v.book_now!==false)}
       </div>
+      <div class="fsec">Bouton Book Now</div>
+      <div class="phnote" style="margin-bottom:8px">Code à intégrer sur WordPress ou tout site. Remplacez BIEN_ID par l'identifiant du bien.</div>
+      <div class="field"><label>Code embed</label><textarea id="spEmbed" readonly rows="3" style="font-family:monospace;font-size:11px">&lt;a href="${location.origin+location.pathname}#book=BIEN_ID" target="_blank" style="display:inline-block;padding:12px 24px;background:#C9A227;color:#fff;border-radius:8px;font-weight:700;text-decoration:none"&gt;Réserver maintenant&lt;/a&gt;</textarea></div>
       <button class="btn g" id="spSave">Enregistrer</button> <span class="ok" id="spOk"></span>
     </div></div>`;
-  $("#spSave").onclick=async()=>{const valeur={nom:$("#spNom").value,domaine:$("#spDom").value,carte:$("#spMap").checked,avis:$("#spRev").checked,instant:$("#spInst").checked,demandes:$("#spReq").checked};const e=await reglSet("site_params",valeur);if(e){$("#spOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#spOk").textContent="Enregistré ✓";toast("Paramètres enregistrés");};
+  $("#spSave").onclick=async()=>{const valeur={nom:$("#spNom").value,domaine:$("#spDom").value,carte:$("#spMap").checked,avis:$("#spRev").checked,instant:$("#spInst").checked,demandes:$("#spReq").checked,cookies:$("#spCookies").checked,book_now:$("#spBookNow").checked};const e=await reglSet("site_params",valeur);if(e){$("#spOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}$("#spOk").textContent="Enregistré ✓";toast("Paramètres enregistrés");};
 }
 
 /* ---------- PARAMETRES : COMPTE & LANGUES ---------- */
