@@ -483,41 +483,67 @@ if(location.hash.includes('type=recovery')){
 /* Public check-in page (no auth needed) */
 if(location.hash.startsWith('#checkin=')){
   const token=location.hash.split('=')[1];
-  document.getElementById('auth').innerHTML=`<div class="card" style="max-width:520px">
-    <div class="logo"><div class="logomark">DPM</div><div><h1>Check-in</h1><div class="tag">Pré-arrivée</div></div></div>
-    <p class="muted" style="margin:8px 0 16px">Remplissez ce formulaire avant votre arrivée pour accélérer votre accueil.</p>
+  document.getElementById('auth').innerHTML=`<div class="card" style="max-width:560px">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>Fiche voyageur</h1><div class="tag">Enregistrement avant l'arrivée</div></div></div>
+    <p class="muted" style="margin:8px 0 16px">Merci de remplir cette fiche avant votre arrivée. L'enregistrement de chaque voyageur est une obligation légale de l'hébergeur. Cela prend 2 minutes.</p>
     <div id="ciPub"><div class="center"><span class="spin"></span></div></div></div>`;
   (async()=>{
-    /* Le voyageur n'atteint que sa fiche, par son lien (fonctions checkin_par_token / checkin_remplir). */
-    const {data:ciStatut,error}=await sb.rpc("checkin_par_token",{p_token:token});
+    /* Le voyageur n'atteint que sa fiche, par son lien (fonctions checkin_infos / checkin_remplir). */
+    const {data:ciInfos,error}=await sb.rpc("checkin_infos",{p_token:token});
     const box=document.getElementById("ciPub");
-    if(error||!ciStatut){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
-    if(ciStatut==='rempli'){box.innerHTML='<p class="ok">✅ Vous avez déjà rempli ce formulaire. Merci et bon séjour !</p>';return;}
-    const f=(id,l,type,ph)=>`<div class="field"><label>${l}</label><input id="${id}" type="${type||'text'}" placeholder="${ph||''}"></div>`;
-    box.innerHTML=`${f('ci_nom','Nom *','text','Votre nom de famille')}${f('ci_prenom','Prénom *','text','Votre prénom')}
-      ${f('ci_email','Email','email','vous@exemple.com')}${f('ci_tel','Téléphone','tel','+33 6 ...')}
-      ${f('ci_nat','Nationalité','text','Française')}${f('ci_pass','N° passeport / carte d\'identité','text','')}
-      <div class="row2">${f('ci_heure','Heure d\'arrivée estimée','time','')}${f('ci_nb','Nombre de personnes','number','2')}</div>
+    if(error||!ciInfos){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
+    if(ciInfos.statut==='rempli'){box.innerHTML='<p class="ok">✅ Vous avez déjà rempli cette fiche. Merci et bon séjour !</p>';return;}
+    const f=(id,l,type,ph)=>`<div class="field"><label for="${id}">${l}</label><input id="${id}" type="${type||'text'}" placeholder="${ph||''}"></div>`;
+    const nbResa=Math.min(30,Math.max(1,Number(ciInfos.nb)||1));
+    const sejour=ciInfos.bien?`<div class="phnote" style="margin:0 0 14px"><b>${esc(ciInfos.bien)}</b>${ciInfos.arrivee?` — du ${fdate(ciInfos.arrivee)} au ${fdate(ciInfos.depart)}`:''}</div>`:'';
+    const accomp=n=>`<div class="ciAcc" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:13px">Voyageur ${n}</b><span class="sp"></span><button type="button" class="btn o sm ciAccDel">Retirer</button></div>
+        <div class="row2"><div class="field"><label>Nom *</label><input class="ca_nom" type="text"></div><div class="field"><label>Prénom</label><input class="ca_prenom" type="text"></div></div>
+        <div class="row2"><div class="field"><label>Date de naissance</label><input class="ca_naiss" type="date"></div><div class="field"><label>Nationalité</label><input class="ca_nat" type="text"></div></div>
+        <div class="field"><label>N° passeport / carte d'identité</label><input class="ca_piece" type="text"></div></div>`;
+    box.innerHTML=`${sejour}
+      <h4 style="margin:4px 0 8px">Vous (personne qui a réservé)</h4>
+      <div class="row2">${f('ci_nom','Nom *','text','Votre nom de famille')}${f('ci_prenom','Prénom *','text','Votre prénom')}</div>
+      <div class="row2">${f('ci_naiss','Date de naissance','date','')}${f('ci_nat','Nationalité','text','Française')}</div>
+      <div class="row2">${f('ci_pass','N° passeport / carte d\'identité','text','')}${f('ci_pays','Pays de résidence','text','France')}</div>
+      <div class="row2">${f('ci_email','E-mail','email','vous@exemple.com')}${f('ci_tel','Téléphone (avec indicatif)','tel','+33 6 ...')}</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:2px 0 14px;cursor:pointer"><input id="ci_wa" type="checkbox" style="margin-top:3px;width:auto"><span>J'accepte de recevoir les informations de mon séjour (guide, accès, rappels) par WhatsApp à ce numéro.</span></label>
+      <h4 style="margin:4px 0 4px">Les autres voyageurs</h4>
+      <p class="muted" style="font-size:12.5px;margin:0 0 8px">Une ligne par personne qui séjourne avec vous, enfants compris.</p>
+      <div id="ciAccs"></div>
+      <button type="button" class="btn o sm" id="ciAccAdd" style="margin-bottom:14px">+ Ajouter un voyageur</button>
+      <h4 style="margin:4px 0 8px">Votre arrivée</h4>
+      <div class="row2">${f('ci_heure','Heure d\'arrivée estimée','time','')}${f('ci_nb','Nombre total de personnes','number','2')}</div>
       <div class="row2">${f('ci_veh','Véhicule (marque, couleur)','text','Renault Clio grise')}${f('ci_plaq','Plaque d\'immatriculation','text','AB-123-CD')}</div>
-      <div class="field"><label>Demandes spéciales</label><textarea id="ci_dem" rows="3" placeholder="Lit bébé, arrivée tardive, allergies…"></textarea></div>
+      <div class="field"><label for="ci_dem">Demandes spéciales</label><textarea id="ci_dem" rows="3" placeholder="Lit bébé, arrivée tardive, allergies…"></textarea></div>
       <div class="err" id="ciPubErr"></div>
-      <button class="btn g" id="ciPubSave" style="width:100%">Envoyer mes informations</button>`;
+      <button class="btn g" id="ciPubSave" style="width:100%">Envoyer ma fiche</button>`;
+    const accs=document.getElementById("ciAccs");
+    const renum=()=>{[...accs.querySelectorAll(".ciAcc")].forEach((d,i)=>{d.querySelector("b").textContent="Voyageur "+(i+2);});};
+    const ajouter=()=>{ if(accs.querySelectorAll(".ciAcc").length>=29)return; accs.insertAdjacentHTML("beforeend",accomp(0));
+      const d=accs.lastElementChild; d.querySelector(".ciAccDel").onclick=()=>{d.remove();renum();}; renum(); };
+    document.getElementById("ciAccAdd").onclick=ajouter;
+    for(let i=1;i<nbResa;i++) ajouter();
+    document.getElementById("ci_nb").value=nbResa;
     document.getElementById("ciPubSave").onclick=async()=>{
-      const nom=document.getElementById("ci_nom").value.trim(),prenom=document.getElementById("ci_prenom").value.trim();
-      if(!nom||!prenom){document.getElementById("ciPubErr").textContent="Nom et prénom sont obligatoires.";return;}
-      document.getElementById("ciPubSave").disabled=true;
-      const upd={nom,prenom,email:document.getElementById("ci_email").value.trim()||null,
-        telephone:document.getElementById("ci_tel").value.trim()||null,
-        nationalite:document.getElementById("ci_nat").value.trim()||null,
-        num_passeport:document.getElementById("ci_pass").value.trim()||null,
+      const g=id=>document.getElementById(id).value.trim();
+      const nom=g("ci_nom"),prenom=g("ci_prenom"),err=document.getElementById("ciPubErr");
+      if(!nom||!prenom){err.textContent="Nom et prénom sont obligatoires.";return;}
+      const tel=g("ci_tel"), wa=document.getElementById("ci_wa").checked;
+      if(wa&&!tel){err.textContent="Indiquez votre numéro de téléphone pour recevoir les informations par WhatsApp.";return;}
+      const lignes=[...accs.querySelectorAll(".ciAcc")].map(d=>({nom:d.querySelector(".ca_nom").value.trim(),prenom:d.querySelector(".ca_prenom").value.trim(),
+        date_naissance:d.querySelector(".ca_naiss").value||null,nationalite:d.querySelector(".ca_nat").value.trim()||null,num_piece:d.querySelector(".ca_piece").value.trim()||null}));
+      if(lignes.some(l=>!l.nom&&(l.prenom||l.date_naissance||l.nationalite||l.num_piece))){err.textContent="Indiquez le nom de chaque voyageur ajouté, ou retirez la ligne.";return;}
+      const voyageurs=lignes.filter(l=>l.nom);
+      document.getElementById("ciPubSave").disabled=true; err.textContent="";
+      const upd={nom,prenom,email:g("ci_email")||null,telephone:tel||null,accord_whatsapp:wa,
+        nationalite:g("ci_nat")||null,num_passeport:g("ci_pass")||null,date_naissance:document.getElementById("ci_naiss").value||null,pays:g("ci_pays")||null,
         heure_arrivee:document.getElementById("ci_heure").value||null,
-        nb_personnes:Number(document.getElementById("ci_nb").value)||null,
-        vehicule:document.getElementById("ci_veh").value.trim()||null,
-        plaque:document.getElementById("ci_plaq").value.trim()||null,
-        demandes_speciales:document.getElementById("ci_dem").value.trim()||null};
+        nb_personnes:String(Number(document.getElementById("ci_nb").value)||(voyageurs.length+1)),
+        vehicule:g("ci_veh")||null,plaque:g("ci_plaq")||null,demandes_speciales:g("ci_dem")||null,voyageurs};
       const {data:ciRes,error:e2}=await sb.rpc("checkin_remplir",{p_token:token,p_infos:upd});
-      if(e2||ciRes==='invalide'){document.getElementById("ciPubErr").textContent=e2?e2.message:"Lien invalide ou expiré.";document.getElementById("ciPubSave").disabled=false;return;}
-      box.innerHTML='<p class="ok" style="text-align:center;font-size:16px;padding:20px 0">✅ Merci ! Vos informations ont été transmises.<br>Bon voyage et à bientôt !</p>';
+      if(e2||ciRes==='invalide'){err.textContent=e2?e2.message:"Lien invalide ou expiré.";document.getElementById("ciPubSave").disabled=false;return;}
+      box.innerHTML='<p class="ok" style="text-align:center;font-size:16px;padding:20px 0">✅ Merci ! Votre fiche est enregistrée.<br>Bon voyage et à bientôt !</p>';
     };
   })();
   // Stop here, don't load the app
@@ -5807,13 +5833,13 @@ async function renderCheckinOnline(){
       <td>${r?refName("bien",r.bien_id):'—'}</td>
       <td>${c.nom?esc(c.nom+' '+c.prenom):(r?refName("voyageur",r.voyageur_id):'—')}</td>
       <td>${r?fdate(r.arrivee):'—'}</td>
-      <td>${c.statut==='rempli'?'<span class="pill green">Rempli</span>':'<span class="pill gold">En attente</span>'}</td>
+      <td>${c.statut==='rempli'?'<span class="pill green">Rempli</span>':'<span class="pill gold">En attente</span>'}${c.accord_whatsapp?' <span class="pill" title="Accord pour recevoir les informations du séjour par WhatsApp">WhatsApp</span>':''}</td>
       <td><div class="act">
         <button class="btn o sm" data-copyci="${baseUrl+c.token}" title="Copier le lien">🔗</button>
         ${c.statut==='rempli'?`<button class="btn o sm" data-viewci="${c.id}" title="Voir les réponses">👁</button>`:''}
       </div></td>
     </tr>`;}).join("");
-  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">Envoyez le lien de check-in au voyageur avant son arrivée. Il remplit ses infos (identité, heure, véhicule, demandes) et vous retrouvez tout ici.</div>
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">La fiche voyageur se crée toute seule dès qu'une réservation est confirmée. Le voyageur y indique son identité, celle de chaque personne qui l'accompagne, son heure d'arrivée, et s'il accepte d'être contacté par WhatsApp. Vous retrouvez tout ici.</div>
     <div class="panel"><div class="phead"><h3>Check-ins</h3><span class="sp"></span><span class="muted">${list.length}</span></div>
     ${list.length?`<div style="overflow:auto"><table><thead><tr><th>Bien</th><th>Voyageur</th><th>Arrivée</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="empty">Aucun check-in créé. Créez-en un pour chaque réservation à venir.</div>'}
     </div>`;
@@ -5837,16 +5863,34 @@ async function creerCheckin(){
 }
 function voirCheckin(id,list){
   const c=list.find(x=>x.id===id);if(!c)return;
-  const f=(l,v)=>v?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)"><span class="muted">${l}</span><b>${esc(v)}</b></div>`:'';
-  ouvrir(`<div class="h"><h3>Réponses check-in</h3><button class="x" onclick="fermer()">×</button></div>
-    <div class="b" style="font-size:13.5px">
-      ${f('Nom',c.nom)}${f('Prénom',c.prenom)}${f('Email',c.email)}${f('Téléphone',c.telephone)}
-      ${f('Nationalité',c.nationalite)}${f('N° passeport',c.num_passeport)}
+  const f=(l,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line)"><span class="muted">${l}</span><b style="text-align:right">${esc(v)}</b></div>`:'';
+  const acc=Array.isArray(c.voyageurs)?c.voyageurs:[];
+  const tabAcc=acc.length?`<h4 style="margin:14px 0 6px">Autres voyageurs (${acc.length})</h4><div style="overflow:auto"><table><thead><tr><th>Nom</th><th>Prénom</th><th>Né(e) le</th><th>Nationalité</th><th>N° pièce</th></tr></thead><tbody>${acc.map(a=>`<tr><td>${esc(a.nom||'')}</td><td>${esc(a.prenom||'')}</td><td>${a.date_naissance?fdate(a.date_naissance):'—'}</td><td>${esc(a.nationalite||'—')}</td><td>${esc(a.num_piece||'—')}</td></tr>`).join('')}</tbody></table></div>`:'';
+  ouvrir(`<div class="h"><h3>Fiche voyageur</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b" style="font-size:13.5px" id="ciFiche">
+      ${f('Nom',c.nom)}${f('Prénom',c.prenom)}${f('Né(e) le',c.date_naissance?fdate(c.date_naissance):'')}
+      ${f('Nationalité',c.nationalite)}${f('N° passeport / CNI',c.num_passeport)}${f('Pays de résidence',c.pays)}
+      ${f('E-mail',c.email)}${f('Téléphone',c.telephone)}${f('Accord WhatsApp',c.accord_whatsapp?'Oui':'')}
       ${f('Heure d\'arrivée',c.heure_arrivee)}${f('Nb personnes',c.nb_personnes)}
       ${f('Véhicule',c.vehicule)}${f('Plaque',c.plaque)}
       ${f('Demandes spéciales',c.demandes_speciales)}
-      ${f('Rempli le',c.rempli_le?fdate(c.rempli_le):'')}
-    </div><div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+      ${f('Remplie le',c.rempli_le?fdate(c.rempli_le):'')}
+      ${tabAcc}
+    </div><div class="f"><button class="btn o" id="ciPrint">Imprimer la fiche</button><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+  $("#ciPrint").onclick=()=>{
+    const r=(state.opts.reservation||[]).find(x=>x.id===c.reservation_id);
+    const tous=[{nom:c.nom,prenom:c.prenom,date_naissance:c.date_naissance,nationalite:c.nationalite,num_piece:c.num_passeport},...acc];
+    const w=window.open('','_blank'); if(!w){toast("Autorisez les fenêtres pour imprimer");return;}
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Fiche voyageurs</title><style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h1{font-size:20px;margin:0 0 4px}p{margin:2px 0;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:16px;font-size:13px}th,td{border:1px solid #999;padding:6px 8px;text-align:left}th{background:#eee}</style></head><body>
+      <h1>Fiche d'enregistrement des voyageurs</h1>
+      <p><b>Logement :</b> ${r?esc(refName("bien",r.bien_id)):'—'}</p>
+      <p><b>Séjour :</b> ${r?('du '+fdate(r.arrivee)+' au '+fdate(r.depart)):'—'}</p>
+      <p><b>Contact :</b> ${esc([c.telephone,c.email].filter(Boolean).join(' · ')||'—')}${c.pays?' — '+esc(c.pays):''}</p>
+      <table><thead><tr><th>#</th><th>Nom</th><th>Prénom</th><th>Date de naissance</th><th>Nationalité</th><th>N° passeport / CNI</th></tr></thead><tbody>
+      ${tous.map((a,i)=>`<tr><td>${i+1}</td><td>${esc(a.nom||'')}</td><td>${esc(a.prenom||'')}</td><td>${a.date_naissance?fdate(a.date_naissance):''}</td><td>${esc(a.nationalite||'')}</td><td>${esc(a.num_piece||'')}</td></tr>`).join('')}
+      </tbody></table><p style="margin-top:18px;font-size:11px;color:#555">Fiche remplie en ligne par le voyageur${c.rempli_le?' le '+fdate(c.rempli_le):''}.</p></body></html>`);
+    w.document.close(); w.focus(); w.print();
+  };
 }
 
 /* ---------- ENCAISSEMENTS ---------- */
