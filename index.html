@@ -742,6 +742,12 @@ const MODULES = {
       ["types_lits","",{type:"json_array",label_add:"+ Ajouter une chambre",fields:[["chambre","Chambre"],["type_lit","Type de lit",{opts:["lit_double","lit_simple","lit_king","lit_queen","canape_lit","lit_superpose","lit_bebe"]}],["quantite","Qté",{type:"number",def:1}]]}],
       ["__s7","Équipements 🌐",{section:1}],
       ["equipements","",{multi:1,p:1,opts:["Wifi","Climatisation","Chauffage","Piscine","Cuisine équipée","Parking","Parking gratuit","Lave-linge","Sèche-linge","TV","TV câble/satellite","Jacuzzi","Balcon / Terrasse","Jardin","Animaux acceptés","Petit-déjeuner","Ménage inclus","Ascenseur","Vue","Vue mer","Vue montagne","Fer à repasser","Sèche-cheveux","Machine à café","Micro-ondes","Lave-vaisselle","Barbecue","Coffre-fort","Détecteur fumée","Extincteur","Kit premiers secours"]}],
+      ["__s7b","Fenêtre de réservation",{section:1}],
+      ["delai_reservation_min","Délai minimum avant arrivée (jours)",{type:"number",p:1}],
+      ["delai_reservation_max","Réservable jusqu'à (jours à l'avance)",{type:"number",p:1}],
+      ["jours_preparation","Jours de préparation entre séjours",{type:"number",def:0,p:1}],
+      ["arrivees_jours","Jours d'arrivée autorisés",{multi:1,p:1,opts:["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]}],
+      ["departs_jours","Jours de départ autorisés",{multi:1,p:1,opts:["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]}],
       ["__s8","Conditions & règlement",{section:1}],
       ["reglement_interieur","Règlement intérieur",{long:1,p:1}],
       ["enfants_acceptes","Enfants acceptés 🏷 Booking",{opts:["oui","non"],def:"oui",p:1}],
@@ -1015,7 +1021,8 @@ const RUBRIQUES=[
     ["stats","Statistiques par bien",{statsbien:1}],
     ["cp","Champs personnalisés",{champperso:"bien"}],
     ["aso","Score ASO",{scoreaso:1}],
-    ["grp","Groupes d'annonces",{grpannonces:1}]]},
+    ["grp","Groupes d'annonces",{grpannonces:1}],
+    ["masse","Édition en masse",{editmasse:1}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
     ["gerer","Gérer les tâches",{kanban:1}],
     ["agenda","Agenda",{agendataches:1}],
@@ -1575,6 +1582,7 @@ function goRub(rk,sk){
   if(t.icalsync)return renderIcalSync();
   if(t.cronhist)return renderCronHist();
   if(t.emailcfg)return renderEmailConfig();
+  if(t.editmasse)return renderEditMasse();
   if(t.activite)return renderActivite();
   if(t.occupation)return renderOccupation();
   if(t.apikeys)return renderApiKeys();
@@ -4541,6 +4549,51 @@ async function renderEmailConfig(){
   $("#afReset").onclick=()=>{state.anaF={bien:"",canal:"",du:"",au:""};renderFinances();};
 }
 
+/* ---------- ÉDITION EN MASSE DES ANNONCES (LOT 5) ---------- */
+async function renderEditMasse(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  await loadOpts("bien");
+  const biens=state.opts.bien||[];
+  const champs=[
+    {k:"prix_nuit_base",label:"Prix/nuit",type:"number"},
+    {k:"frais_menage",label:"Frais ménage",type:"number"},
+    {k:"nuits_min",label:"Nuits min",type:"number"},
+    {k:"nuits_max",label:"Nuits max",type:"number"},
+    {k:"capacite",label:"Capacité",type:"number"},
+    {k:"statut",label:"Statut",opts:["actif","inactif","brouillon","en_maintenance"]},
+  ];
+  const hdr=`<tr><th style="position:sticky;left:0;background:var(--bg);z-index:2">Bien</th>${champs.map(c=>`<th>${c.label}</th>`).join('')}<th></th></tr>`;
+  const rows=biens.map(b=>`<tr data-bid="${b.id}">
+    <td style="position:sticky;left:0;background:var(--bg);z-index:1;font-weight:600;white-space:nowrap">${esc(b.nom)}</td>
+    ${champs.map(c=>{
+      const v=b[c.k]!=null?b[c.k]:(b.parametres||{})[c.k]||'';
+      if(c.opts)return `<td><select data-em="${c.k}">${c.opts.map(o=>`<option ${String(v)===o?'selected':''}>${o}</option>`).join('')}</select></td>`;
+      return `<td><input data-em="${c.k}" type="${c.type||'text'}" value="${v}" style="width:80px"></td>`;
+    }).join('')}
+    <td><button class="btn sm" data-emsave="${b.id}">💾</button></td></tr>`).join('');
+  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">Modifiez les valeurs directement dans le tableau et cliquez 💾 pour sauvegarder chaque ligne, ou <b>Tout enregistrer</b> pour sauvegarder toutes les lignes modifiées.</div>
+    <div style="overflow:auto"><table class="tbl" style="font-size:12px"><thead>${hdr}</thead><tbody>${rows}</tbody></table></div>
+    <div style="margin-top:12px"><button class="btn g" id="emSaveAll">💾 Tout enregistrer</button> <span id="emStatus" class="muted"></span></div>`;
+  const saveRow=async(bid)=>{
+    const tr=document.querySelector(`tr[data-bid="${bid}"]`);if(!tr)return;
+    const d={};
+    champs.forEach(c=>{const el=tr.querySelector(`[data-em="${c.k}"]`);if(!el)return;let v=el.value;if(v===''||v==null)return;if(c.type==='number')v=Number(v);d[c.k]=v;});
+    const{error}=await sb.from("bien").update(d).eq("id",bid);
+    if(error){toast("Erreur: "+error.message);return false;}
+    return true;
+  };
+  document.querySelectorAll("[data-emsave]").forEach(btn=>btn.onclick=async()=>{
+    btn.disabled=true;const ok=await saveRow(btn.dataset.emsave);btn.disabled=false;
+    if(ok){toast("✅ Sauvegardé");btn.closest("tr").style.background="var(--ok-bg)";}
+  });
+  document.getElementById("emSaveAll").onclick=async()=>{
+    const st=document.getElementById("emStatus");st.textContent="Enregistrement...";
+    let ok=0;
+    for(const b of biens){if(await saveRow(b.id))ok++;}
+    st.textContent=`✅ ${ok} bien(s) mis à jour`;await loadOpts("bien",true);
+  };
+}
+
 /* ---------- RAPPORTS : ACTIVITE & OCCUPATION ---------- */
 async function renderActivite(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -6624,7 +6677,15 @@ async function ficheBien(id){
       ${(taches&&taches.length)?`<div class="fsec" style="margin-top:12px">Tâches en cours</div>${taches.map(t=>`<div style="font-size:12.5px;padding:3px 0">${pill(t.statut)} ${esc(t.titre)} <span class="muted">${t.date_prevue?fdate(t.date_prevue):''}</span></div>`).join("")}`:''}
       ${(resas&&resas.length)?`<div class="fsec" style="margin-top:12px">Dernières réservations</div>${resas.map(r=>`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)">${refName("voyageur",r.voyageur_id)} — ${fdate(r.arrivee)} → ${fdate(r.depart)} — ${money(r.prix_total)}</div>`).join("")}`:''}
     </div>
-    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button>
+      <button class="btn o" onclick="fermer();openForm('biens',${JSON.stringify(b).replace(/'/g,"\\'")})">✏️ Modifier</button>
+      <button class="btn o" id="dupBien">📋 Dupliquer</button></div>`);
+  document.getElementById("dupBien").onclick=async()=>{
+    const dup={...b};delete dup.id;delete dup.cree_le;delete dup.maj_le;dup.nom=(b.nom||'')+" (copie)";dup.statut="brouillon";
+    const {data:nd,error}=await sb.from("bien").insert(dup).select().single();
+    if(error){toast("Erreur: "+error.message);return;}
+    toast("✅ Annonce dupliquée");fermer();goRub("annonces","liste");
+  };
 }
 
 /* ---------- CONTRAT AUTOMATIQUE PDF ---------- */
