@@ -2,87 +2,67 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Votre avis — DPM Conciergerie</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',Arial,sans-serif;background:#FBFAF6;color:#222;min-height:100vh}
+body{font-family:Arial,sans-serif;background:#FBFAF6;color:#222;min-height:100vh}
 .hdr{background:#14352A;color:#fff;padding:24px;text-align:center}
 .hdr h1{color:#C9A227;font-family:'Cormorant Garamond',serif;font-size:28px;margin-bottom:4px}
-.hdr p{font-size:13px;opacity:.8}
+.hdr p{font-size:13px;opacity:.85}
 .card{max-width:520px;margin:24px auto;background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .field{margin-bottom:16px}
-.field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:#14352A}
-.field input,.field textarea,.field select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
-.field textarea{resize:vertical}
-.stars{display:flex;gap:4px;font-size:28px;cursor:pointer}
-.stars span{color:#ddd;transition:color .15s}
-.stars span.on{color:#C9A227}
-.btn{background:#C9A227;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;width:100%}
-.btn:hover{opacity:.9}
+.field label{display:block;font-weight:700;font-size:13px;margin-bottom:4px;color:#14352A}
+.field textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical}
+.stars{display:flex;gap:4px}
+.stars button{background:none;border:0;font-size:30px;line-height:1;color:#ddd;cursor:pointer;padding:0 2px}
+.stars button.on{color:#C9A227}
+.btn{background:#C9A227;color:#fff;border:0;padding:12px 32px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;width:100%}
+.btn:disabled{opacity:.6}
 .info{background:#14352A11;padding:14px;border-radius:8px;margin-bottom:16px;font-size:13px;color:#14352A}
-.ok{text-align:center;padding:40px;font-size:18px;color:#14352A}
-.err{color:#e74c3c;font-size:13px;margin-top:8px}
+.msg{text-align:center;padding:32px 16px;font-size:17px;color:#14352A}
+.msg a{color:#14352A}
+.err{color:#c0392b;font-size:13px;margin:8px 0}
 </style>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="hdr"><h1>DPM Conciergerie</h1><p>Merci de partager votre expérience</p></div>
-<div class="card" id="form">
-  <div class="info" id="sejInfo">Chargement...</div>
-  <div class="field"><label>Note globale</label><div class="stars" id="starsGlobal" data-field="note_globale"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
-  <div class="field"><label>Propreté</label><div class="stars" id="starsProp" data-field="note_proprete"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
-  <div class="field"><label>Communication</label><div class="stars" id="starsComm" data-field="note_communication"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
-  <div class="field"><label>Emplacement</label><div class="stars" id="starsEmpl" data-field="note_emplacement"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
-  <div class="field"><label>Rapport qualité-prix</label><div class="stars" id="starsQP" data-field="note_qualite_prix"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
-  <div class="field"><label>Votre commentaire</label><textarea id="commentaire" rows="4" placeholder="Dites-nous ce que vous avez aimé…"></textarea></div>
-  <div class="field"><label>Recommanderiez-vous ce logement ?</label><select id="recommande"><option value="oui">Oui, absolument</option><option value="non">Non</option></select></div>
-  <div class="err" id="err"></div>
-  <button class="btn" id="submit">Envoyer mon avis</button>
-</div>
-<div class="ok" id="merci" style="display:none">🎉 Merci pour votre avis !<br><span style="font-size:14px;color:#888">Il sera publié après vérification.</span></div>
-
-<script src="cookies-banner.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<div class="card" id="carte"><div class="msg">Chargement…</div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-const SUPABASE_URL="https://eztwwzzjzwmhfzmcafyu.supabase.co";
-const SUPABASE_KEY="sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-
-const resaId=location.hash.replace('#','').replace('/avis/','').replace('avis=','');
-const notes={note_globale:0,note_proprete:0,note_communication:0,note_emplacement:0,note_qualite_prix:0};
-
-// Stars interaction
-document.querySelectorAll('.stars').forEach(group=>{
-  const field=group.dataset.field;
-  group.querySelectorAll('span').forEach(s=>{
-    s.onmouseenter=()=>{const v=+s.dataset.v;group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=v));};
-    s.onclick=()=>{notes[field]=+s.dataset.v;group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=notes[field]));};
-  });
-  group.onmouseleave=()=>{group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=notes[field]));};
-});
-
-// Load reservation info
+const sb=supabase.createClient("https://eztwwzzjzwmhfzmcafyu.supabase.co","sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4");
+const jeton=location.hash.replace(/^#/,'');
+const carte=document.getElementById('carte');
+const portail=new URL('sejour/#/sejour/'+encodeURIComponent(jeton),location.href).href;
+const esc=s=>{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;};
+const jour=d=>d?new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+const message=t=>{carte.innerHTML='<div class="msg">'+t+'</div>';};
+const retour='<br><br><a href="'+esc(portail)+'">Retour à votre espace séjour</a>';
+const CRITERES=[['note_globale','Note globale *'],['note_proprete','Propreté'],['note_communication','Communication'],['note_emplacement','Emplacement'],['note_qualite_prix','Rapport qualité-prix']];
+const notes={};
 (async()=>{
-  if(!resaId){document.getElementById('sejInfo').textContent='Lien invalide — ID de réservation manquant.';return;}
-  const {data:r}=await sb.from('reservation').select('bien_id,arrivee,depart,voyageur_id,tenant_id').eq('id',resaId).single();
-  if(!r){document.getElementById('sejInfo').textContent='Réservation introuvable.';return;}
-  const {data:b}=await sb.from('bien').select('nom').eq('id',r.bien_id).single();
-  const {data:v}=await sb.from('voyageur').select('nom').eq('id',r.voyageur_id).single();
-  document.getElementById('sejInfo').innerHTML=`<b>${v?.nom||'Voyageur'}</b> — séjour du ${r.arrivee} au ${r.depart}<br><b>${b?.nom||''}</b>`;
-
-  document.getElementById('submit').onclick=async()=>{
-    if(!notes.note_globale){document.getElementById('err').textContent='Veuillez donner au moins une note globale.';return;}
-    const avis={
-      tenant_id:r.tenant_id,reservation_id:resaId,bien_id:r.bien_id,voyageur_id:r.voyageur_id,
-      ...notes,
-      commentaire:document.getElementById('commentaire').value,
-      recommande:document.getElementById('recommande').value,
-      canal:'direct',origine:'direct',statut:'en_attente'
-    };
-    const {error}=await sb.from('avis').insert(avis);
-    if(error){document.getElementById('err').textContent='Erreur : '+error.message;return;}
-    document.getElementById('form').style.display='none';
-    document.getElementById('merci').style.display='block';
+  if(jeton.length<16){message("Ce lien n'est pas valide.");return;}
+  const {data,error}=await sb.rpc('avis_infos',{p_token:jeton});
+  if(error||!data){message("Ce lien n'est pas valide ou n'est plus actif.");return;}
+  if(data.deja){message('Vous avez déjà déposé votre avis. Merci !'+retour);return;}
+  carte.innerHTML='<div class="info"><b>'+esc(data.bien||'Votre séjour')+'</b><br>du '+esc(jour(data.arrivee))+' au '+esc(jour(data.depart))+'</div>'
+    +CRITERES.map(([k,l])=>'<div class="field"><label>'+l+'</label><div class="stars" data-k="'+k+'">'+[1,2,3,4,5].map(n=>'<button type="button" data-v="'+n+'" aria-label="'+n+' sur 5">★</button>').join('')+'</div></div>').join('')
+    +'<div class="field"><label for="com">Votre avis</label><textarea id="com" rows="5" maxlength="4000" placeholder="Ce que vous avez aimé, ce que nous pouvons améliorer…"></textarea></div>'
+    +'<div class="err" id="err"></div><button class="btn" id="envoyer">Envoyer mon avis</button>';
+  carte.querySelectorAll('.stars').forEach(g=>g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    notes[g.dataset.k]=+b.dataset.v;g.querySelectorAll('button').forEach(x=>x.classList.toggle('on',+x.dataset.v<=notes[g.dataset.k]));}));
+  document.getElementById('envoyer').onclick=async()=>{
+    const err=document.getElementById('err'),btn=document.getElementById('envoyer');
+    if(!notes.note_globale){err.textContent='Merci de donner au moins la note globale.';return;}
+    btn.disabled=true;err.textContent='';
+    const infos={commentaire:document.getElementById('com').value};
+    Object.keys(notes).forEach(k=>infos[k]=String(notes[k]));
+    const r=await sb.rpc('avis_deposer',{p_token:jeton,p_infos:infos});
+    if(r.error){btn.disabled=false;err.textContent="L'envoi n'a pas abouti. Réessayez dans un instant.";return;}
+    if(r.data==='ok')message('Merci pour votre avis !'+retour);
+    else if(r.data==='deja_depose')message('Vous avez déjà déposé votre avis. Merci !'+retour);
+    else message("Ce lien n'est pas valide ou n'est plus actif.");
   };
 })();
 </script>

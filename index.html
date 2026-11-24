@@ -2922,7 +2922,7 @@ async function renderFinances(){
 function payForm(resaId){
   const r=(state.cache.resaFin||[]).find(x=>x.id===resaId);
   const reste=(r.prix_total||0)-(r.montant_paye||0);
-  const payLink=location.origin+location.pathname.replace(/[^/]*$/,'')+'pay.html#'+resaId;
+  const payLink=location.origin+location.pathname+'#pay='+resaId;
   ouvrir(`<div class="h"><h3>Encaisser un paiement</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b">
       <p class="muted">Reste à encaisser : <b>${money(reste)}</b></p>
@@ -6308,8 +6308,7 @@ async function renderAutoMsg(){
       .replace(/\{contact_urgence\}/g,p.contact_urgence||'')
       .replace(/\{caution\}/g,money(p.caution||bien.caution||0))
       .replace(/\{ref_canal\}/g,r.reference_canal||'')
-      .replace(/\{lien_checkin\}/g,location.origin+location.pathname.replace(/[^/]*$/,'')+'sejour/#/sejour/'+r.id)
-      .replace(/\{lien_avis\}/g,location.origin+location.pathname.replace(/[^/]*$/,'')+'avis.html#'+r.id)
+      .replace(/\{lien_avis\}/g,r.acces_voyageur?(location.origin+location.pathname.replace(/[^/]*$/,'')+'avis.html#'+r.acces_voyageur):'')
       .replace(/\{montant_paye\}/g,money(r.montant_paye||0))
       .replace(/\{reste_du\}/g,money((r.prix_total||0)-(r.montant_paye||0)))
       .replace(/\{reglement\}/g,p.reglement_interieur||'')
@@ -7187,7 +7186,7 @@ function renderAbout(){
     ["Annonces","CRUD, étiquettes, photos, scores ASO, édition en masse, duplication, import CSV","à vérifier"],
     ["Messagerie","Conversations, modèles, messages auto (16 déclencheurs, 35 variables), campagnes, récurrents","à vérifier"],
     ["Tâches","Kanban, checklists enrichies (templates), tâches auto, notifications retard","à vérifier"],
-    ["Avis","Gestion, notes par catégorie, réponse hôte, avis auto, page publique livre d'or","à vérifier"],
+    ["Avis","Gestion, notes par catégorie, réponse hôte, avis auto, page d'avis voyageur par lien","à vérifier"],
     ["Rapports","Analytique, activité, occupation, prévisionnel, rapport mensuel, export comptable","à vérifier"],
     ["Dépenses","Dépenses/suppléments, catégories, vues personnalisées, automatisations","à vérifier"],
     ["Paiements","PayPal, CMI, encaissements, remboursements, factures PDF, reçus PDF, dépôts garantie","à vérifier"],
@@ -7199,7 +7198,7 @@ function renderAbout(){
     ["Documents","Contrat signable, facture PDF, reçu PDF, relevé PDF, rapport hebdo/mensuel","à vérifier"],
     ["Intégrations","Email, WhatsApp Business, SMS, webhooks, API keys, Host Tools bridge","à vérifier"],
     ["Paramètres","Compte, langues, notifications (13 catégories), PayPal, CMI, assurance, marketplace","à vérifier"],
-    ["Pages publiques","Formulaire d'avis, livre d'or, page paiement, widget calendrier WordPress","à vérifier"],
+    ["Pages publiques","Page d'avis voyageur (lien unique), widget calendrier WordPress","à vérifier"],
   ];
   const rows=features.map(([f,d,s])=>`<tr><td><b>${esc(f)}</b></td><td style="font-size:12px">${esc(d)}</td><td style="text-align:center">${s}</td></tr>`).join('');
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>My Hostaway — DPM Conciergerie</h3></div>
