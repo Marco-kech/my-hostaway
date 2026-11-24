@@ -2612,8 +2612,10 @@ function payForm(resaId){
       <div class="field"><label>Lien de paiement (à envoyer au voyageur)</label>
         <div style="display:flex;gap:6px"><input id="pLink" readonly value="${esc(payLink)}" style="font-size:12px"><button class="btn o sm" id="pCopyLink">Copier</button></div></div>
       <div class="field"><label>Montant *</label><input id="pM" type="number" value="${reste>0?reste:""}"></div>
-      <div class="field"><label>Moyen</label><select id="pMoy"><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="lien_paiement">Lien de paiement</option><option value="autre">Autre</option></select></div>
-      <div class="field"><label>Référence</label><input id="pRef" placeholder="N° de transaction"></div>
+      <div class="field"><label>Moyen</label><select id="pMoy"><option value="paypal">PayPal</option><option value="cmi">CMI (carte)</option><option value="virement">Virement</option><option value="especes">Espèces</option><option value="carte">Carte</option><option value="cheque">Chèque</option><option value="lien_paiement">Lien de paiement</option><option value="autre">Autre</option></select></div>
+      <div class="field"><label>Référence</label><input id="pRef" placeholder="N° de transaction PayPal / virement"></div>
+      <div class="field"><label>Type</label><select id="pType"><option value="encaissement">Encaissement</option><option value="remboursement">Remboursement</option><option value="depot_garantie">Dépôt de garantie</option><option value="retenue_caution">Retenue sur caution</option></select></div>
+      <div class="field"><label>Notes</label><input id="pNotes" placeholder="Facultatif"></div>
       <div class="err" id="pErr"></div>
     </div>
     <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pSave">Enregistrer</button></div>`);
@@ -2621,11 +2623,18 @@ function payForm(resaId){
   $("#pSave").onclick=async()=>{
     const montant=Number($("#pM").value);
     if(!montant||montant<=0){$("#pErr").textContent="Montant invalide.";return;}
+    const type_paiement=$("#pType").value;
+    const isRemb=type_paiement==='remboursement';
     $("#pSave").disabled=true;
-    const {error}=await sb.from("paiement").insert({tenant_id:state.tenant.id,reservation_id:resaId,montant,moyen:$("#pMoy").value,reference:$("#pRef").value||null,statut:"reussi"});
+    const {error}=await sb.from("paiement").insert({tenant_id:state.tenant.id,reservation_id:resaId,montant:isRemb?-Math.abs(montant):montant,moyen:$("#pMoy").value,reference:$("#pRef").value||null,type_paiement,notes:$("#pNotes").value||null,statut:"reussi"});
+    if(!error&&isRemb){
+      /* Mettre à jour montant_paye sur la réservation */
+      const newPaye=Math.max(0,(r.montant_paye||0)-Math.abs(montant));
+      await sb.from("reservation").update({montant_paye:newPaye,statut_paiement:newPaye<=0?"rembourse":"partiel"}).eq("id",resaId);
+    }
     $("#pSave").disabled=false;
     if(error){$("#pErr").textContent=error.message;return;}
-    fermer();toast("Paiement enregistré");renderFinances();
+    fermer();toast(isRemb?"✅ Remboursement enregistré":"✅ Paiement enregistré");renderFinances();
   };
 }
 
