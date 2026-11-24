@@ -399,6 +399,91 @@ $("#ov").addEventListener("click",e=>{if(e.target===$("#ov"))fermer();});
 
 const state = { user:null, tenant:null, rub:"apercu", sub:null, opts:{} };
 
+/* ---------- MANUAL OVERRIDE (LOT 1.1) ---------- */
+/* Marque un champ comme modifié manuellement sur un enregistrement */
+async function setManualOverride(table,id,champ){
+  const {data}=await sb.from(table).select('manual_override').eq('id',id).maybeSingle();
+  const mo={...(data?.manual_override||{}),[champ]:true};
+  await sb.from(table).update({manual_override:mo}).eq('id',id);
+}
+/* Vérifie si un champ a été modifié manuellement */
+function isManualOverride(row,champ){return !!(row?.manual_override||{})[champ];}
+/* Retire le verrou manual_override d'un champ */
+async function clearManualOverride(table,id,champ){
+  const {data}=await sb.from(table).select('manual_override').eq('id',id).maybeSingle();
+  const mo={...(data?.manual_override||{})};delete mo[champ];
+  await sb.from(table).update({manual_override:mo}).eq('id',id);
+}
+/* Icône de verrouillage pour les champs manual_override */
+function moIcon(row,champ,table){
+  if(!isManualOverride(row,champ))return '';
+  return ` <span class="mo-lock" title="Modifié manuellement — le recalcul automatique ne touchera pas cette valeur. Cliquer pour déverrouiller." data-mo-table="${table}" data-mo-id="${row.id}" data-mo-champ="${champ}" style="cursor:pointer;color:#C9A227;font-size:12px">🔒</span>`;
+}
+/* Écouteur global pour le déverrouillage */
+document.addEventListener('click',async e=>{
+  const el=e.target.closest('.mo-lock');if(!el)return;
+  if(!confirm('Déverrouiller ce champ ? Le recalcul automatique pourra à nouveau le modifier.'))return;
+  await clearManualOverride(el.dataset.moTable,el.dataset.moId,el.dataset.moChamp);
+  toast('🔓 Champ déverrouillé');goRub(state.rub,state.sub);
+});
+
+/* ---------- ÉTIQUETTES D'ANNONCES (LOT 1.2) ---------- */
+async function loadEtiquettes(){
+  if(state.opts._etiquettes)return state.opts._etiquettes;
+  const {data}=await sb.from('etiquette').select('*').order('nom');
+  state.opts._etiquettes=data||[];return state.opts._etiquettes;
+}
+async function loadBienEtiquettes(bienId){
+  const {data}=await sb.from('bien_etiquette').select('etiquette_id').eq('bien_id',bienId);
+  return (data||[]).map(x=>x.etiquette_id);
+}
+async function setBienEtiquettes(bienId,etiquetteIds){
+  await sb.from('bien_etiquette').delete().eq('bien_id',bienId);
+  if(etiquetteIds.length){
+    await sb.from('bien_etiquette').insert(etiquetteIds.map(eid=>({bien_id:bienId,etiquette_id:eid})));
+  }
+}
+async function creerEtiquette(nom,couleur){
+  const {data,error}=await sb.from('etiquette').insert({tenant_id:state.tenant.id,nom:nom.slice(0,25),couleur:couleur||'#C9A227'}).select('*').maybeSingle();
+  if(error)return null;
+  state.opts._etiquettes=null;return data;
+}
+async function supprimerEtiquette(id){
+  if(!confirm('Supprimer cette étiquette de tous les biens ?'))return;
+  await sb.from('etiquette').delete().eq('id',id);
+  state.opts._etiquettes=null;toast('Étiquette supprimée');
+}
+/* Génère le HTML des chips étiquettes pour un bien */
+function etiquettesChipsHtml(bienId,etiquetteIds,allEtiquettes){
+  const chips=(etiquetteIds||[]).map(eid=>{
+    const e=(allEtiquettes||[]).find(x=>x.id===eid);
+    if(!e)return '';
+    return `<span class="etiq-chip" style="background:${esc(e.couleur||'#C9A227')}22;color:${esc(e.couleur||'#C9A227')};border:1px solid ${esc(e.couleur||'#C9A227')}44;padding:2px 8px;border-radius:12px;font-size:11px;display:inline-flex;align-items:center;gap:4px">${esc(e.nom)}<span class="etiq-rm" data-bien="${bienId}" data-etiq="${eid}" style="cursor:pointer;font-weight:bold" title="Retirer">×</span></span>`;
+  }).join(' ');
+  return `<div class="etiq-container" data-bien="${bienId}" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${chips}<input class="etiq-input" data-bien="${bienId}" placeholder="+ étiquette" style="border:none;outline:none;font-size:11px;width:80px;background:transparent" list="etiq-list"></div>`;
+}
+
+/* ---------- HÉRITAGE FINANCIER (LOT 1.3) ---------- */
+/* Construit le snapshot financier figé à partir du bien, au moment de la création d'une réservation */
+function buildFinancierFige(bien){
+  return {
+    prix_nuit_base:bien.prix_nuit_base||0,
+    frais_menage:bien.frais_menage||0,
+    taxe_sejour_nuit:bien.taxe_sejour_nuit||0,
+    prix_personne_supp:bien.prix_personne_supp||0,
+    remise_hebdo_pct:bien.remise_hebdo_pct||0,
+    remise_hebdo_seuil:bien.remise_hebdo_seuil||7,
+    remise_mensuelle_pct:bien.remise_mensuelle_pct||0,
+    remise_mensuelle_seuil:bien.remise_mensuelle_seuil||30,
+    frais_standards:bien.frais_standards||[],
+    majoration_canaux:bien.majoration_canaux||{},
+    caution:bien.caution||0,
+    heure_arrivee:bien.heure_arrivee||'15:00',
+    heure_depart:bien.heure_depart||'11:00',
+    fige_le:new Date().toISOString()
+  };
+}
+
 /* ---------- AUTH ---------- */
 /* ---------- DARK MODE ---------- */
 (function(){try{if(localStorage.getItem('dpm_dark')==='1')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
@@ -583,7 +668,7 @@ async function boot(){
 /* ---------- MODULES (data screens) ---------- */
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
-    cols:[["nom","Nom",(v,r)=>r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v))],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)],["proprete","Propreté",v=>pill(v)]],
+    cols:[["nom","Nom",(v,r)=>{let n=r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v));const tags=(r?._etiquettes||[]);if(tags.length){n+='<br>'+tags.map(e=>`<span style="background:${esc(e.couleur||'#C9A227')}22;color:${esc(e.couleur||'#C9A227')};border:1px solid ${esc(e.couleur||'#C9A227')}44;padding:1px 6px;border-radius:10px;font-size:10px">${esc(e.nom)}</span>`).join(' ');}return n;}],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)],["proprete","Propreté",v=>pill(v)]],
     fields:[
       ["__s1","Informations générales",{section:1}],
       ["nom","Nom de l'annonce",{req:1}],
@@ -662,7 +747,7 @@ const MODULES = {
       ["arrivee","Arrivée",{type:"date",req:1}],["depart","Départ",{type:"date",req:1}],
       ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
       ["reference_canal","Réf. canal",{}],["prix_total","Prix total",{type:"number"}],
-      ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show"],def:"confirmee"}],["notes","Notes",{long:1}]]},
+      ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show","sejour_proprietaire"],def:"confirmee"}],["raison_annulation","Raison d'annulation",{opts:["voyageur","hote","plateforme","double_reservation","autre"]}],["notes","Notes",{long:1}]]},
   coupons:{title:"Coupons",add:"Ajouter un coupon",table:"coupon",
     cols:[["code","Code"],["type","Type",v=>pill(v)],["valeur","Valeur"],["sejour_min","Séjour min",v=>v?v+" nuits":""],["validite_fin","Validité",v=>fdate(v)],["utilisations_max","Max"],["utilisations","Utilisé"],["statut","Statut",v=>pill(v)]],
     fields:[["code","Code du coupon",{req:1}],
@@ -870,7 +955,8 @@ const PILLMAP={propre:"green",en_nettoyage:"gold",a_nettoyer:"red",pre_autorisat
   acompte:"gold",en_attente:"gold",a_faire:"gold",demande:"gold",brouillon:"gray",
   non_paye:"red",annulee:"red",echoue:"red",no_show:"red",inactif:"gray",en_cours:"blue",
   direct:"blue",airbnb:"red",booking:"blue",vrbo:"gold",whatsapp:"green",email:"blue",sms:"gold",interne:"gray",sortant:"blue",entrant:"gold",
-  menage:"blue",chauffeur:"gold",petit_dejeuner:"green",maintenance:"red",accueil:"blue",checkin:"green",checkout:"gold",transport:"blue",inspection:"gray"};
+  menage:"blue",chauffeur:"gold",petit_dejeuner:"green",maintenance:"red",accueil:"blue",checkin:"green",checkout:"gold",transport:"blue",inspection:"gray",
+  sejour_proprietaire:"blue",voyageur:"gold",hote:"blue",plateforme:"red",double_reservation:"red"};
 function pill(v){if(v==null||v==="")return "—";const c=PILLMAP[v]||"gray";return `<span class="pill ${c}">${esc(v==="masque"?"masqué":String(v).replace(/_/g," "))}</span>`;}
 
 /* ---------- RUBRIQUES (18 Hostaway menu) ---------- */
@@ -1629,6 +1715,17 @@ async function renderList(k){
   if(error&&/cree_le/.test(error.message||"")){({data,error}=await sb.from(m.table).select("*"));}
   if(error){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(error.message)}</div></div>`;return;}
   state.cache=state.cache||{}; state.cache[k]=(k==='biens'&&data)?orderBiensHierarchy(data):(data||[]);
+  /* LOT 1.2 — Charger les étiquettes pour les biens */
+  if(k==='biens'&&state.cache[k]?.length){
+    try{
+      const allEtiq=await loadEtiquettes();
+      const {data:liens}=await sb.from('bien_etiquette').select('bien_id,etiquette_id');
+      (state.cache[k]||[]).forEach(b=>{
+        const eids=(liens||[]).filter(l=>l.bien_id===b.id).map(l=>l.etiquette_id);
+        b._etiquettes=eids.map(eid=>allEtiq.find(e=>e.id===eid)).filter(Boolean);
+      });
+    }catch(e){}
+  }
   state.listState=state.listState||{};
   if(!state.listState[k]) state.listState[k]={q:"",page:1,size:20};
   paintList(k);
@@ -1878,6 +1975,18 @@ async function openForm(k,row){
     if(Object.keys(params).length) d.parametres=params;
     if(m.valide){const msgV=m.valide(d);if(msgV){$("#fErr").textContent=msgV;return;}}
     d.tenant_id=state.tenant.id;
+    /* LOT 1.1 — manual_override : détecter les champs financiers modifiés à la main */
+    if(m.table==='reservation'&&row.id){
+      const finFields=['prix_total','frais_menage','taxe_sejour_nuit','commission_canal_pct','base_rate','sous_total','total_taxes','total_frais'];
+      const moUpdate={};
+      for(const ff of finFields){if(d[ff]!=null&&row[ff]!=null&&String(d[ff])!==String(row[ff]))moUpdate[ff]=true;}
+      if(Object.keys(moUpdate).length){d.manual_override={...(row.manual_override||{}),...moUpdate};}
+    }
+    /* LOT 1.3 — Héritage : snapshot financier figé à la création d'une réservation */
+    if(m.table==='reservation'&&!row.id&&d.bien_id){
+      const bien=(state.opts.bien||[]).find(b=>b.id===d.bien_id);
+      if(bien){d.financier_fige=buildFinancierFige(bien);if(!d.base_rate)d.base_rate=bien.prix_nuit_base||0;}
+    }
     $("#fSave").disabled=true;
     let res;
     if(row.id) res=await sb.from(m.table).update(d).eq("id",row.id);
@@ -6173,9 +6282,10 @@ async function ficheReservation(id){
           ${f('Nom',esc(voy.nom||'—'))}${f('Email',esc(voy.email||'—'))}${f('Tél.',esc(voy.tel||'—'))}
           ${f('Pays',esc(voy.pays||'—'))}
           <div class="fsec" style="margin-top:12px">Paiement</div>
-          ${f('Total',money(r.prix_total))}${f('Payé',money(r.montant_paye||0))}
+          ${f('Total',money(r.prix_total)+moIcon(r,'prix_total','reservation'))}${f('Payé',money(r.montant_paye||0))}
           ${f('Reste','<span style="color:'+(reste>0?'var(--danger)':'var(--ok)')+'">'+money(reste)+'</span>')}
           ${f('Statut paiement',pill(r.statut_paiement))}
+          ${r.financier_fige?.fige_le?f('Figé le',fdate(r.financier_fige.fige_le)):''}
         </div>
       </div>
       ${(paiements&&paiements.length)?`<div class="fsec" style="margin-top:12px">Paiements (${paiements.length})</div>${paiements.map(p=>`<div style="font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)">${fdate(p.paye_le)} — ${money(p.montant)} — ${pill(p.moyen)}</div>`).join("")}`:''}
