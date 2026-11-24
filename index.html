@@ -735,6 +735,7 @@ const MODULES = {
       if(d.type==="interne") d.partenaire_id=null;
       if(d.type==="dpm"){ d.partenaire_id=null; d.proprietaire_id=null; }
       if(d.au_logement!==true&&d.a_l_exterieur!==true) return "Cochez au moins un lieu : au logement ou à l'extérieur.";
+      {const inc=cgCoherencePrestation(d); if(inc) return inc;}
       if(d.horaires){const h=d.horaires,ouv=Object.values(h.jours).filter(j=>j.ouvert);
         if(!ouv.length) return "Horaires : cochez au moins un jour d'ouverture, ou choisissez « Toujours disponible ».";
         if(h.mode==="plages"&&ouv.some(j=>j.a<=j.de)) return "Horaires : l'heure de fin doit être après l'heure de début.";
@@ -3481,6 +3482,22 @@ async function renderCgComptes(){
   document.querySelectorAll(".cgOff").forEach(b=>b.onclick=()=>maj(b.dataset.id,{statut:"desactive"},"Compte désactivé"));
   document.querySelectorAll(".cgVoir").forEach(b=>b.onclick=()=>cgVoirComme(comptes.find(x=>x.id===b.dataset.id),parts,props));
 }
+
+/* Cohérence commission / net partenaire : c'est le net qui sert au calcul des commandes ;
+   la commission affichée doit donc dire la même chose, sinon la fiche est trompeuse. */
+function cgCoherencePrestation(d){
+      if(d.type!=="externe") return;
+      const net=Number(d.net_partenaire)||0, f=n=>(Math.round(n*100)/100).toLocaleString("fr-FR");
+      const lieux=[["au logement",d.au_logement,d.prix_logement,d.commission_logement,d.mode_commission_logement],
+                   ["à l'extérieur",d.a_l_exterieur,d.prix_exterieur,d.commission_exterieur,d.mode_commission_exterieur]];
+      for(const [nom,actif,px,com,mode] of lieux){
+        const prix=Number(px)||0; if(actif!==true||prix<=0) continue;
+        if(net>prix) return `Le net reversé au partenaire (${f(net)}) dépasse le prix facturé au voyageur ${nom} (${f(prix)}).`;
+        const attM=prix-net, attP=attM/prix*100, saisi=Number(com)||0, enPct=mode!=="montant";
+        if(Math.abs(saisi-(enPct?attP:attM))>0.5)
+          return `Prestation ${nom} : un prix de ${f(prix)} et un net partenaire de ${f(net)} donnent une commission de ${f(attM)} (${f(attP)} %). Vous avez saisi ${f(saisi)}${enPct?" %":""}. Corrigez la commission ou le net partenaire.`;
+      }
+    }
 
 /* « Voir comme » : l'administrateur consulte, en lecture seule, les données qu'un compte
    partenaire ou propriétaire voit dans son propre espace. Aucune écriture, aucun changement de session. */
