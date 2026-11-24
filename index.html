@@ -1942,9 +1942,19 @@ function paintList(k){
     invalidate("reservation");renderList(k);
   });
 }
-async function envoyerBrevo(to, sujet, html, replyTo){
+async function envoyerEmail(to, sujet, html, replyTo){
   const cfg=await reglGet("email");
-  if(!cfg||!cfg.api_key){toast("Configurez d'abord l'e-mail dans Paramètres > E-mail");return {error:"non configuré"};}
+  if(!cfg||!cfg.api_key){toast("Configurez d'abord l'e-mail dans Paramètres > Intégrations");return {error:"non configuré"};}
+  const provider=cfg.provider||'resend';
+  if(provider==='resend'){
+    try{
+      const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+cfg.api_key,"Content-Type":"application/json"},
+        body:JSON.stringify({from:(cfg.sender_name||"DPM Conciergerie")+" <"+(cfg.sender_email||"noreply@dpmconciergerie.com")+">",to:[to],subject:sujet,html,reply_to:replyTo||cfg.reply_to||undefined})});
+      if(!r.ok){const j=await r.json().catch(()=>({}));return {error:j.message||"Erreur Resend "+r.status};}
+      return {data:await r.json()};
+    }catch(e){return {error:"Erreur réseau : "+e.message};}
+  }
+  /* Brevo (Sendinblue) */
   const body={sender:{name:cfg.sender_name||"DPM Conciergerie",email:cfg.sender_email||"hostaway@dpmconciergerie.com"},to:[{email:to}],subject:sujet,htmlContent:html};
   if(replyTo||cfg.reply_to)body.replyTo={email:replyTo||cfg.reply_to};
   try{
@@ -1953,6 +1963,8 @@ async function envoyerBrevo(to, sujet, html, replyTo){
     return {data:await r.json()};
   }catch(e){return {error:"Erreur réseau : "+e.message};}
 }
+/* Alias backward compat */
+const envoyerBrevo=envoyerEmail;
 async function sendMessageEmail(k,id){
   const msg=(state.cache[k]||[]).find(x=>x.id===id); if(!msg)return;
   const voy=(state.opts.voyageur||[]).find(x=>x.id===msg.voyageur_id);
@@ -2137,7 +2149,10 @@ async function openForm(k,row){
     else res=await sb.from(m.table).insert(d);
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
-    invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table); goRub(state.rub,state.sub);
+    invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table);
+    /* Webhook : notifier les endpoints configurés */
+    fireWebhook(row.id?'update':'create',m.table,d);
+    goRub(state.rub,state.sub);
   };
 }
 async function delRow(k,id){
@@ -2148,7 +2163,7 @@ async function delRow(k,id){
   $("#dOk").onclick=async()=>{
     const {error}=await sb.from(m.table).delete().eq("id",id);
     if(error){$("#dErr").textContent=error.message;return;}
-    invalidate(m.table);fermer();toast("Supprimé");logAction('suppression',m.table,id,m.table);goRub(state.rub,state.sub);
+    invalidate(m.table);fermer();toast("Supprimé");logAction('suppression',m.table,id,m.table);fireWebhook('delete',m.table,{id});goRub(state.rub,state.sub);
   };
 }
 
@@ -3274,7 +3289,7 @@ async function renderTarifDyn(){
         <div>🏪 Prix &gt;15% sous marché → <strong>+8%</strong></div>
         <div>🔒 Prix toujours entre <strong>min et max</strong></div>
       </div>
-      <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <span class="ok" id="tdOk"></span></div>
+      <div style="margin-top:16px"><button class="btn g" id="tdSave">💾 Enregistrer les réglages</button> <button class="btn o" id="tdApply">⚡ Appliquer à tous les biens</button> <span class="ok" id="tdOk"></span></div>
     </div>
     <div id="tdSimulResult" style="padding:0 16px 16px"></div>
   </div>
@@ -3359,6 +3374,18 @@ async function renderTarifDyn(){
     const e=await reglSet("tarif_dyn",out);
     if(e){$("#tdOk").innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     $("#tdOk").textContent="Enregistré ✓"; toast("Tarification dynamique enregistrée");
+  };
+  /* Appliquer à tous les biens */
+  document.getElementById("tdApply").onclick=async()=>{
+    const btn=document.getElementById("tdApply");btn.disabled=true;btn.textContent="⏳ Calcul...";
+    let count=0;
+    for(const b of biens){
+      const prix=await appliquerTarifDyn(b.id);
+      if(prix!=null)count++;
+    }
+    btn.disabled=false;btn.textContent="⚡ Appliquer à tous les biens";
+    toast("⚡ Tarification dynamique appliquée à "+count+" bien(s)");
+    renderTarifDyn();
   };
   /* --- CRUD Concurrents --- */
   const biensOpts=biens.map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("");
@@ -6805,6 +6832,55 @@ async function renderEncaissements(){
 /* ---------- JOURNAL D'ACTIVITÉ ---------- */
 async function logAction(action,entite,entite_id,details){
   try{await sb.from("journal").insert({tenant_id:state.tenant.id,user_id:state.user.id,action,entite,entite_id,details});}catch(e){console.warn("logAction",e);}
+}
+
+/* ---------- WEBHOOKS : ENVOYER LES EVENTS ---------- */
+async function fireWebhook(event,table,data){
+  try{
+    const cfg=await reglGet("webhooks");
+    const hooks=(cfg&&cfg.liste)?cfg.liste:[];
+    if(!hooks.length)return;
+    const payload={event,table,data,timestamp:new Date().toISOString(),tenant_id:state.tenant.id};
+    hooks.forEach(h=>{
+      if(h.events&&!h.events.includes(event)&&!h.events.includes('*'))return;
+      fetch(h.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(()=>{});
+    });
+  }catch(e){console.warn("fireWebhook",e);}
+}
+
+/* ---------- TARIFICATION DYNAMIQUE : APPLIQUER AUTO ---------- */
+async function appliquerTarifDyn(bienId){
+  try{
+    const bien=(state.opts.bien||[]).find(b=>b.id===bienId);if(!bien)return;
+    const cfg=await reglGet("tarif_dynamique");if(!cfg||!cfg.actif)return;
+    const today=new Date().toISOString().slice(0,10);
+    const in14=new Date(Date.now()+14*864e5).toISOString().slice(0,10);
+    /* Taux d'occupation 14 jours */
+    const {data:resas}=await sb.from("reservation").select("arrivee,depart").eq("bien_id",bienId).in("statut",["confirmee"]).lte("arrivee",in14).gte("depart",today);
+    let occ=0;(resas||[]).forEach(r=>{const a=new Date(Math.max(new Date(r.arrivee),new Date(today)));const d=new Date(Math.min(new Date(r.depart),new Date(in14)));occ+=Math.max(0,(d-a)/864e5);});
+    const tauxOcc=occ/14;
+    const base=Number(bien.prix_nuit_base||0);
+    const min=Number(cfg.prix_min||Math.round(base*0.7));
+    const max=Number(cfg.prix_max||Math.round(base*1.5));
+    /* Ajustement : +20% si occ>80%, -15% si occ<30%, sinon proportionnel */
+    let coef=1;
+    if(tauxOcc>0.8)coef=1.2;
+    else if(tauxOcc<0.3)coef=0.85;
+    else coef=0.9+tauxOcc*0.4;
+    /* Week-end +10% */
+    const dow=new Date().getDay();
+    if(dow===5||dow===6)coef*=1.1;
+    /* Last minute : si arrivée <3j, -10% */
+    const nextResa=(resas||[]).find(r=>r.arrivee>=today);
+    if(!nextResa){const daysToNext=14;if(daysToNext<3)coef*=0.9;}
+    let prix=Math.round(base*coef);
+    prix=Math.max(min,Math.min(max,prix));
+    /* Écrire le tarif pour les 14 prochains jours */
+    const existing=await sb.from("tarif").select("id").eq("bien_id",bienId).eq("source","dynamique").gte("fin",today);
+    if(existing.data&&existing.data.length){await sb.from("tarif").delete().in("id",existing.data.map(t=>t.id));}
+    await sb.from("tarif").insert({tenant_id:state.tenant.id,bien_id:bienId,debut:today,fin:in14,prix_nuit:prix,priorite:5,nom:"Tarif dynamique",source:"dynamique"});
+    return prix;
+  }catch(e){console.warn("appliquerTarifDyn",e);return null;}
 }
 async function renderJournal(){
   $("#topAdd").hidden=true;
