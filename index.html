@@ -476,7 +476,10 @@ function buildFinancierFige(bien){
     remise_mensuelle_pct:bien.remise_mensuelle_pct||0,
     remise_mensuelle_seuil:bien.remise_mensuelle_seuil||30,
     frais_standards:bien.frais_standards||[],
+    frais_personnalises:bien.frais_personnalises||[],
+    ventes_incitatives:bien.ventes_incitatives||[],
     majoration_canaux:bien.majoration_canaux||{},
+    politique_annulation_canaux:bien.politique_annulation_canaux||{},
     caution:bien.caution||0,
     heure_arrivee:bien.heure_arrivee||'15:00',
     heure_depart:bien.heure_depart||'11:00',
@@ -704,10 +707,26 @@ const MODULES = {
       ["nuits_min","Nuits minimum",{type:"number"}],
       ["nuits_max","Nuits maximum",{type:"number",p:1}],
       ["prix_weekend","Supplément week-end / nuit",{type:"number",p:1}],
+      ["prix_personne_supp","Prix par personne supplémentaire / nuit",{type:"number"}],
       ["frais_menage","Frais de ménage",{type:"number"}],
       ["taxe_sejour_nuit","Taxe de séjour / nuit",{type:"number"}],
       ["caution","Caution demandée",{type:"number",p:1}],
-      ["politique_annulation","Politique d'annulation",{opts:["flexible","moderee","stricte","non_remboursable"],def:"moderee",p:1}],
+      ["remise_hebdo_pct","Remise hebdomadaire (%)",{type:"number"}],
+      ["remise_hebdo_seuil","Seuil remise hebdo (jours, défaut 7)",{type:"number",def:7}],
+      ["remise_mensuelle_pct","Remise mensuelle (%)",{type:"number"}],
+      ["remise_mensuelle_seuil","Seuil remise mensuelle (jours, défaut 30)",{type:"number",def:30}],
+      ["politique_annulation","Politique d'annulation (défaut)",{opts:["flexible","moderee","stricte","non_remboursable"],def:"moderee",p:1}],
+      ["politique_annulation_canaux.airbnb","Annulation Airbnb",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
+      ["politique_annulation_canaux.booking","Annulation Booking",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
+      ["politique_annulation_canaux.vrbo","Annulation VRBO",{opts:["flexible","moderee","stricte","non_remboursable",""],p:1}],
+      ["__s5b","Majorations par canal",{section:1}],
+      ["majoration_canaux.airbnb","Majoration Airbnb (%)",{type:"number"}],
+      ["majoration_canaux.booking","Majoration Booking (%)",{type:"number"}],
+      ["majoration_canaux.vrbo","Majoration VRBO (%)",{type:"number"}],
+      ["majoration_canaux.site","Majoration Site direct (%)",{type:"number"}],
+      ["__s5c","Frais personnalisés",{section:1}],
+      ["frais_personnalises","",{type:"json_array",label_add:"+ Ajouter un frais",fields:[["nom","Nom du frais"],["montant","Montant",{type:"number"}],["type","Type",{opts:["par_sejour","par_nuit","par_personne"]}],["obligatoire","Obligatoire",{opts:["oui","non"],def:"oui"}]]}],
+      ["ventes_incitatives","",{type:"json_array",label_add:"+ Ajouter une vente incitative",fields:[["nom","Nom"],["montant","Montant",{type:"number"}],["type","Type",{opts:["par_sejour","par_nuit","par_personne"]}]]}],
       ["__s6","Arrivée & accès",{section:1}],
       ["heure_arrivee","Heure d'arrivée",{type:"time",p:1}],
       ["heure_depart","Heure de départ",{type:"time",p:1}],
@@ -1006,7 +1025,8 @@ const RUBRIQUES=[
     ["occ","Taux d'occupation",{occupation:1}],
     ["form","Formules",{formules:1}],
     ["tax","Taxes",{paramtaxes:1}],
-    ["paramfin","Paramètres financiers",{paramfin:1}]]},
+    ["paramfin","Paramètres financiers",{paramfin:1}],
+    ["export","Export comptable",{exportcompta:1}]]},
   {k:"depenses",label:"Dépenses & suppléments",icon:"⊟",subs:[
     ["dep","Dépenses",{depfiltre:"depense"}],
     ["sup","Suppléments",{depfiltre:"supplement"}],
@@ -1516,7 +1536,7 @@ function goRub(rk,sk){
   const t=sub[2];
   $("#topAdd").hidden=true;
   /* Bouton Print sur rapports/relevés/factures/stats */
-  const printable=t.fi||t.activite||t.occupation||t.releves||t.factures||t.statsbien||t.dashprop||t.encaissements;
+  const printable=t.fi||t.activite||t.occupation||t.releves||t.factures||t.statsbien||t.dashprop||t.encaissements||t.exportcompta;
   let pb=document.getElementById("printBtn");
   if(!pb){pb=document.createElement("button");pb.id="printBtn";pb.className="btn g print-btn no-print";pb.textContent="🖨 Imprimer / PDF";pb.onclick=()=>window.print();document.body.appendChild(pb);}
   pb.hidden=!printable;
@@ -1537,6 +1557,7 @@ function goRub(rk,sk){
   if(t.webhooks)return renderWebhooks();
   if(t.paramtaxes)return renderParamTaxes();
   if(t.paramfin)return renderParamFinanciers();
+  if(t.exportcompta)return renderExportCompta();
   if(t.formules)return renderFormules();
   if(t.qualavis)return renderQualAvis();
   if(t.qualann)return renderQualAnn();
@@ -1902,6 +1923,37 @@ async function renderEnvois(){
 }
 
 /* ---------- FORM ---------- */
+/* json_array — ajouter une ligne vide */
+function jaAddRow(divId,fieldKey){
+  const m=Object.values(MODULES).find(m=>m.fields.some(f=>f[0]===fieldKey));
+  if(!m)return;
+  const fdef=m.fields.find(f=>f[0]===fieldKey);
+  if(!fdef)return;
+  const o=fdef[2]||{};
+  const tbody=document.querySelector('#'+divId+' tbody');
+  if(!tbody)return;
+  const tr=document.createElement('tr');
+  tr.innerHTML=o.fields.map(ff=>{
+    const fo=ff[2]||{};
+    if(fo.opts)return `<td><select data-ja-f="${ff[0]}">${fo.opts.map(op=>`<option>${op}</option>`).join('')}</select></td>`;
+    return `<td><input data-ja-f="${ff[0]}" type="${fo.type||'text'}" value="${fo.def||''}" style="width:100%"></td>`;
+  }).join('')+`<td><button class="btn o" style="padding:2px 6px;font-size:11px" onclick="this.closest('tr').remove()">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+/* Lire les valeurs json_array d'un div */
+function jaReadValues(divId,fieldKey){
+  const m=Object.values(MODULES).find(m=>m.fields.some(f=>f[0]===fieldKey));
+  if(!m)return[];
+  const fdef=m.fields.find(f=>f[0]===fieldKey);
+  const o=fdef[2]||{};
+  const rows=document.querySelectorAll('#'+divId+' tbody tr');
+  return Array.from(rows).map(tr=>{
+    const obj={};
+    o.fields.forEach(ff=>{const el=tr.querySelector(`[data-ja-f="${ff[0]}"]`);if(el)obj[ff[0]]=ff[2]&&ff[2].type==='number'?Number(el.value||0):el.value;});
+    return obj;
+  });
+}
+
 async function openForm(k,row){
   const m=MODULES[k];
   if(k==="depense"||k==="depenses_auto"){try{await chargerCatDep();}catch(e){}}
@@ -1912,9 +1964,32 @@ async function openForm(k,row){
   const body=m.fields.map(f=>{
     const[key,label,o]=f;
     if(o.section) return `<div class="fsec">${esc(label)}</div>`;
-    const v=gv(key,o);
+    /* Support dotted keys: majoration_canaux.airbnb → row.majoration_canaux?.airbnb */
+    const gvDot=(key,o)=>{
+      if(key.includes('.')){const[parent,child]=key.split('.');const obj=o.p?P:row;return(obj[parent]||{})[child];}
+      return gv(key,o);
+    };
+    const v=gvDot(key,o);
     let inp;
-    if(o.ref){
+    /* json_array: table dynamique avec + Ajouter */
+    if(o.type==='json_array'){
+      const items=Array.isArray(v)?v:[];
+      const fid='ja_'+key;
+      let tbl=`<div id="${fid}" data-ja="${key}">`;
+      const hdr=o.fields.map(ff=>`<th style="font-size:11px">${esc(ff[1])}</th>`).join('');
+      tbl+=`<table class="tbl" style="font-size:12px"><thead><tr>${hdr}<th></th></tr></thead><tbody>`;
+      items.forEach((item,idx)=>{
+        tbl+='<tr>'+o.fields.map(ff=>{
+          const fk=ff[0],fo=ff[2]||{};
+          const cv=item[fk]||'';
+          if(fo.opts)return `<td><select data-ja-f="${fk}">${fo.opts.map(op=>`<option ${cv===op?'selected':''}>${op}</option>`).join('')}</select></td>`;
+          return `<td><input data-ja-f="${fk}" type="${fo.type||'text'}" value="${esc(cv)}" style="width:100%"></td>`;
+        }).join('')+`<td><button class="btn o" style="padding:2px 6px;font-size:11px" onclick="this.closest('tr').remove()">✕</button></td></tr>`;
+      });
+      tbl+=`</tbody></table>`;
+      tbl+=`<button class="btn o" style="margin-top:4px;font-size:12px" onclick="jaAddRow('${fid}','${key}')">${esc(o.label_add||'+ Ajouter')}</button></div>`;
+      inp=tbl;
+    }else if(o.ref){
       const list=state.opts[o.ref]||[];
       inp=`<select id="f_${key}"><option value="">—</option>`+list.map(x=>{
         const lab=o.ref==="reservation"?(refName("bien",x.bien_id)+" · "+fdate(x.arrivee)):(x.nom||x.id.slice(0,8));
@@ -1943,18 +2018,24 @@ async function openForm(k,row){
       if(!bienEl||!arrEl||!depEl||!pxEl)return;
       const bid=bienEl.value,arr=arrEl.value,dep=depEl.value;
       if(!bid||!arr||!dep)return;
+      const nbEl=document.getElementById('f_nb_personnes');
+      const nbP=nbEl?Number(nbEl.value||0):0;
       if(!pxEl.value||pxEl.dataset.auto==='1'){
-        const total=await calcPrixSaisonnier(bid,arr,dep);
+        const total=await calcPrixSaisonnier(bid,arr,dep,nbP);
         if(total>0){pxEl.value=total;pxEl.dataset.auto='1';}
       }
     };
-    ['f_bien_id','f_arrivee','f_depart'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',calcPrix);});
+    ['f_bien_id','f_arrivee','f_depart','f_nb_personnes'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',calcPrix);});
     const pxEl=document.getElementById('f_prix_total');if(pxEl)pxEl.addEventListener('input',()=>{pxEl.dataset.auto='0';});
   }
   $("#fSave").onclick=async()=>{
     const d={}; const params={...(row.parametres||{})};
     for(const f of m.fields){const[key,,o]=f;
       if(o.section)continue;
+      /* json_array → lire le tableau dynamique */
+      if(o.type==='json_array'){ d[key]=jaReadValues('ja_'+key,key); continue; }
+      /* Dotted keys → stocker dans l'objet parent */
+      if(key.includes('.')){const[parent,child]=key.split('.');if(!d[parent])d[parent]={...(row[parent]||{})};let v=$("#f_"+key).value;if(v==="")v=null;if(v!=null&&o.type==="number")v=Number(v);d[parent][child]=v;continue;}
       if(o.file){const el=document.getElementById('f_'+key);const file=el&&el.files&&el.files[0];
         if(file){const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=state.tenant.id+'/'+key+'_'+Date.now()+'_'+safe;
           const up=await sb.storage.from('uploads').upload(path,file,{upsert:true});
@@ -4556,6 +4637,55 @@ async function renderOccupation(){
 
 }
 
+/* ---------- EXPORT COMPTABLE (LOT 2) ---------- */
+async function renderExportCompta(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  const EC=state.ecF=state.ecF||{du:"",au:"",bien:"",format:"csv"};
+  await Promise.all([loadOpts("bien"),loadOpts("reservation")]);
+  const bienSel=`<select id="ecBien"><option value="">Tous les biens</option>${(state.opts.bien||[]).map(b=>`<option value="${b.id}" ${EC.bien===b.id?"selected":""}>${esc(b.nom)}</option>`).join("")}</select>`;
+  const hdr=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="date" id="ecDu" value="${EC.du}" style="width:130px"> → <input type="date" id="ecAu" value="${EC.au}" style="width:130px">
+    ${bienSel}
+    <select id="ecFmt"><option value="csv" ${EC.format==="csv"?"selected":""}>CSV</option><option value="xlsx" ${EC.format==="xlsx"?"selected":""}>Excel (tab)</option></select>
+    <button class="btn" id="ecGen">📥 Générer l'export</button></div>`;
+  /* Aperçu des écritures */
+  let resas=(state.opts.reservation||[]).filter(r=>r.statut!=='annulee'&&r.statut!=='sejour_proprietaire');
+  if(EC.du)resas=resas.filter(r=>r.depart>=EC.du);
+  if(EC.au)resas=resas.filter(r=>r.arrivee<=EC.au);
+  if(EC.bien)resas=resas.filter(r=>r.bien_id===EC.bien);
+  resas.sort((a,b)=>a.arrivee>b.arrivee?1:-1);
+  const rows=resas.map(r=>{
+    const bien=(state.opts.bien||[]).find(b=>b.id===r.bien_id)||{};
+    const nuits=Math.max(1,Math.round((new Date(r.depart)-new Date(r.arrivee))/864e5));
+    const ca=Number(r.prix_total||0);
+    const commPct=Number(r.commission_canal_pct||bien.commission_canal_pct||0);
+    const comm=Math.round(ca*commPct/100);
+    const menage=Number(r.frais_menage||bien.frais_menage||0);
+    const taxe=Number(r.taxe_sejour_nuit||bien.taxe_sejour_nuit||0)*nuits;
+    const net=ca-comm-menage-taxe;
+    return {date:r.arrivee,ref:r.reference_canal||r.id.slice(0,8),bien:bien.nom||'',canal:r.canal||'',nuits,ca,comm,menage,taxe,net,statut:r.statut_paiement||'en_attente'};
+  });
+  const totCA=rows.reduce((s,r)=>s+r.ca,0);
+  const totComm=rows.reduce((s,r)=>s+r.comm,0);
+  const totMen=rows.reduce((s,r)=>s+r.menage,0);
+  const totTax=rows.reduce((s,r)=>s+r.taxe,0);
+  const totNet=rows.reduce((s,r)=>s+r.net,0);
+  const tbl=`<table class="tbl"><thead><tr><th>Date</th><th>Réf.</th><th>Bien</th><th>Canal</th><th>Nuits</th><th>CA brut</th><th>Commission</th><th>Ménage</th><th>Taxes</th><th>Net</th><th>Paiement</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td>${fdate(r.date)}</td><td>${esc(r.ref)}</td><td>${esc(r.bien)}</td><td>${pill(r.canal)}</td><td>${r.nuits}</td><td>${money(r.ca)}</td><td>${money(r.comm)}</td><td>${money(r.menage)}</td><td>${money(r.taxe)}</td><td><b>${money(r.net)}</b></td><td>${pill(r.statut)}</td></tr>`).join("")}
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="5">TOTAUX (${rows.length} réservations)</td><td>${money(totCA)}</td><td>${money(totComm)}</td><td>${money(totMen)}</td><td>${money(totTax)}</td><td>${money(totNet)}</td><td></td></tr>
+    </tbody></table>`;
+  $("#content").innerHTML=hdr+tbl;
+  ["ecBien","ecDu","ecAu","ecFmt"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=()=>{EC[{ecBien:"bien",ecDu:"du",ecAu:"au",ecFmt:"format"}[id]]=el.value;renderExportCompta();}});
+  document.getElementById("ecGen").onclick=()=>{
+    const sep=EC.format==="xlsx"?"\t":",";
+    const header=["Date","Référence","Bien","Canal","Nuits","CA_Brut","Commission","Ménage","Taxes","Net","Statut_Paiement"];
+    const csv=[header.join(sep),...rows.map(r=>[r.date,r.ref,'"'+r.bien+'"',r.canal,r.nuits,r.ca,r.comm,r.menage,r.taxe,r.net,r.statut].join(sep))].join("\n");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="export_comptable_"+new Date().toISOString().slice(0,10)+(EC.format==="xlsx"?".tsv":".csv");a.click();
+    toast("✅ Export téléchargé");
+  };
+}
+
 /* ---------- AVIS & RELEVES AUTOMATIQUES ---------- */
 async function renderAvisList(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -5990,18 +6120,36 @@ async function renderCalTarif(){
 }
 
 /* Calcul prix avec tarifs saisonniers */
-async function calcPrixSaisonnier(bienId,arrivee,depart){
+async function calcPrixSaisonnier(bienId,arrivee,depart,nbPersonnes){
   const {data:tarifs}=await sb.from("tarif").select("*").eq("bien_id",bienId).order("priorite",{ascending:false});
   const bien=(state.opts.bien||[]).find(b=>b.id===bienId);
   const base=bien?Number(bien.prix_nuit_base||0):0;
-  let total=0;
+  let totalNuits=0;
   const a=new Date(arrivee),d=new Date(depart);
+  const nuits=Math.max(1,Math.round((d-a)/864e5));
   for(let dt=new Date(a);dt<d;dt.setDate(dt.getDate()+1)){
     const iso=dt.toISOString().slice(0,10);
     const t=(tarifs||[]).find(t=>t.debut<=iso&&t.fin>=iso);
-    total+=t?Number(t.prix_nuit):base;
+    totalNuits+=t?Number(t.prix_nuit):base;
   }
-  return Math.round(total);
+  /* Supplément personnes supplémentaires */
+  const capacite=bien?Number(bien.capacite||0):0;
+  const pps=bien?Number(bien.prix_personne_supp||0):0;
+  const nb=Number(nbPersonnes||0);
+  const suppPersonnes=(pps>0&&nb>capacite)?(nb-capacite)*pps*nuits:0;
+  /* Remise hebdomadaire / mensuelle */
+  const remHebdoPct=bien?Number(bien.remise_hebdo_pct||0):0;
+  const remHebdoSeuil=bien?Number(bien.remise_hebdo_seuil||7):7;
+  const remMensPct=bien?Number(bien.remise_mensuelle_pct||0):0;
+  const remMensSeuil=bien?Number(bien.remise_mensuelle_seuil||30):30;
+  let remisePct=0;
+  if(remMensPct>0&&nuits>=remMensSeuil)remisePct=remMensPct;
+  else if(remHebdoPct>0&&nuits>=remHebdoSeuil)remisePct=remHebdoPct;
+  const sousTotal=totalNuits+suppPersonnes;
+  const remise=remisePct>0?Math.round(sousTotal*remisePct/100):0;
+  const fraisMenage=bien?Number(bien.frais_menage||0):0;
+  const taxeSejour=bien?Number(bien.taxe_sejour_nuit||0)*nuits:0;
+  return Math.round(sousTotal-remise+fraisMenage+taxeSejour);
 }
 
 /* ---------- CHECK-IN EN LIGNE ---------- */
@@ -6286,6 +6434,41 @@ async function ficheReservation(id){
           ${f('Reste','<span style="color:'+(reste>0?'var(--danger)':'var(--ok)')+'">'+money(reste)+'</span>')}
           ${f('Statut paiement',pill(r.statut_paiement))}
           ${r.financier_fige?.fige_le?f('Figé le',fdate(r.financier_fige.fige_le)):''}
+          <div class="fsec" style="margin-top:12px">Décomposition du prix</div>
+          ${(()=>{
+            const ff=r.financier_fige||bien;
+            const pnb=Number(ff.prix_nuit_base||0);
+            const baseNuits=pnb*nuits;
+            const pps=Number(ff.prix_personne_supp||0);
+            const cap=Number(bien.capacite||0);
+            const nbP=Number(r.nb_personnes||0);
+            const suppPers=(pps>0&&nbP>cap)?(nbP-cap)*pps*nuits:0;
+            const remHPct=Number(ff.remise_hebdo_pct||0);
+            const remHSeuil=Number(ff.remise_hebdo_seuil||7);
+            const remMPct=Number(ff.remise_mensuelle_pct||0);
+            const remMSeuil=Number(ff.remise_mensuelle_seuil||30);
+            let remPct=0,remLabel='';
+            if(remMPct>0&&nuits>=remMSeuil){remPct=remMPct;remLabel='mensuelle '+remMPct+'%';}
+            else if(remHPct>0&&nuits>=remHSeuil){remPct=remHPct;remLabel='hebdo '+remHPct+'%';}
+            const sousT=baseNuits+suppPers;
+            const remise=remPct>0?Math.round(sousT*remPct/100):0;
+            const fm=Number(ff.frais_menage||0);
+            const ts=Number(ff.taxe_sejour_nuit||0)*nuits;
+            const majCanaux=ff.majoration_canaux||{};
+            const majPct=Number(majCanaux[(r.canal||'').toLowerCase()]||0);
+            const majMontant=majPct>0?Math.round((sousT-remise)*majPct/100):0;
+            const calcTotal=sousT-remise+fm+ts+majMontant;
+            let h='';
+            h+=f(pnb+' × '+nuits+' nuits',money(baseNuits));
+            if(suppPers>0)h+=f('Suppl. '+(nbP-cap)+' pers. × '+nuits+' nuits','+'+money(suppPers));
+            if(remise>0)h+=f('Remise '+remLabel,'<span style="color:var(--ok)">−'+money(remise)+'</span>');
+            if(fm>0)h+=f('Frais de ménage','+'+money(fm));
+            if(ts>0)h+=f('Taxe de séjour','+'+money(ts));
+            if(majMontant>0)h+=f('Majoration '+r.canal+' ('+majPct+'%)','+'+money(majMontant));
+            h+=f('<b>Calculé</b>','<b>'+money(calcTotal)+'</b>');
+            if(Math.abs(calcTotal-(r.prix_total||0))>1)h+=`<div style="font-size:11px;color:var(--danger);padding:4px 0">⚠️ Écart de ${money(Math.abs(calcTotal-(r.prix_total||0)))} avec le prix saisi</div>`;
+            return h;
+          })()}
         </div>
       </div>
       ${(paiements&&paiements.length)?`<div class="fsec" style="margin-top:12px">Paiements (${paiements.length})</div>${paiements.map(p=>`<div style="font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)">${fdate(p.paye_le)} — ${money(p.montant)} — ${pill(p.moyen)}</div>`).join("")}`:''}

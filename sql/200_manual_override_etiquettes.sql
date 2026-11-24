@@ -59,5 +59,10 @@ ALTER TABLE reservation ADD COLUMN IF NOT EXISTS total_taxes NUMERIC;
 ALTER TABLE reservation ADD COLUMN IF NOT EXISTS total_frais NUMERIC;
 ALTER TABLE reservation ADD COLUMN IF NOT EXISTS raison_annulation TEXT;
 
+-- LOT 2 : Frais personnalisés et ventes incitatives sur le bien
+ALTER TABLE bien ADD COLUMN IF NOT EXISTS frais_personnalises JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE bien ADD COLUMN IF NOT EXISTS ventes_incitatives JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE bien ADD COLUMN IF NOT EXISTS politique_annulation_canaux JSONB DEFAULT '{}'::jsonb;
+
 -- Statut séjour propriétaire
 -- (ajouter 'sejour_proprietaire' aux statuts possibles - pas de contrainte enum en base)
