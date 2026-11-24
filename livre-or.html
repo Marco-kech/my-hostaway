@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Livre d'or — DPM Conciergerie</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;background:#FBFAF6;color:#222;min-height:100vh}
+.hdr{background:#14352A;color:#fff;padding:32px;text-align:center}
+.hdr h1{color:#C9A227;font-family:'Cormorant Garamond',serif;font-size:32px;margin-bottom:4px}
+.hdr p{font-size:14px;opacity:.8}
+.stats{display:flex;justify-content:center;gap:32px;padding:20px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stat{text-align:center}.stat .n{font-size:28px;font-weight:700;color:#C9A227}.stat .l{font-size:12px;color:#888}
+.list{max-width:700px;margin:24px auto;padding:0 16px}
+.avis{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.avis .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.avis .nom{font-weight:700;font-size:15px}.avis .date{font-size:12px;color:#888}
+.avis .stars{color:#C9A227;font-size:16px;margin-bottom:8px}
+.avis .comment{font-size:14px;line-height:1.6;color:#444}
+.avis .reponse{margin-top:12px;padding:12px;background:#14352A08;border-left:3px solid #C9A227;border-radius:0 8px 8px 0;font-size:13px}
+.avis .reponse b{color:#14352A}
+.empty{text-align:center;padding:40px;color:#888;font-size:15px}
+.sub{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:#888}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="hdr"><h1>Livre d'or</h1><p>DPM Conciergerie — Ce que nos voyageurs disent de nous</p></div>
+<div class="stats" id="stats"><div class="stat"><div class="n" id="avgNote">—</div><div class="l">Note moyenne</div></div><div class="stat"><div class="n" id="nbAvis">0</div><div class="l">Avis</div></div><div class="stat"><div class="n" id="pctRecom">—</div><div class="l">Recommandent</div></div></div>
+<div class="list" id="list"><div class="empty">Chargement…</div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb=supabase.createClient("https://eztwwzzjzwmhfzmcafyu.supabase.co","sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4");
+(async()=>{
+  const {data}=await sb.from('avis').select('note_globale,note_proprete,note_communication,note_emplacement,note_qualite_prix,commentaire,recommande,reponse_hote,cree_le,voyageur_id,bien_id').eq('statut','publie').eq('afficher_site',true).order('cree_le',{ascending:false}).limit(50);
+  const avis=data||[];
+  if(!avis.length){document.getElementById('list').innerHTML='<div class="empty">Aucun avis publié pour le moment.</div>';return;}
+  // Load voyageurs and biens names
+  const vIds=[...new Set(avis.map(a=>a.voyageur_id).filter(Boolean))];
+  const bIds=[...new Set(avis.map(a=>a.bien_id).filter(Boolean))];
+  const [vr,br]=await Promise.all([
+    vIds.length?sb.from('voyageur').select('id,nom').in('id',vIds):{data:[]},
+    bIds.length?sb.from('bien').select('id,nom').in('id',bIds):{data:[]}
+  ]);
+  const vMap=Object.fromEntries((vr.data||[]).map(v=>[v.id,v.nom]));
+  const bMap=Object.fromEntries((br.data||[]).map(b=>[b.id,b.nom]));
+  // Stats
+  const avg=(avis.reduce((s,a)=>s+(a.note_globale||0),0)/avis.length).toFixed(1);
+  const recom=avis.filter(a=>a.recommande==='oui').length;
+  document.getElementById('avgNote').textContent=avg+' ★';
+  document.getElementById('nbAvis').textContent=avis.length;
+  document.getElementById('pctRecom').textContent=Math.round(recom/avis.length*100)+'%';
+  // Render
+  const stars=n=>'★'.repeat(Math.round(n||0))+'☆'.repeat(5-Math.round(n||0));
+  const esc=s=>{const d=document.createElement('div');d.textContent=s;return d.innerHTML;};
+  const fdate=d=>d?new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+  document.getElementById('list').innerHTML=avis.map(a=>`<div class="avis">
+    <div class="top"><span class="nom">${esc(vMap[a.voyageur_id]||'Voyageur')}</span><span class="date">${fdate(a.cree_le)}</span></div>
+    <div class="stars">${stars(a.note_globale)}</div>
+    <div class="sub">🧹 ${a.note_proprete||'—'} · 💬 ${a.note_communication||'—'} · 📍 ${a.note_emplacement||'—'} · 💰 ${a.note_qualite_prix||'—'}</div>
+    ${a.commentaire?`<div class="comment" style="margin-top:8px">${esc(a.commentaire)}</div>`:''}
+    ${a.reponse_hote?`<div class="reponse"><b>Réponse de l'hôte :</b> ${esc(a.reponse_hote)}</div>`:''}
+    <div style="margin-top:6px;font-size:12px;color:#aaa">${esc(bMap[a.bien_id]||'')}</div>
+  </div>`).join('');
+})();
+</script>
+</body>
+</html>

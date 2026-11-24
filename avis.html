@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Votre avis — DPM Conciergerie</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;background:#FBFAF6;color:#222;min-height:100vh}
+.hdr{background:#14352A;color:#fff;padding:24px;text-align:center}
+.hdr h1{color:#C9A227;font-family:'Cormorant Garamond',serif;font-size:28px;margin-bottom:4px}
+.hdr p{font-size:13px;opacity:.8}
+.card{max-width:520px;margin:24px auto;background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.field{margin-bottom:16px}
+.field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:#14352A}
+.field input,.field textarea,.field select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
+.field textarea{resize:vertical}
+.stars{display:flex;gap:4px;font-size:28px;cursor:pointer}
+.stars span{color:#ddd;transition:color .15s}
+.stars span.on{color:#C9A227}
+.btn{background:#C9A227;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;width:100%}
+.btn:hover{opacity:.9}
+.info{background:#14352A11;padding:14px;border-radius:8px;margin-bottom:16px;font-size:13px;color:#14352A}
+.ok{text-align:center;padding:40px;font-size:18px;color:#14352A}
+.err{color:#e74c3c;font-size:13px;margin-top:8px}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="hdr"><h1>DPM Conciergerie</h1><p>Merci de partager votre expérience</p></div>
+<div class="card" id="form">
+  <div class="info" id="sejInfo">Chargement...</div>
+  <div class="field"><label>Note globale</label><div class="stars" id="starsGlobal" data-field="note_globale"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
+  <div class="field"><label>Propreté</label><div class="stars" id="starsProp" data-field="note_proprete"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
+  <div class="field"><label>Communication</label><div class="stars" id="starsComm" data-field="note_communication"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
+  <div class="field"><label>Emplacement</label><div class="stars" id="starsEmpl" data-field="note_emplacement"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
+  <div class="field"><label>Rapport qualité-prix</label><div class="stars" id="starsQP" data-field="note_qualite_prix"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div></div>
+  <div class="field"><label>Votre commentaire</label><textarea id="commentaire" rows="4" placeholder="Dites-nous ce que vous avez aimé…"></textarea></div>
+  <div class="field"><label>Recommanderiez-vous ce logement ?</label><select id="recommande"><option value="oui">Oui, absolument</option><option value="non">Non</option></select></div>
+  <div class="err" id="err"></div>
+  <button class="btn" id="submit">Envoyer mon avis</button>
+</div>
+<div class="ok" id="merci" style="display:none">🎉 Merci pour votre avis !<br><span style="font-size:14px;color:#888">Il sera publié après vérification.</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://eztwwzzjzwmhfzmcafyu.supabase.co";
+const SUPABASE_KEY="sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const resaId=location.hash.replace('#','').replace('/avis/','').replace('avis=','');
+const notes={note_globale:0,note_proprete:0,note_communication:0,note_emplacement:0,note_qualite_prix:0};
+
+// Stars interaction
+document.querySelectorAll('.stars').forEach(group=>{
+  const field=group.dataset.field;
+  group.querySelectorAll('span').forEach(s=>{
+    s.onmouseenter=()=>{const v=+s.dataset.v;group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=v));};
+    s.onclick=()=>{notes[field]=+s.dataset.v;group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=notes[field]));};
+  });
+  group.onmouseleave=()=>{group.querySelectorAll('span').forEach(x=>x.classList.toggle('on',+x.dataset.v<=notes[field]));};
+});
+
+// Load reservation info
+(async()=>{
+  if(!resaId){document.getElementById('sejInfo').textContent='Lien invalide — ID de réservation manquant.';return;}
+  const {data:r}=await sb.from('reservation').select('bien_id,arrivee,depart,voyageur_id,tenant_id').eq('id',resaId).single();
+  if(!r){document.getElementById('sejInfo').textContent='Réservation introuvable.';return;}
+  const {data:b}=await sb.from('bien').select('nom').eq('id',r.bien_id).single();
+  const {data:v}=await sb.from('voyageur').select('nom').eq('id',r.voyageur_id).single();
+  document.getElementById('sejInfo').innerHTML=`<b>${v?.nom||'Voyageur'}</b> — séjour du ${r.arrivee} au ${r.depart}<br><b>${b?.nom||''}</b>`;
+
+  document.getElementById('submit').onclick=async()=>{
+    if(!notes.note_globale){document.getElementById('err').textContent='Veuillez donner au moins une note globale.';return;}
+    const avis={
+      tenant_id:r.tenant_id,reservation_id:resaId,bien_id:r.bien_id,voyageur_id:r.voyageur_id,
+      ...notes,
+      commentaire:document.getElementById('commentaire').value,
+      recommande:document.getElementById('recommande').value,
+      canal:'direct',origine:'direct',statut:'en_attente'
+    };
+    const {error}=await sb.from('avis').insert(avis);
+    if(error){document.getElementById('err').textContent='Erreur : '+error.message;return;}
+    document.getElementById('form').style.display='none';
+    document.getElementById('merci').style.display='block';
+  };
+})();
+</script>
+</body>
+</html>
