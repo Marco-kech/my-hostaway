@@ -2737,7 +2737,7 @@ async function renderCalendar(){
   const label=calMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   $("#content").innerHTML=`<div class="panel"><div class="phead">
       <button class="btn o sm" id="calPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
-      <button class="btn o sm" id="calNext">›</button><span class="sp"></span>${bienSel}<span class="muted" style="margin-left:8px">Cliquez une date libre pour bloquer</span></div>
+      <button class="btn o sm" id="calNext">›</button><span class="sp"></span><button class="btn o sm" onclick="listesDisponibles()">🔎 Listes disponibles</button>${bienSel}<span class="muted" style="margin-left:8px">Cliquez une date libre pour bloquer</span></div>
       <div style="padding:14px"><div class="cal">${cells}</div></div></div>`;
   $("#calPrev").onclick=()=>{calMonth.setMonth(calMonth.getMonth()-1);renderCalendar();};
   $("#calNext").onclick=()=>{calMonth.setMonth(calMonth.getMonth()+1);renderCalendar();};
@@ -2761,6 +2761,46 @@ async function renderCalendar(){
 }
 
 /* ---------- CALENDAR (multiple : biens x jours) ---------- */
+/* Listes disponibles (devis) : annonces libres sur des dates, avec filtres → réservation directe au statut « demande » */
+async function listesDisponibles(){
+  const biens=(await loadOpts("bien"))||[];
+  const villes=[...new Set(biens.map(b=>(b.parametres||{}).ville).filter(Boolean))].sort();
+  ouvrir(`<div class="h"><h3>Listes disponibles</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b">
+      <div class="row2"><div class="field"><label>Arrivée *</label><input type="date" id="ldA"></div><div class="field"><label>Départ *</label><input type="date" id="ldD"></div></div>
+      <div class="row2"><div class="field"><label>Nombre d'invités</label><input type="number" id="ldN" min="1"></div><div class="field"><label>Ville</label><select id="ldV"><option value="">Toutes</option>${villes.map(v=>`<option>${esc(v)}</option>`).join('')}</select></div></div>
+      <div class="row2"><div class="field"><label>Prix min / nuit</label><input type="number" id="ldMin"></div><div class="field"><label>Prix max / nuit</label><input type="number" id="ldMax"></div></div>
+      <div class="field"><label>Équipement (contient)</label><input id="ldE" placeholder="ex. piscine"></div>
+      <div class="err" id="ldErr"></div><div id="ldRes"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button><button class="btn g" id="ldGo">Appliquer</button></div>`);
+  document.getElementById('ldGo').onclick=async()=>{
+    const a=document.getElementById('ldA').value,d=document.getElementById('ldD').value,err=document.getElementById('ldErr'),out=document.getElementById('ldRes');
+    err.textContent='';
+    if(!a||!d||d<=a){err.textContent="Indique une arrivée et un départ (départ après l'arrivée).";return;}
+    out.innerHTML='<div class="center"><span class="spin"></span></div>';
+    const [rq,bq]=await Promise.all([
+      sb.from('reservation').select('bien_id,statut').lt('arrivee',d).gt('depart',a),
+      sb.from('blocage').select('bien_id').lt('debut',d).gte('fin',a)]);
+    if(rq.error||bq.error){out.innerHTML='';err.textContent=(rq.error||bq.error).message;return;}
+    const pris=new Set([...(rq.data||[]).filter(x=>!['annulee','no_show','demande'].includes(x.statut)).map(x=>x.bien_id),...(bq.data||[]).map(x=>x.bien_id)]);
+    const n=Number(document.getElementById('ldN').value||0),v=document.getElementById('ldV').value,mn=Number(document.getElementById('ldMin').value||0),mx=Number(document.getElementById('ldMax').value||0),eq=(document.getElementById('ldE').value||'').trim().toLowerCase();
+    const nuits=Math.max(1,Math.round((new Date(d)-new Date(a))/86400000));
+    const libres=biens.filter(b=>{const P=b.parametres||{};
+      if(pris.has(b.id)||b.type_unite==='parent')return false;
+      if(n&&Number(b.capacite||0)&&Number(b.capacite)<n)return false;
+      if(v&&P.ville!==v)return false;
+      if(eq&&!(Array.isArray(P.equipements)?P.equipements:[]).some(x=>String(x).toLowerCase().includes(eq)))return false;
+      return true;});
+    const lignes=[];
+    for(const b of libres){let total=0;try{total=await calcPrixSaisonnier(b.id,a,d,n);}catch(e){}
+      if(!total)total=Number(b.prix_nuit_base||0)*nuits;
+      const pn=total/nuits;
+      if((mn&&pn<mn)||(mx&&pn>mx))continue;
+      lignes.push({b,total,pn});}
+    out.innerHTML=lignes.length?`<table class="tbl" style="font-size:13px;margin-top:10px"><thead><tr><th>Annonce</th><th>Capacité</th><th>Prix / nuit</th><th>${nuits} nuit(s)</th><th></th></tr></thead><tbody>${lignes.map((l,i)=>`<tr><td><b>${esc(l.b.nom)}</b>${(l.b.parametres||{}).ville?'<br><span class="muted">'+esc(l.b.parametres.ville)+'</span>':''}</td><td>${l.b.capacite||'—'}</td><td>${money(Math.round(l.pn))}</td><td>${money(l.total)}</td><td><button class="btn g sm ld-add" data-i="${i}">Ajouter</button></td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:12px;margin-top:6px">Prix indicatif hors ménage et taxes. « Ajouter » ouvre une réservation directe au statut « demande ».</div>`:'<div class="empty" style="margin-top:10px">Aucune annonce libre avec ces critères.</div>';
+    out.querySelectorAll('.ld-add').forEach(bt=>bt.onclick=()=>{const l=lignes[Number(bt.dataset.i)];fermer();openForm('reservations',{bien_id:l.b.id,arrivee:a,depart:d,nb_personnes:n||null,canal:'direct',statut:'demande',prix_total:l.total});});
+  };
+}
 async function renderCalMultiple(){
   $("#topAdd").hidden=false;$("#topAdd").textContent="+ Nouvelle réservation";$("#topAdd").onclick=()=>openForm('reservations');
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -2820,7 +2860,7 @@ async function renderCalMultiple(){
   await loadOpts("voyageur");
   $("#content").innerHTML=`<div class="panel"><div class="phead">
     <button class="btn o sm" id="cmPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3>
-    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><span class="muted">${shown.length} annonce(s)${actif?" (filtré)":""}</span>
+    <button class="btn o sm" id="cmNext">›</button><span class="sp"></span><button class="btn o sm" onclick="listesDisponibles()" style="margin-right:8px">🔎 Listes disponibles</button><span class="muted">${shown.length} annonce(s)${actif?" (filtré)":""}</span>
       <button class="btn o sm" id="cmTarif">Modifier les tarifs en masse</button>
       <button class="btn o sm" id="cmLegend">Légende</button></div>
     <div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap">
