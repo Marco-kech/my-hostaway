@@ -917,7 +917,7 @@ const MODULES = {
   modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
     cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","airbnb","booking","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
-      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation"]}],["delai_h","Délai (heures)",{type:"number"}]]},
+      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation","reservation_attente","demande_invite","annulation","paiement_recu","fiche_soumise","avis_soumis"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
@@ -6315,12 +6315,14 @@ async function renderAutoMsg(){
       .replace(/\{date_aujourdhui\}/g,new Date().toLocaleDateString('fr-FR'));
   };
   const planned=[];
-  (modeles||[]).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
-  const EVL={reservation:"À la réservation",confirmation:"Confirmation",modification:"Modification",annulation:"Annulation",avant_arrivee:"Avant l'arrivée",jour_arrivee:"Jour d'arrivée",arrivee:"À l'arrivée",pendant_sejour:"Pendant le séjour",veille_depart:"Veille du départ",jour_depart:"Jour du départ",depart:"Au départ",apres_depart:"Après le départ",demande_avis:"Demande d'avis",paiement_recu:"Paiement reçu",rappel_paiement:"Rappel de paiement",checkin_incomplet:"Check-in incomplet"};
-  const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td></tr>`).join("");
+  /* Les événements ci-dessous sont traités par la base : un brouillon se crée seul quand l'événement survient. */
+  const EV_AUTO={reservation_attente:1,demande_invite:1,annulation:1,paiement_recu:1,fiche_soumise:1,avis_soumis:1};
+  (modeles||[]).filter(mo=>!EV_AUTO[mo.evenement]&&mo.actif!==false).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
+  const EVL={avant_arrivee:"Avant l'arrivée",arrivee:"À l'arrivée",depart:"Au départ",apres_depart:"Après le départ",reservation:"À la réservation",reservation_attente:"Réservation en attente",demande_invite:"Demande de l'invité",annulation:"Annulation",paiement_recu:"Paiement réussi",fiche_soumise:"Fiche d'arrivée en ligne remplie",avis_soumis:"Avis déposé par le voyageur"};
+  const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td><td>${EV_AUTO[mo.evenement]?'Brouillon créé seul à l\'événement':'Bouton « Préparer » ci-dessous'}</td></tr>`).join("");
   $("#content").innerHTML=`<div id="pvPanel"></div>
     <div class="panel"><div class="phead"><h3>Règles de messages automatisés</h3><span class="sp"></span><span class="muted">${(modeles||[]).length} règle(s)</span></div>
-      <div style="overflow:auto">${(modeles&&modeles.length)?`<table><thead><tr><th>Modèle</th><th>Événement</th><th>Canal</th><th>Délai</th></tr></thead><tbody>${rulesRows}</tbody></table>`:'<div class="empty">Aucun modèle avec événement. Ajoutez-en dans « Modèles de message » en renseignant un événement.</div>'}</div></div>
+      <div style="overflow:auto">${(modeles&&modeles.length)?`<table><thead><tr><th>Modèle</th><th>Événement</th><th>Canal</th><th>Délai</th><th>Préparation</th></tr></thead><tbody>${rulesRows}</tbody></table>`:'<div class="empty">Aucun modèle avec événement. Ajoutez-en dans « Modèles de message » en renseignant un événement.</div>'}</div></div>
     <div class="panel"><div class="phead"><h3>Programmer les messages</h3></div>
       <div style="padding:16px">
         <div class="phnote">Pour chaque règle et chaque réservation à venir (sans doublon), crée un message <b>brouillon</b> personnalisé (nom du voyageur, bien), visible dans <b>Conversations</b>. Rien n'est envoyé tout seul : tu relis puis tu envoies.</div>
