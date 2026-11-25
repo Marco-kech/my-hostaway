@@ -1454,14 +1454,28 @@ async function renderInbox(){
     document.getElementById('ibxMsg').value='';state.inboxNote=false;state.inboxSched=false;
     toast(rec.statut==='brouillon'?'Brouillon enregistré':(state.inboxNote?'Note interne ajoutée':(rec.statut==='erreur_envoi'?'⚠️ Message sauvé mais envoi échoué':'✅ Message envoyé au voyageur via '+rec.canal)));renderInbox();};
   const cxl=document.getElementById('ibxCancel');
-  if(cxl) cxl.onclick=()=>{const rid=cxl.dataset.rid;
-    ouvrir(`<div class="h"><h3>Annuler la réservation ?</h3><button class="x" onclick="fermer()">×</button></div>
-      <div class="b"><p class="muted">La réservation passera au statut « annulée » et le calendrier sera libéré.</p><div class="err" id="cxErr"></div></div>
-      <div class="f"><button class="btn o" onclick="fermer()">Retour</button><button class="btn d" id="cxOk">Confirmer l'annulation</button></div>`);
-    document.getElementById('cxOk').onclick=async()=>{const {error}=await sb.from('reservation').update({statut:'annulee'}).eq('id',rid);
-      if(error){document.getElementById('cxErr').textContent=error.message;return;}
-      invalidate('reservation'); fermer(); toast('Réservation annulée'); renderInbox();};
-  };
+  if(cxl) cxl.onclick=()=>annulerReservation(cxl.dataset.rid,()=>renderInbox());
+}
+/* Annulation d'une réservation, avec raison (ajoutée aux notes). Le voyageur n'est prévenu que s'il existe un modèle « annulation ». */
+async function annulerReservation(rid,apres){
+  const {data:r}=await sb.from('reservation').select('id,canal,notes,statut').eq('id',rid).maybeSingle();
+  if(!r){toast('Réservation introuvable');return;}
+  const ota=['airbnb','booking'].includes(String(r.canal||''));
+  const raisons=["Demande du voyageur","Paiement non reçu","Dates indisponibles","Double réservation","Problème dans le logement","Autre"];
+  ouvrir(`<div class="h"><h3>Annuler la réservation ?</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b"><p class="muted">La réservation passera au statut « annulée » et le calendrier sera libéré.</p>
+      ${ota?`<p style="color:#c0392b;font-size:13px">Réservation ${esc(r.canal)} : l'annulation doit aussi être faite sur la plateforme, My Hostaway ne l'annule pas là-bas.</p>`:''}
+      <div class="field"><label>Raison</label><select id="cxRaison">${raisons.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div>
+      <div class="field"><label>Précision (facultatif)</label><input id="cxDetail"></div>
+      <p class="muted" style="font-size:12px">Le voyageur n'est prévenu que si un modèle de message « annulation » existe (un brouillon est alors préparé).</p>
+      <div class="err" id="cxErr"></div></div>
+    <div class="f"><button class="btn o" onclick="fermer()">Retour</button><button class="btn d" id="cxOk">Confirmer l'annulation</button></div>`);
+  document.getElementById('cxOk').onclick=async()=>{
+    const det=(document.getElementById('cxDetail').value||'').trim();
+    const ligne='Annulation du '+new Date().toLocaleDateString('fr-FR')+' — '+document.getElementById('cxRaison').value+(det?' : '+det:'');
+    const {error}=await sb.from('reservation').update({statut:'annulee',notes:(r.notes?r.notes+'\n':'')+ligne}).eq('id',rid);
+    if(error){document.getElementById('cxErr').textContent=error.message;return;}
+    invalidate('reservation'); fermer(); toast('Réservation annulée'); if(apres)apres();};
 }
 async function renderDocModeles(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
@@ -2193,12 +2207,36 @@ async function openForm(k,row){
       const bien=(state.opts.bien||[]).find(b=>b.id===d.bien_id);
       if(bien){d.financier_fige=buildFinancierFige(bien);if(!d.base_rate)d.base_rate=bien.prix_nuit_base||0;}
     }
+    /* Changement d'annonce d'une réservation : récapitulatif des effets + confirmation (comme l'original) */
+    let chgAnnonce=false;
+    if(m.table==='reservation'&&row.id&&row.bien_id&&d.bien_id&&d.bien_id!==row.bien_id){
+      const ckChg=document.getElementById('fChgOk');
+      if(!ckChg||ckChg.dataset.bien!==d.bien_id){
+        let occupe=false;
+        try{if(d.arrivee&&d.depart){const {data:cf}=await sb.from('reservation').select('id').eq('bien_id',d.bien_id).neq('id',row.id).not('statut','in','(annulee,no_show)').lt('arrivee',d.depart).gt('depart',d.arrivee).limit(1);occupe=!!(cf&&cf.length);}}catch(e){}
+        const ota=['airbnb','booking','vrbo'].includes(String(row.canal||''));
+        $("#fErr").innerHTML=`<div style="color:var(--ink,#222);background:rgba(201,162,39,.12);border:1px solid var(--gold,#C9A227);border-radius:8px;padding:10px 12px;font-size:13px;text-align:left">
+          <b>Changement d'annonce : ${esc(refName('bien',row.bien_id))} → ${esc(refName('bien',d.bien_id))}</b>
+          ${occupe?'<div style="color:#c0392b;margin-top:6px"><b>Attention : la nouvelle annonce a déjà une réservation sur ces dates.</b></div>':''}
+          <ul style="margin:8px 0 8px 18px;padding:0">
+            <li>La nouvelle annonce sera occupée à ces dates ; l'ancienne se libère dans My Hostaway.</li>
+            ${ota?'<li>Réservation venue de '+esc(row.canal)+' : l\'ancienne annonce reste bloquée sur la plateforme et le suivi automatique de cette réservation peut être perdu.</li>':''}
+            <li>Le prix et le détail financier ne changent pas ; les rapports passent sous la nouvelle annonce.</li>
+            <li>Les tâches non terminées liées à cette réservation basculent sur la nouvelle annonce.</li>
+          </ul>
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fChgOk" data-bien="${d.bien_id}"> Je confirme avoir lu et compris les implications</label></div>`;
+        return;
+      }
+      if(!ckChg.checked){toast("Coche la case de confirmation pour changer d'annonce");return;}
+      chgAnnonce=true;
+    }
     $("#fSave").disabled=true;
     let res;
     if(row.id) res=await sb.from(m.table).update(d).eq("id",row.id);
     else res=await sb.from(m.table).insert(d);
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
+    if(chgAnnonce){try{const rt=await sb.from('tache').update({bien_id:d.bien_id}).eq('reservation_id',row.id).in('statut',['a_faire','accepte','en_cours']);if(rt.error)toast('Réservation déplacée, mais tâches non basculées : '+rt.error.message);}catch(e){}invalidate('tache');}
     invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table);
     goRub(state.rub,state.sub);
   };
@@ -7062,10 +7100,12 @@ async function ficheReservation(id){
     <div class="f">
       <button class="btn o" onclick="fermer()">Fermer</button>
       <button class="btn o" onclick="fermer();genererContrat('${id}')">📄 Contrat</button>
+      ${(r.statut!=='annulee'&&r.statut!=='bloque')?'<button class="btn d" id="frCancel">Annuler la réservation</button>':''}
       <button class="btn o" id="frEdit">Modifier</button>
       <button class="btn g" onclick="fermer();payForm('${id}')">💳 Paiement</button>
     </div>`);
   {const be=document.getElementById("frEdit");if(be)be.onclick=()=>{fermer();openForm('reservations',r);};}
+  {const bc=document.getElementById("frCancel");if(bc)bc.onclick=()=>annulerReservation(id,()=>goRub(state.rub,state.sub));}
   /* Bouton Actualiser profil — appelle getReservation individuel via channel-bridge */
   const rpBtn=document.getElementById("refreshProfile");
   if(rpBtn&&r.source_id){
