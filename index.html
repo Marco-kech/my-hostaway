@@ -2791,12 +2791,12 @@ async function listesDisponibles(){
       if(v&&P.ville!==v)return false;
       if(eq&&!(Array.isArray(P.equipements)?P.equipements:[]).some(x=>String(x).toLowerCase().includes(eq)))return false;
       return true;});
+    const totaux=await Promise.all(libres.map(b=>calcPrixSaisonnier(b.id,a,d,n).catch(()=>0)));
     const lignes=[];
-    for(const b of libres){let total=0;try{total=await calcPrixSaisonnier(b.id,a,d,n);}catch(e){}
-      if(!total)total=Number(b.prix_nuit_base||0)*nuits;
-      const pn=total/nuits;
-      if((mn&&pn<mn)||(mx&&pn>mx))continue;
-      lignes.push({b,total,pn});}
+    libres.forEach((b,i)=>{const total=totaux[i]||Number(b.prix_nuit_base||0)*nuits;const pn=total/nuits;
+      if((mn&&pn<mn)||(mx&&pn>mx))return;
+      lignes.push({b,total,pn});});
+    lignes.sort((x,y)=>String(x.b.nom||'').localeCompare(String(y.b.nom||'')));
     out.innerHTML=lignes.length?`<table class="tbl" style="font-size:13px;margin-top:10px"><thead><tr><th>Annonce</th><th>Capacité</th><th>Prix / nuit</th><th>${nuits} nuit(s)</th><th></th></tr></thead><tbody>${lignes.map((l,i)=>`<tr><td><b>${esc(l.b.nom)}</b>${(l.b.parametres||{}).ville?'<br><span class="muted">'+esc(l.b.parametres.ville)+'</span>':''}</td><td>${l.b.capacite||'—'}</td><td>${money(Math.round(l.pn))}</td><td>${money(l.total)}</td><td><button class="btn g sm ld-add" data-i="${i}">Ajouter</button></td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:12px;margin-top:6px">Prix indicatif hors ménage et taxes. « Ajouter » ouvre une réservation directe au statut « demande ».</div>`:'<div class="empty" style="margin-top:10px">Aucune annonce libre avec ces critères.</div>';
     out.querySelectorAll('.ld-add').forEach(bt=>bt.onclick=()=>{const l=lignes[Number(bt.dataset.i)];fermer();openForm('reservations',{bien_id:l.b.id,arrivee:a,depart:d,nb_personnes:n||null,canal:'direct',statut:'demande',prix_total:l.total});});
   };
