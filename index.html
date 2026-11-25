@@ -1204,24 +1204,33 @@ async function renderInbox(){
   if(error){$("#content").innerHTML='<div class="panel"><div class="empty">Erreur : '+esc(error.message)+'</div></div>';return;}
   const resas=state.opts.reservation||[], voys=state.opts.voyageur||[];
   const findResa=id=>resas.find(x=>x.id===id), findVoy=id=>voys.find(x=>x.id===id);
+  /* Fiches d'arrivée (checklist) + fils archivés (réglage « inbox_archives » : clé du fil → date d'archivage) */
+  let fichesCk=[], arch={};
+  try{const [fq,aq]=await Promise.all([sb.from('checkin_online').select('reservation_id,statut'),reglGet('inbox_archives')]);fichesCk=(fq&&fq.data)||[];arch=(aq&&typeof aq==='object')?aq:{};}catch(e){}
   const nights=(a,d)=>(a&&d)?Math.max(0,Math.round((new Date(d)-new Date(a))/86400000)):0;
   const groups={};
   (msgs||[]).forEach(m=>{const key=m.reservation_id?('r:'+m.reservation_id):(m.voyageur_id?('v:'+m.voyageur_id):'autre');(groups[key]=groups[key]||[]).push(m);});
   const keys=Object.keys(groups).sort((a,b)=>{const la=groups[a][groups[a].length-1].cree_le||'',lb=groups[b][groups[b].length-1].cree_le||'';return lb.localeCompare(la);});
-  if(!state.inboxSel||!groups[state.inboxSel]) state.inboxSel=keys[0]||null;
+  const lastInOf=key=>groups[key].filter(m=>m.sens==='entrant').pop();
+  const lastOutOf=key=>groups[key].filter(m=>m.sens==='sortant').pop();
+  /* Un fil archivé revient tout seul dans la boîte si le voyageur réécrit après l'archivage */
+  const estArchive=key=>{const d=arch[key];if(!d)return false;const li=lastInOf(key);return !(li&&li.cree_le>d);};
+  const estNonLu=key=>{const li=lastInOf(key),lo=lastOutOf(key);return !!(li&&(!lo||lo.cree_le<li.cree_le));};
+  const filIbx=state.ibxFil||'';
+  const keysVis=keys.filter(key=>filIbx==='archive'?estArchive(key):(!estArchive(key)&&(filIbx!=='nonlu'||estNonLu(key))&&(filIbx!=='brouillon'||groups[key].some(m=>m.statut==='brouillon'))));
+  if(!state.inboxSel||!keysVis.includes(state.inboxSel)) state.inboxSel=keysVis[0]||null;
   const titleFor=key=>{if(key==='autre')return 'Sans réservation';if(key.startsWith('r:'))return refName('reservation',key.slice(2));if(key.startsWith('v:')){const v=findVoy(key.slice(2));return v?v.nom:'Voyageur';}return key;};
   /* Compteurs inbox enrichie */
   let totalNonLu=0, totalUrgent=0;
   const now=Date.now();
-  const list=keys.map(key=>{const arr=groups[key],last=arr[arr.length-1],on=key===state.inboxSel;
+  keys.filter(k=>!estArchive(k)).forEach(k=>{if(estNonLu(k)){totalNonLu++;if(now-new Date(lastInOf(k).cree_le).getTime()>24*3600000)totalUrgent++;}});
+  const list=keysVis.map(key=>{const arr=groups[key],last=arr[arr.length-1],on=key===state.inboxSel;
     /* Non lu = dernier message entrant sans réponse sortante après */
     const lastIn=arr.filter(m=>m.sens==='entrant').pop();
     const lastOut=arr.filter(m=>m.sens==='sortant').pop();
     const nonLu=lastIn&&(!lastOut||lastOut.cree_le<lastIn.cree_le);
-    if(nonLu)totalNonLu++;
     /* Urgent = entrant sans réponse depuis >24h */
     const urgent=nonLu&&lastIn&&(now-new Date(lastIn.cree_le).getTime()>24*3600000);
-    if(urgent)totalUrgent++;
     const badge=urgent?'<span style="background:#e74c3c;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px">URGENT</span>':(nonLu?'<span style="background:var(--dpm-or,#C9A227);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px">NEW</span>':'');
     return `<div class="ibx-item" data-key="${esc(key)}" style="padding:10px 12px;border-bottom:1px solid var(--line,#eee);cursor:pointer;${on?'background:rgba(201,162,74,.12)':''}${urgent?';border-left:3px solid #e74c3c':''}">
       <div style="display:flex;justify-content:space-between;gap:6px"><strong style="font-size:13px">${esc(titleFor(key))}${badge}</strong><span class="muted" style="font-size:11px">${fdate(last.cree_le)}</span></div>
@@ -1250,6 +1259,37 @@ async function renderInbox(){
         ${r.statut!=='annulee'?`<button class="btn d sm" id="ibxCancel" data-rid="${r.id}" style="margin-top:14px;width:100%">Annuler la réservation</button>`:''}</div>`;}
   } else if(sel&&sel.startsWith('v:')){const v=findVoy(sel.slice(2));
     if(v) resume=`<div style="padding:14px;font-size:13px"><div class="fsec">Voyageur</div><strong>${esc(v.nom)}</strong>${v.email?'<br><span class="muted">'+esc(v.email)+'</span>':''}${v.tel?'<br><span class="muted">'+esc(v.tel)+'</span>':''}${v.ville?'<br>'+esc(v.ville):''}${v.pays?' · '+esc(v.pays):''}</div>`;}
+  /* Barre latérale à onglets (comme l'original) : Réservation · Annonce · Notes */
+  let ibxBienId=null;
+  if(sel&&sel.startsWith('r:')){const r=findResa(sel.slice(2));if(r){
+    const b=(state.opts.bien||[]).find(x=>x.id===r.bien_id)||{}, P=b.parametres||{}, v=findVoy(r.voyageur_id);
+    ibxBienId=r.bien_id||null;
+    const tab=state.ibxTab||'resa';
+    const nbSej=v?resas.filter(x=>x.voyageur_id===v.id&&x.statut!=='annulee').length:0;
+    const fk=(fichesCk||[]).find(x=>x.reservation_id===r.id);
+    const extra=`<div style="padding:0 14px 14px;font-size:13px"><div class="fsec">Avant l'arrivée</div>
+      <div>${fk&&fk.statut==='rempli'?'✅':'⬜'} Fiche d'arrivée en ligne${fk?'':' <span class="muted">(pas de fiche)</span>'}</div>
+      <div>${r.contrat_signe?'✅':'⬜'} Contrat signé</div>
+      <div style="margin-top:6px"><span class="muted">Conditions d'annulation</span> ${pill(P.politique_annulation||'moderee')}</div>
+      ${nbSej>1?`<div style="margin-top:6px">🔁 Voyageur récurrent · ${nbSej} séjours</div>`:''}
+      <button class="btn o sm" id="ibxOpenResa" style="margin-top:10px;width:100%">Ouvrir la réservation</button></div>`;
+    const eq=Array.isArray(P.equipements)?P.equipements:[];
+    const auj=new Date().toISOString().slice(0,10);
+    const proch=resas.filter(x=>x.bien_id===r.bien_id&&x.statut!=='annulee'&&String(x.depart||'')>=auj).sort((a,c)=>String(a.arrivee).localeCompare(String(c.arrivee))).slice(0,6);
+    const annonce=`<div style="padding:14px;font-size:13px"><div class="fsec">Annonce</div><strong>${esc(b.nom||'—')}</strong>${b.adresse?'<br><span class="muted">'+esc(b.adresse)+'</span>':''}
+      <div style="margin-top:8px"><span class="muted">Arrivée / départ</span><br>${esc(P.heure_arrivee||'15:00')} / ${esc(P.heure_depart||'11:00')}</div>
+      <div class="fsec" style="margin-top:12px">Calendrier de l'annonce</div>${proch.map(x=>`<div style="margin:2px 0">${fdate(x.arrivee)} → ${fdate(x.depart)} ${pill(x.statut)}</div>`).join('')||'<div class="muted">Aucun séjour à venir.</div>'}
+      <div class="fsec" style="margin-top:12px">Équipements (${eq.length})</div>${eq.length?'<input id="ibxEqQ" placeholder="Rechercher un équipement…" style="width:100%;font-size:12px;margin-bottom:6px">':''}
+      <div>${eq.map(e=>`<span class="ibx-eq" title="Cliquer pour copier" style="display:inline-block;cursor:pointer;border:1px solid var(--line,#ddd);border-radius:999px;padding:2px 8px;margin:2px;font-size:12px">${esc(e)}</span>`).join('')||'<span class="muted">Aucun équipement renseigné.</span>'}</div>
+      <button class="btn o sm" id="ibxOpenBien" style="margin-top:10px;width:100%">🏠 Ouvrir l'annonce</button></div>`;
+    const notesInt=(arr||[]).filter(m=>m.canal==='interne');
+    const notes=`<div style="padding:14px;font-size:13px"><div class="fsec">Notes de la réservation</div><textarea id="ibxNR" rows="4" style="width:100%">${esc(r.notes||'')}</textarea>
+      <div class="fsec" style="margin-top:12px">Notes du voyageur</div>${v?`<textarea id="ibxNV" rows="4" style="width:100%">${esc(v.notes||'')}</textarea>`:'<div class="muted">Pas de voyageur lié.</div>'}
+      <button class="btn g sm" id="ibxNSave" data-rid="${r.id}" data-vid="${v?v.id:''}" style="margin-top:8px;width:100%">Enregistrer les notes</button>
+      <div class="fsec" style="margin-top:12px">Notes de la conversation</div>${notesInt.map(m=>`<div style="margin:4px 0;padding:6px 8px;background:rgba(0,0,0,.04);border-radius:8px">${esc(m.corps||'')}<div class="muted" style="font-size:10px">${fdate(m.cree_le)}</div></div>`).join('')||'<div class="muted">Aucune note interne. Utilise « 📝 Note » sous le fil.</div>'}</div>`;
+    const tb=(k,l)=>`<button class="btn o sm ibx-tab" data-tab="${k}" style="flex:1;font-size:11px;${tab===k?'font-weight:700;border-color:var(--gold)':''}">${l}</button>`;
+    resume=`<div style="display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line,#eee)">${tb('resa','Réservation')}${tb('annonce','Annonce')}${tb('notes','Notes')}</div>`+(tab==='annonce'?annonce:(tab==='notes'?notes:(resume+extra)));
+  }}
   const tplOpts=(modeles||[]).map((mo,i)=>`<option value="${i}">${esc(mo.nom)}</option>`).join("");
   const composer=sel?`<div style="border-top:1px solid var(--line,#eee);padding:8px 10px">
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
@@ -1275,14 +1315,31 @@ async function renderInbox(){
             <button class="btn o sm ibx-fil ${!state.ibxFil?'on':''}" data-fil="" style="font-size:11px;flex:1">Tous</button>
             <button class="btn o sm ibx-fil ${state.ibxFil==='nonlu'?'on':''}" data-fil="nonlu" style="font-size:11px;flex:1">Non lus</button>
             <button class="btn o sm ibx-fil ${state.ibxFil==='brouillon'?'on':''}" data-fil="brouillon" style="font-size:11px;flex:1">Brouillons</button>
+            <button class="btn o sm ibx-fil ${state.ibxFil==='archive'?'on':''}" data-fil="archive" style="font-size:11px;flex:1">Archivés</button>
           </div>
         </div>
         <div id="ibxListInner">${list}</div>
       </div>
-      <div style="display:flex;flex-direction:column;max-height:70vh"><div style="flex:1;overflow:auto;padding:12px">${thread}</div>${composer}</div>
+      <div style="display:flex;flex-direction:column;max-height:70vh">${sel?`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line,#eee)"><strong style="font-size:13px">${esc(titleFor(sel))}</strong><button class="btn o sm" id="ibxArch" style="margin-left:auto">${estArchive(sel)?'Désarchiver':'🗄 Archiver'}</button></div>`:''}<div style="flex:1;overflow:auto;padding:12px">${thread}</div>${composer}</div>
       <div style="border-left:1px solid var(--line,#eee);overflow:auto;max-height:70vh">${resume}</div></div></div>`;
   document.querySelectorAll('.ibx-item').forEach(el=>el.onclick=()=>{state.inboxSel=el.dataset.key;renderInbox();});
-  document.querySelectorAll('.ibx-fil').forEach(b=>b.onclick=()=>{state.ibxFil=b.dataset.fil||'';renderInbox();});
+  document.querySelectorAll('.ibx-fil').forEach(b=>{if(b.classList.contains('on')){b.style.fontWeight='700';b.style.borderColor='var(--gold)';}b.onclick=()=>{state.ibxFil=b.dataset.fil||'';renderInbox();};});
+  document.querySelectorAll('.ibx-tab').forEach(b=>b.onclick=()=>{state.ibxTab=b.dataset.tab;renderInbox();});
+  const ibxAr=document.getElementById('ibxArch');
+  if(ibxAr) ibxAr.onclick=async()=>{const a={...arch};const etait=estArchive(sel);if(etait)delete a[sel];else a[sel]=new Date().toISOString();ibxAr.disabled=true;const e=await reglSet('inbox_archives',a);if(e){toast('Erreur : '+e.message);ibxAr.disabled=false;return;}toast(etait?'Conversation remise dans la boîte':'Conversation archivée');renderInbox();};
+  const ibxOR=document.getElementById('ibxOpenResa'); if(ibxOR) ibxOR.onclick=()=>ficheReservation(sel.slice(2));
+  const ibxOB=document.getElementById('ibxOpenBien'); if(ibxOB) ibxOB.onclick=()=>{if(ibxBienId)ficheBien(ibxBienId);};
+  const ibxEq=document.getElementById('ibxEqQ'); if(ibxEq) ibxEq.oninput=()=>{const q=ibxEq.value.toLowerCase();document.querySelectorAll('.ibx-eq').forEach(el=>{el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'inline-block':'none';});};
+  document.querySelectorAll('.ibx-eq').forEach(el=>el.onclick=()=>{try{navigator.clipboard.writeText(el.textContent);toast('Copié : '+el.textContent);}catch(e){}});
+  const ibxNS=document.getElementById('ibxNSave');
+  if(ibxNS) ibxNS.onclick=async()=>{ibxNS.disabled=true;const rid=ibxNS.dataset.rid,vid=ibxNS.dataset.vid;
+    const nr=(document.getElementById('ibxNR').value||'').trim()||null;
+    const e1=(await sb.from('reservation').update({notes:nr}).eq('id',rid)).error;
+    let e2=null;const nvEl=document.getElementById('ibxNV');
+    if(!e1&&vid&&nvEl){const nv=(nvEl.value||'').trim()||null;e2=(await sb.from('voyageur').update({notes:nv}).eq('id',vid)).error;if(!e2){const vv=findVoy(vid);if(vv)vv.notes=nv;}}
+    ibxNS.disabled=false;
+    if(e1||e2){toast('Erreur : '+(e1||e2).message);return;}
+    const rr=findResa(rid);if(rr)rr.notes=nr;toast('Notes enregistrées');};
   const ibxS=document.getElementById('ibxSearch');
   if(ibxS){ibxS.value=state.ibxQ||'';ibxS.oninput=()=>{
     const q=(ibxS.value||'').toLowerCase();state.ibxQ=q;
