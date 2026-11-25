@@ -6317,18 +6317,35 @@ async function renderAutoMsg(){
   const planned=[];
   /* Les événements ci-dessous sont traités par la base : un brouillon se crée seul quand l'événement survient. */
   const EV_AUTO={reservation_attente:1,demande_invite:1,annulation:1,paiement_recu:1,fiche_soumise:1,avis_soumis:1,message_recu:1};
-  (modeles||[]).filter(mo=>!EV_AUTO[mo.evenement]&&mo.actif!==false).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
+  /* Réglage « dates automatiques » : la base prépare elle-même les brouillons à l'échéance (délai du modèle). */
+  const cfgAuto=await reglGet("auto_messages"); const autoDates=!!(cfgAuto&&cfgAuto.dates===true);
+  const modsDates=(modeles||[]).filter(mo=>!EV_AUTO[mo.evenement]&&mo.actif!==false);
+  (autoDates?[]:modsDates).forEach(mo=>{(resa||[]).forEach(r=>{const corps=sub(mo.corps,r);if(!seen.has(r.id+"|"+corps))planned.push({tenant_id:state.tenant.id,reservation_id:r.id,voyageur_id:r.voyageur_id,canal:mo.canal,sens:"sortant",corps,statut:"brouillon"});});});
   const EVL={avant_arrivee:"Avant l'arrivée",arrivee:"À l'arrivée",depart:"Au départ",apres_depart:"Après le départ",reservation:"À la réservation",reservation_attente:"Réservation en attente",demande_invite:"Demande de l'invité",annulation:"Annulation",paiement_recu:"Paiement réussi",fiche_soumise:"Fiche d'arrivée en ligne remplie",avis_soumis:"Avis déposé par le voyageur",message_recu:"Premier message reçu du voyageur"};
-  const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td><td>${EV_AUTO[mo.evenement]?'Brouillon créé seul à l\'événement':'Bouton « Préparer » ci-dessous'}</td></tr>`).join("");
+  const rulesRows=(modeles||[]).map(mo=>`<tr><td><b>${esc(mo.nom)}</b></td><td>${esc(EVL[mo.evenement]||mo.evenement)}</td><td>${pill(mo.canal)}</td><td>${mo.delai_h!=null?(mo.delai_h+' h'):'—'}</td><td>${EV_AUTO[mo.evenement]?'Brouillon créé seul à l\'événement':(autoDates?'Brouillon créé seul à la date prévue':'Bouton « Préparer » ci-dessous')}</td></tr>`).join("");
   $("#content").innerHTML=`<div id="pvPanel"></div>
     <div class="panel"><div class="phead"><h3>Règles de messages automatisés</h3><span class="sp"></span><span class="muted">${(modeles||[]).length} règle(s)</span></div>
       <div style="overflow:auto">${(modeles&&modeles.length)?`<table><thead><tr><th>Modèle</th><th>Événement</th><th>Canal</th><th>Délai</th><th>Préparation</th></tr></thead><tbody>${rulesRows}</tbody></table>`:'<div class="empty">Aucun modèle avec événement. Ajoutez-en dans « Modèles de message » en renseignant un événement.</div>'}</div></div>
     <div class="panel"><div class="phead"><h3>Programmer les messages</h3></div>
       <div style="padding:16px">
         <div class="phnote">Pour chaque règle et chaque réservation à venir (sans doublon), crée un message <b>brouillon</b> personnalisé (nom du voyageur, bien), visible dans <b>Conversations</b>. Rien n'est envoyé tout seul : tu relis puis tu envoies.</div>
-        <div style="margin-top:12px"><button class="btn g" id="pmBtn" ${planned.length?'':'disabled'}>${planned.length?('Préparer '+planned.length+' message(s)'):'Tout est à jour'}</button> <span class="ok" id="pmOk"></span></div>
+        <div style="margin-top:12px"><button class="btn g" id="pmBtn" ${planned.length?'':'disabled'}>${autoDates?'Préparation automatique activée':(planned.length?('Préparer '+planned.length+' message(s)'):'Tout est à jour')}</button> <span class="ok" id="pmOk"></span></div>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:16px;font-weight:500"><input type="checkbox" id="pmAuto" ${autoDates?'checked':''} style="width:auto;margin-top:3px"> <span>Préparer automatiquement les brouillons à la date prévue, selon le délai du modèle</span></label>
+        <div class="phnote" style="margin-top:8px">Une fois coché, le bouton ci-dessus ne sert plus : la base crée chaque brouillon à son échéance (vérification toutes les 15 minutes). Délai du modèle, en heures : « avant l'arrivée » = heures avant l'arrivée ; « après le départ » = heures après le départ ; « arrivée » et « départ » = heures après (valeur négative = avant) ; « réservation » = heures après la confirmation. Sans délai, le brouillon est créé au moment même. Toujours des brouillons : rien n'est envoyé tout seul.</div>
       </div></div>`;
   renderParcours();
+  const pa=$("#pmAuto"); if(pa) pa.onchange=async()=>{
+    pa.disabled=true;
+    if(pa.checked){
+      /* Signaler à la base les brouillons déjà préparés à la main, pour ne pas les refaire. */
+      const paires=[]; modsDates.forEach(mo=>{(resa||[]).forEach(r=>{if(seen.has(r.id+"|"+sub(mo.corps,r)))paires.push({m:mo.id,r:r.id});});});
+      const {error}=await sb.rpc("auto_message_marquer",{p_paires:paires});
+      if(error){pa.checked=false;pa.disabled=false;toast("Erreur : "+error.message);return;}
+    }
+    const e=await reglSet("auto_messages",{...(cfgAuto||{}),dates:pa.checked});
+    if(e){pa.checked=!pa.checked;pa.disabled=false;toast("Erreur : "+e.message);return;}
+    toast(pa.checked?"Préparation automatique activée":"Préparation automatique désactivée");renderAutoMsg();
+  };
   const pb=$("#pmBtn"); if(pb&&planned.length) pb.onclick=async()=>{pb.disabled=true;const {error}=await sb.from("message").insert(planned);pb.disabled=false;if(error){$("#pmOk").innerHTML='<span class="err">'+esc(error.message)+'</span>';return;}toast(planned.length+" message(s) préparés");renderAutoMsg();};
 }
 
