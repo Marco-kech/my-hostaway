@@ -917,7 +917,7 @@ const MODULES = {
   modeles:{title:"Modèles de message",add:"Nouveau modèle",table:"modele_message",
     cols:[["nom","Nom"],["canal","Canal",v=>pill(v)],["evenement","Événement"],["delai_h","Délai (h)"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom",{req:1}],["canal","Canal",{opts:["whatsapp","email","sms","airbnb","booking","interne"],def:"whatsapp"}],["sujet","Sujet",{}],
-      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation","reservation_attente","demande_invite","annulation","paiement_recu","fiche_soumise","avis_soumis","message_recu"]}],["delai_h","Délai après l'événement (heures)",{type:"number"}]]},
+      ["corps","Message",{long:1,req:1}],["evenement","Événement",{opts:["avant_arrivee","arrivee","depart","apres_depart","reservation","reservation_attente","demande_invite","annulation","paiement_recu","fiche_soumise","avis_soumis","message_recu"]}],["delai_h","Délai (heures)",{type:"number"}]]},
   proprietaires:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
