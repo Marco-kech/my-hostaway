@@ -818,7 +818,7 @@ const MODULES = {
       const nm=esc(voy.nom||'?');const em=voy.email?`<br><span class="muted" style="font-size:11px">📧 ${esc(voy.email)}</span>`:'';
       const ph=voy.tel?`<br><span class="muted" style="font-size:11px">📱 ${esc(voy.tel)}</span>`:'';
       return`<a href="#" onclick="event.preventDefault();event.stopPropagation();ficheVoyageur('${v}')" style="color:var(--dpm-vert);font-weight:600;text-decoration:none" title="Voir la fiche voyageur">${nm}</a>${em}${ph}`;}],
-      ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],
+      ["arrivee","Arrivée",v=>fdate(v)],["depart","Départ",v=>fdate(v)],["canal","Canal",v=>pill(v)],["unite_id","Unité",v=>v?refName("bien_unite",v):""],
       ["statut","Statut",v=>pill(v)],["prix_total","Total",(v,r)=>{
         const t=money(v);if(!v||!r)return t;
         const a=r.arrivee?new Date(r.arrivee):null,d=r.depart?new Date(r.depart):null;
@@ -828,6 +828,7 @@ const MODULES = {
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["voyageur_id","Voyageur",{ref:"voyageur"}],
       ["arrivee","Arrivée",{type:"date",req:1}],["depart","Départ",{type:"date",req:1}],
       ["nb_personnes","Personnes",{type:"number"}],["canal","Canal",{opts:["direct","airbnb","booking","vrbo","expedia","abritel","autre"],def:"direct"}],
+      ["unite_id","Unité / chambre",{ref:"bien_unite"}],
       ["reference_canal","Réf. canal",{}],["prix_total","Prix total",{type:"number"}],
       ["statut","Statut",{opts:["demande","en_attente","confirmee","annulee","terminee","no_show","sejour_proprietaire"],def:"confirmee"}],["raison_annulation","Raison d'annulation",{opts:["voyageur","hote","plateforme","double_reservation","autre"]}],
       ["__sCIO","Check-in / Check-out",{section:1}],
@@ -1084,6 +1085,7 @@ const RUBRIQUES=[
     ["aso","Score ASO",{scoreaso:1}],
     ["grp","Groupes d'annonces",{grpannonces:1}],
     ["dup","Dupliquer une annonce",{dupannonce:1}],
+    ["mu","Multi-unités / Chambres",{multiunites:1}],
     ["ordre","Ordre des annonces",{ordreannonces:1}],
     ["masse","Édition en masse",{editmasse:1}],
     ["import","Importer (CSV)",{importbiens:1}]]},
@@ -1783,6 +1785,7 @@ function goRub(rk,sk){
   if(t.depfiltre)return renderDepenses(t.depfiltre);
   if(t.ordreannonces)return renderOrdreAnnonces();
   if(t.dupannonce)return renderDupliquerAnnonce();
+  if(t.multiunites)return renderMultiUnites();
   if(t.photogalerie)return renderPhotosGalerie();
   if(t.pjannonce)return renderPiecesJointesAnnonce();
   if(t.statsbien)return renderStatsBien();
@@ -2056,6 +2059,95 @@ async function renderPlansTarifBooking(){
     const e=await reglSet("plans_booking_"+sel,{plans});
     if(e){document.getElementById('ptOk').innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     document.getElementById('ptOk').textContent='Enregistré ✓';toast('Plans tarifaires enregistrés');
+  };
+}
+
+/* ---- Multi-unités / Chambres ---- */
+async function renderMultiUnites(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const sel=state.muBien||"";
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Multi-unités / Chambres</h3><span class="sp"></span>
+    <select id="muBien" style="max-width:220px"><option value="">— Choisir un bien —</option>${biens.map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(b.nom)}${b.nb_unites?' ('+b.nb_unites+' ch.)':''}</option>`).join('')}</select></div>
+    <div style="padding:16px">
+      <p class="muted" style="margin-bottom:12px">Un bien multi-unités (riad, appart-hôtel) est composé de chambres réservables individuellement. Chaque chambre peut avoir son propre tarif. Les réservations sont attribuées automatiquement à une chambre libre.</p>
+      <div id="muContent">${sel?'<div class="center"><span class="spin"></span></div>':'<p class="muted">Sélectionnez un bien.</p>'}</div>
+    </div></div>`;
+  document.getElementById('muBien').onchange=e=>{state.muBien=e.target.value;renderMultiUnites();};
+  if(!sel)return;
+  const mc=document.getElementById('muContent');
+  const [{data:unites,error:eu},{data:resas}]=await Promise.all([
+    sb.from('bien_unite').select('*').eq('bien_id',sel).order('ordre'),
+    sb.from('reservation').select('id,arrivee,depart,statut,unite_id,voyageur_id').eq('bien_id',sel).neq('statut','annulee').gte('depart',new Date().toISOString().slice(0,10)).order('arrivee').limit(50)
+  ]);
+  if(eu){mc.innerHTML='<p class="err">'+esc(eu.message)+'</p><p class="muted">Si vous voyez cette erreur, le SQL de création des tables multi-unités n\'a peut-être pas encore été exécuté.<br>Allez dans Supabase > Éditeur SQL et exécutez le fichier <code>sql/270_multi_unites.sql</code>.</p>';return;}
+  const list=unites||[];
+  const rows=list.map((u,i)=>`<tr data-uid="${u.id}">
+    <td style="font-weight:600">${i+1}</td>
+    <td><input class="mu-nom" value="${esc(u.nom)}" style="width:140px"></td>
+    <td><input class="mu-prix" type="number" value="${u.prix_nuit||''}" style="width:80px" placeholder="Tarif parent"></td>
+    <td>${pill(u.actif?'actif':'inactif')}</td>
+    <td>${(resas||[]).filter(r=>r.unite_id===u.id).length}</td>
+    <td><button class="btn o sm mu-toggle" data-uid="${u.id}" data-actif="${u.actif}">${u.actif?'Désactiver':'Activer'}</button>
+        <button class="btn d sm mu-del" data-uid="${u.id}">🗑</button></td></tr>`).join('');
+  const unassigned=(resas||[]).filter(r=>!r.unite_id);
+  mc.innerHTML=`<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+    <button class="btn g" id="muAdd">+ Ajouter une chambre</button>
+    <button class="btn o" id="muConvert">${list.length?'Modifier le nombre':'Convertir en multi-unité'}</button>
+    <span class="muted">${list.length} chambre(s) · ${(resas||[]).length} réservation(s) à venir</span></div>
+    ${list.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>#</th><th>Nom</th><th>Prix/nuit</th><th>Statut</th><th>Résas</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:8px"><button class="btn g" id="muSaveAll">💾 Enregistrer</button> <span class="ok" id="muOk"></span></div>`:''}
+    ${unassigned.length?`<div class="phnote" style="margin-top:12px">⚠️ ${unassigned.length} réservation(s) sans chambre attribuée. <button class="btn o sm" id="muAutoAssign">Attribuer automatiquement</button></div>`:''}`;
+  document.getElementById('muAdd').onclick=async()=>{
+    const nom=prompt('Nom de la chambre :','Chambre '+(list.length+1));if(!nom)return;
+    const prix=prompt('Prix par nuit (vide = tarif du bien parent) :','');
+    const {error}=await sb.from('bien_unite').insert({tenant_id:state.tenant.id,bien_id:sel,nom,ordre:list.length,prix_nuit:prix?Number(prix):null});
+    if(error){toast('Erreur : '+error.message);return;}
+    await sb.from('bien').update({nb_unites:(list.length+1),type_unite:'parent'}).eq('id',sel);invalidate('bien');
+    toast('Chambre ajoutée');renderMultiUnites();
+  };
+  document.getElementById('muConvert').onclick=async()=>{
+    const n=Number(prompt('Nombre total de chambres :',String(list.length||3)));
+    if(!n||n<1)return;
+    if(n>list.length){
+      const toAdd=[];for(let i=list.length;i<n;i++)toAdd.push({tenant_id:state.tenant.id,bien_id:sel,nom:'Chambre '+(i+1),ordre:i});
+      await sb.from('bien_unite').insert(toAdd);
+    } else if(n<list.length){
+      for(const u of list.slice(n)){
+        if((resas||[]).some(r=>r.unite_id===u.id)){toast(u.nom+' a des résas');continue;}
+        await sb.from('bien_unite').delete().eq('id',u.id);}
+    }
+    await sb.from('bien').update({nb_unites:n,type_unite:n>1?'parent':'simple'}).eq('id',sel);invalidate('bien');
+    toast(n+' chambre(s)');renderMultiUnites();
+  };
+  const saveAll=document.getElementById('muSaveAll');
+  if(saveAll) saveAll.onclick=async()=>{
+    saveAll.disabled=true;
+    const trs=[...document.querySelectorAll('tr[data-uid]')];
+    for(const tr of trs){
+      const uid=tr.dataset.uid,nom=tr.querySelector('.mu-nom').value.trim(),pv=tr.querySelector('.mu-prix').value;
+      await sb.from('bien_unite').update({nom,prix_nuit:pv?Number(pv):null}).eq('id',uid);
+    }
+    saveAll.disabled=false;document.getElementById('muOk').textContent='✅';toast('Enregistré');
+  };
+  document.querySelectorAll('.mu-toggle').forEach(b=>b.onclick=async()=>{
+    await sb.from('bien_unite').update({actif:b.dataset.actif!=='true'}).eq('id',b.dataset.uid);toast('Statut modifié');renderMultiUnites();
+  });
+  document.querySelectorAll('.mu-del').forEach(b=>b.onclick=async()=>{
+    if(!confirm('Supprimer cette chambre ?'))return;
+    if((resas||[]).some(r=>r.unite_id===b.dataset.uid)){toast('Impossible : réservation(s) attribuées');return;}
+    await sb.from('bien_unite').delete().eq('id',b.dataset.uid);
+    await sb.from('bien').update({nb_unites:Math.max(0,list.length-1)}).eq('id',sel);invalidate('bien');
+    toast('Supprimée');renderMultiUnites();
+  });
+  const aa=document.getElementById('muAutoAssign');
+  if(aa) aa.onclick=async()=>{
+    aa.disabled=true;let n=0;
+    for(const r of unassigned){
+      const {data:uid}=await sb.rpc('attribuer_unite',{p_bien_id:sel,p_arrivee:r.arrivee,p_depart:r.depart});
+      if(uid){await sb.from('reservation').update({unite_id:uid}).eq('id',r.id);n++;}
+    }
+    aa.disabled=false;toast(n+' attribuée(s)');renderMultiUnites();
   };
 }
 
@@ -2501,6 +2593,12 @@ async function openForm(k,row){
     $("#fSave").disabled=false;
     if(res.error){$("#fErr").textContent=res.error.message;return;}
     if(chgAnnonce){try{const rt=await sb.from('tache').update({bien_id:d.bien_id}).eq('reservation_id',row.id).in('statut',['a_faire','accepte','en_cours']);if(rt.error)toast('Réservation déplacée, mais tâches non basculées : '+rt.error.message);}catch(e){}invalidate('tache');}
+    /* Multi-unités : attribution automatique à la création */
+    if(m.table==='reservation'&&!row.id&&d.bien_id&&!d.unite_id){
+      try{const {data:uid}=await sb.rpc('attribuer_unite',{p_bien_id:d.bien_id,p_arrivee:d.arrivee,p_depart:d.depart});
+        if(uid){const rid=Array.isArray(res.data)?res.data[0]?.id:res.data?.id;
+          if(rid){await sb.from('reservation').update({unite_id:uid}).eq('id',rid);toast('Chambre attribuée : '+uid.slice(0,8));}}}catch(e){}
+    }
     invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table);
     /* Détection d'écart : avertir si le montant payé dépasse le prix total après modification */
     if(m.table==='reservation'&&res.data){
