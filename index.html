@@ -2879,9 +2879,13 @@ async function renderCalendar(){
     const date=new Date(y,mo,d),iso=date.toISOString().slice(0,10);
     const evs=(resa||[]).filter(r=>iso>=r.arrivee&&iso<r.depart).map(r=>{
       const isConfirm=r.statut==='confirmee'||r.statut==='terminee';
-      const cls=isConfirm?'ev':'ev dem';
-      const prefix=isConfirm?'':'⏳ ';
-      return `<div class="${cls}">${prefix}${esc(refName("bien",r.bien_id))}</div>`;
+      const isProp=r.statut==='sejour_proprietaire';
+      const isDemande=r.statut==='demande'||r.statut==='en_attente';
+      const bg=isProp?'#3498db':isDemande?'#f1c40f':isConfirm?'var(--gold,#C9A227)':'#95a5a6';
+      const prefix=isProp?'🏠 ':isDemande?'⏳ ':'';
+      const prix=(state.calShowPrix&&r.prix_total)?` · ${money(r.prix_total)}`:'';
+      const note=(state.calShowNotes&&r.notes)?` · <span class="muted" style="font-size:10px">${esc(r.notes.slice(0,30))}</span>`:'';
+      return `<div class="ev" style="background:${bg}20;border-left:3px solid ${bg};padding:1px 4px">${prefix}${esc(refName("bien",r.bien_id))}${prix}${note}</div>`;
     }).join("");
     const bl=(blos||[]).filter(b=>iso>=b.debut&&iso<b.fin);
     const blHtml=bl.map(b=>`<div class="ev b" data-unblock="${b.id}" style="cursor:pointer" title="Cliquer pour débloquer">🔒 ${esc(refName("bien",b.bien_id)||'Bloqué')}</div>`).join("");
@@ -5202,7 +5206,10 @@ async function renderEditMasse(){
       return `<td><input data-em="${c.k}" type="${c.type||'text'}" value="${v}" style="width:80px"></td>`;
     }).join('')}
     <td><button class="btn sm" data-emsave="${b.id}">💾</button></td></tr>`).join('');
-  $("#content").innerHTML=`<div class="phnote" style="margin-bottom:12px">Modifiez les valeurs directement dans le tableau et cliquez 💾 pour sauvegarder chaque ligne, ou <b>Tout enregistrer</b> pour sauvegarder toutes les lignes modifiées.</div>
+  $("#content").innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+    <select id="emCopySrc"><option value="">— Copier depuis —</option>${biens.map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join('')}</select>
+    <button class="btn o" id="emCopy">📋 Copier les paramètres vers…</button></div>
+    <div class="phnote" style="margin-bottom:12px">Modifiez les valeurs directement dans le tableau et cliquez 💾 pour sauvegarder chaque ligne, ou <b>Tout enregistrer</b> pour sauvegarder toutes les lignes modifiées.</div>
     <div style="overflow:auto"><table class="tbl" style="font-size:12px"><thead>${hdr}</thead><tbody>${rows}</tbody></table></div>
     <div style="margin-top:12px"><button class="btn g" id="emSaveAll">💾 Tout enregistrer</button> <span id="emStatus" class="muted"></span></div>`;
   const saveRow=async(bid)=>{
@@ -5221,7 +5228,52 @@ async function renderEditMasse(){
     const st=document.getElementById("emStatus");st.textContent="Enregistrement...";
     let ok=0;
     for(const b of biens){if(await saveRow(b.id))ok++;}
-    st.textContent=`✅ ${ok} bien(s) mis à jour`;await loadOpts("bien",true);
+    st.textContent=`✅ ${ok} bien(s) mis à jour`;invalidate("bien");
+  };
+  /* Copier les paramètres d'une annonce vers d'autres (comme l'original) */
+  const copyEl=document.getElementById("emCopy");
+  if(copyEl) copyEl.onclick=()=>{
+    const src=document.getElementById("emCopySrc").value;
+    if(!src){toast("Choisis une annonce source");return;}
+    const b=biens.find(x=>x.id===src);if(!b)return;
+    const P=b.parametres||{};
+    const sections=[
+      {k:"prix",label:"Prix & Frais",fields:["prix_nuit_base","frais_menage","taxe_sejour_nuit","commission_canal_pct","caution","prix_personne_supp","remise_hebdo","remise_mensuelle"]},
+      {k:"politique",label:"Politique d'annulation",fields:["politique_annulation"]},
+      {k:"heures",label:"Heures check-in/out",fields:["heure_arrivee","heure_depart"]},
+      {k:"equipements",label:"Équipements",fields:["equipements"]},
+      {k:"majoration",label:"Majorations par canal",fields:["majoration_canaux"]},
+    ];
+    const cibles=biens.filter(x=>x.id!==src);
+    ouvrir(`<div class="h"><h3>Copier depuis : ${esc(b.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted" style="margin-bottom:10px">Cochez ce que vous voulez copier et vers quels biens.</p>
+      <div class="fsec">Sections à copier</div>
+      ${sections.map(sec=>`<label style="display:block;margin:4px 0"><input type="checkbox" class="emSec" data-k="${sec.k}" checked> ${sec.label}</label>`).join('')}
+      <div class="fsec" style="margin-top:12px">Annonces cibles</div>
+      ${cibles.map(c=>`<label style="display:block;margin:4px 0"><input type="checkbox" class="emTgt" value="${c.id}"> ${esc(c.nom)}</label>`).join('')}
+      <div class="err" id="emCopyErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="emCopyGo">Appliquer</button></div>`);
+    document.getElementById("emCopyGo").onclick=async()=>{
+      const secs=[...document.querySelectorAll('.emSec:checked')].map(c=>c.dataset.k);
+      const tgts=[...document.querySelectorAll('.emTgt:checked')].map(c=>c.value);
+      if(!secs.length||!tgts.length){document.getElementById("emCopyErr").textContent="Coche au moins une section et une annonce.";return;}
+      document.getElementById("emCopyGo").disabled=true;
+      let n=0;
+      for(const tid of tgts){
+        const tgt=biens.find(x=>x.id===tid);if(!tgt)continue;
+        const d={};const tp={...(tgt.parametres||{})};
+        for(const sec of secs){
+          for(const f of sections.find(x=>x.k===sec).fields){
+            if(P[f]!==undefined)tp[f]=P[f]; else if(b[f]!==undefined)d[f]=b[f];
+          }
+        }
+        d.parametres=tp;
+        const{error}=await sb.from("bien").update(d).eq("id",tid);
+        if(!error)n++;
+      }
+      document.getElementById("emCopyGo").disabled=false;
+      fermer();invalidate("bien");toast(`✅ Paramètres copiés vers ${n} annonce(s)`);renderEditMasse();
+    };
   };
 }
 
