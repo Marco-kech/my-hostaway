@@ -1022,10 +1022,13 @@ const RUBRIQUES=[
   {k:"annonces",label:"Annonces",icon:"⌂",subs:[
     ["liste","Liste",{m:"biens"}],
     ["photos","Photos",{photogalerie:1}],
+    ["pj","Pièces jointes",{pjannonce:1}],
     ["stats","Statistiques par bien",{statsbien:1}],
     ["cp","Champs personnalisés",{champperso:"bien"}],
     ["aso","Score ASO",{scoreaso:1}],
     ["grp","Groupes d'annonces",{grpannonces:1}],
+    ["dup","Dupliquer une annonce",{dupannonce:1}],
+    ["ordre","Ordre des annonces",{ordreannonces:1}],
     ["masse","Édition en masse",{editmasse:1}],
     ["import","Importer (CSV)",{importbiens:1}]]},
   {k:"taches",label:"Tâches",icon:"✓",subs:[
@@ -1665,6 +1668,7 @@ function goRub(rk,sk){
   if(t.autotaches)return renderTachesAuto();
   if(t.tachesarch)return renderTachesArch();
   if(t.iaconfig)return renderIaConfig();
+  if(t.escalades)return renderEscaladesIA();
   if(t.autosmsg)return renderAutoMsg();
   if(t.catdep)return renderCatDep();
   if(t.releves)return renderReleves();
@@ -1707,7 +1711,10 @@ function goRub(rk,sk){
   if(t.inbox)return renderInbox();
   if(t.docmodeles)return renderDocModeles();
   if(t.depfiltre)return renderDepenses(t.depfiltre);
+  if(t.ordreannonces)return renderOrdreAnnonces();
+  if(t.dupannonce)return renderDupliquerAnnonce();
   if(t.photogalerie)return renderPhotosGalerie();
+  if(t.pjannonce)return renderPiecesJointesAnnonce();
   if(t.statsbien)return renderStatsBien();
   if(t.scoreaso)return renderScoreASO();
   if(t.cgoptions)return renderCgOptions();
@@ -1804,6 +1811,132 @@ async function suppPhoto(id){
   if(!confirm("Supprimer cette photo ?"))return;
   await sb.from("bien_photo").delete().eq("id",id);
   invalidate("bien_photo");renderPhotosGalerie();toast("Photo supprimée");
+}
+
+/* ---- Pièces jointes par annonce ---- */
+async function renderPiecesJointesAnnonce(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const sel=state.pjBien||"";
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Pièces jointes par annonce</h3><span class="sp"></span><span class="muted">Documents privés ou partagés au voyageur</span></div><div style="padding:16px">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <select id="pjBien" style="min-width:200px"><option value="">— Choisir un bien —</option>${biens.map(b=>`<option value="${b.id}" ${b.id===sel?"selected":""}>${esc(b.nom)}</option>`).join("")}</select>
+      <button class="btn" id="pjUpBtn" style="font-size:13px" disabled>📤 Ajouter un document</button>
+      <input type="file" id="pjFileIn" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif" style="display:none">
+    </div><div id="pjGrid"></div></div></div>`;
+  const bienSel=$("#pjBien"),upBtn=$("#pjUpBtn"),fileIn=$("#pjFileIn"),grid=$("#pjGrid");
+  async function loadPJ(){
+    grid.innerHTML="";const bid=bienSel.value;if(!bid){grid.innerHTML='<p class="muted">Sélectionnez un bien.</p>';upBtn.disabled=true;return;}
+    upBtn.disabled=false;state.pjBien=bid;
+    const cfg=await reglGet("pj_"+bid);const docs=(cfg&&Array.isArray(cfg.docs))?cfg.docs:[];
+    if(!docs.length){grid.innerHTML='<p class="muted">Aucun document.</p>';return;}
+    grid.innerHTML=`<table class="tbl" style="font-size:13px"><thead><tr><th>Nom</th><th>Public</th><th></th></tr></thead><tbody>${docs.map((d,i)=>`<tr>
+      <td><a href="${esc(d.url)}" target="_blank">${esc(d.nom)}</a></td>
+      <td><input type="checkbox" data-i="${i}" class="pjPub" ${d.public?"checked":""}> <span class="muted" style="font-size:11px">visible dans le portail si payé</span></td>
+      <td><button class="btn d sm pjDel" data-i="${i}">🗑</button></td></tr>`).join('')}</tbody></table>`;
+    grid.querySelectorAll('.pjPub').forEach(cb=>cb.onchange=async()=>{docs[Number(cb.dataset.i)].public=cb.checked;await reglSet("pj_"+bid,{docs});toast("Visibilité mise à jour");});
+    grid.querySelectorAll('.pjDel').forEach(bt=>bt.onclick=async()=>{if(!confirm("Supprimer ce document ?"))return;docs.splice(Number(bt.dataset.i),1);await reglSet("pj_"+bid,{docs});loadPJ();toast("Document supprimé");});
+  }
+  bienSel.onchange=loadPJ;upBtn.onclick=()=>fileIn.click();
+  fileIn.onchange=async()=>{const bid=bienSel.value;if(!bid)return;const file=fileIn.files[0];if(!file)return;
+    upBtn.disabled=true;upBtn.textContent="⏳ Upload…";
+    const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=state.tenant.id+'/pj/'+bid+'/'+Date.now()+'_'+safe;
+    const up=await sb.storage.from('uploads').upload(path,file,{upsert:true});
+    if(up.error){toast('Erreur: '+up.error.message);upBtn.disabled=false;upBtn.textContent="📤 Ajouter un document";return;}
+    const url=sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
+    const cfg=await reglGet("pj_"+bid);const docs=(cfg&&Array.isArray(cfg.docs))?cfg.docs:[];
+    docs.push({nom:file.name,url,public:false});await reglSet("pj_"+bid,{docs});
+    upBtn.disabled=false;upBtn.textContent="📤 Ajouter un document";fileIn.value="";loadPJ();toast("Document ajouté");};
+  if(sel)loadPJ();
+}
+
+/* ---- Ordre des annonces (drag & drop) ---- */
+async function renderOrdreAnnonces(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const cfg=await reglGet("ordre_annonces");const ordreIds=(cfg&&Array.isArray(cfg.ids))?cfg.ids:[];
+  const sorted=[...biens].sort((a,b)=>{const ia=ordreIds.indexOf(a.id),ib=ordreIds.indexOf(b.id);if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;return String(a.nom||'').localeCompare(String(b.nom||''));});
+  const list=sorted.map((b,i)=>`<div class="card ord-item" draggable="true" data-id="${b.id}" style="cursor:grab;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:4px">
+    <span style="font-size:16px;cursor:grab">≡</span><span style="font-weight:600">${i+1}.</span> ${esc(b.nom)} <span class="muted" style="margin-left:auto">${esc((b.parametres||{}).ville||'')}</span></div>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Ordre des annonces</h3><span class="sp"></span><button class="btn g" id="ordSave">Enregistrer l'ordre</button></div>
+    <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Glissez-déposez pour réorganiser.</p><div id="ordList">${list}</div></div></div>`;
+  const container=document.getElementById('ordList');let dragEl=null;
+  container.querySelectorAll('.ord-item').forEach(el=>{
+    el.addEventListener('dragstart',e=>{dragEl=el;el.style.opacity='0.4';e.dataTransfer.effectAllowed='move';});
+    el.addEventListener('dragend',()=>{if(dragEl)dragEl.style.opacity='1';dragEl=null;});
+    el.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';});
+    el.addEventListener('drop',e=>{e.preventDefault();if(!dragEl||dragEl===el)return;const rect=el.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;container.insertBefore(dragEl,after?el.nextSibling:el);dragEl.style.opacity='1';
+      [...container.querySelectorAll('.ord-item')].forEach((c,i)=>{c.querySelector('span:nth-child(2)').textContent=(i+1)+'.';});});});
+  document.getElementById('ordSave').onclick=async()=>{
+    const ids=[...container.querySelectorAll('.ord-item')].map(el=>el.dataset.id);
+    const e=await reglSet("ordre_annonces",{ids});if(e){toast("Erreur : "+e.message);return;}toast("Ordre enregistré ✓");};
+}
+
+/* ---- Dupliquer une annonce ---- */
+async function renderDupliquerAnnonce(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");const sel=state.dupBienId||"";
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Dupliquer une annonce</h3></div>
+    <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Crée une copie (statut brouillon) avec tous les paramètres sauf les photos et les réservations.</p>
+      <div class="field"><label>Annonce à dupliquer</label><select id="dupSel"><option value="">— Choisir —</option>${biens.map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(b.nom)}</option>`).join('')}</select></div>
+      <button class="btn g" id="dupGo" style="margin-top:10px">📋 Dupliquer</button> <span id="dupOk" class="ok"></span></div></div>`;
+  document.getElementById('dupGo').onclick=async()=>{
+    const bid=document.getElementById('dupSel').value;if(!bid){toast("Choisis une annonce");return;}state.dupBienId=bid;
+    const b=biens.find(x=>x.id===bid);if(!b){toast("Introuvable");return;}
+    document.getElementById('dupGo').disabled=true;
+    const dup={...b};delete dup.id;delete dup.cree_le;delete dup.maj_le;delete dup.source_id;delete dup.donnees_source;dup.nom=(b.nom||'')+' (copie)';dup.statut='brouillon';
+    const {data:nd,error}=await sb.from("bien").insert(dup).select().single();
+    document.getElementById('dupGo').disabled=false;
+    if(error){toast("Erreur: "+error.message);return;}invalidate('bien');
+    document.getElementById('dupOk').textContent="✅ Annonce dupliquée : "+(nd.nom||'');toast("Annonce dupliquée");};
+}
+
+/* ---- Règles IA nommées et escalades ---- */
+async function renderEscaladesIA(){
+  $("#topAdd").hidden=true;
+  const cfg=await reglGet("ia_regles");const regles=(cfg&&Array.isArray(cfg.regles))?cfg.regles:[];
+  const esc_cfg=await reglGet("ia_escalades");const escCfg=esc_cfg||{actif:false,sentiment:true,mots_cles:'',notifier_email:'',delai_humain:5};
+  function renderList(){
+    const rows=regles.map((r,i)=>`<tr><td><b>${esc(r.nom||'')}</b></td><td>${esc(r.sujet||'—')}</td><td>${pill(r.mode||'brouillon')}</td><td>${pill(r.actif!==false?'actif':'inactif')}</td>
+      <td><button class="btn o sm esc-edit" data-i="${i}">✏️</button> <button class="btn d sm esc-del" data-i="${i}">🗑</button></td></tr>`).join('');
+    document.getElementById('escList').innerHTML=regles.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Nom</th><th>Sujet</th><th>Mode</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<p class="muted">Aucune règle IA.</p>';
+    document.querySelectorAll('.esc-edit').forEach(b=>b.onclick=()=>editRegle(Number(b.dataset.i)));
+    document.querySelectorAll('.esc-del').forEach(b=>b.onclick=async()=>{if(!confirm('Supprimer cette règle ?'))return;regles.splice(Number(b.dataset.i),1);await reglSet("ia_regles",{regles});renderList();toast('Règle supprimée');});
+  }
+  function editRegle(idx){
+    const r=idx>=0?regles[idx]:{nom:'',sujet:'',texte:'',mode:'brouillon',annonces:[],actif:true};const biens=state.opts.bien||[];
+    ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Nouvelle'} règle IA</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><div class="field"><label>Nom *</label><input id="erNom" value="${esc(r.nom)}"></div>
+        <div class="field"><label>Sujet (thème)</label><input id="erSujet" value="${esc(r.sujet||'')}"></div>
+        <div class="field"><label>Instructions pour l'IA</label><textarea id="erTxt" rows="4">${esc(r.texte||'')}</textarea></div>
+        <div class="row2"><div class="field"><label>Mode</label><select id="erMode"><option ${r.mode==='brouillon'?'selected':''}>brouillon</option><option ${r.mode==='auto'?'selected':''}>auto</option></select></div>
+          <div class="field"><label>Statut</label><select id="erActif"><option value="true" ${r.actif!==false?'selected':''}>Actif</option><option value="false" ${r.actif===false?'selected':''}>Inactif</option></select></div></div>
+        <div class="field"><label>Annonces (vide = toutes)</label><div class="chk">${biens.map(b=>`<label><input type="checkbox" class="erAnn" value="${b.id}" ${(r.annonces||[]).includes(b.id)?'checked':''}>${esc(b.nom)}</label>`).join('')}</div></div>
+        <div class="err" id="erErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="erSave">Enregistrer</button></div>`);
+    document.getElementById('erSave').onclick=async()=>{
+      const nom=document.getElementById('erNom').value.trim();if(!nom){document.getElementById('erErr').textContent='Nom obligatoire';return;}
+      const nr={nom,sujet:document.getElementById('erSujet').value.trim(),texte:document.getElementById('erTxt').value.trim(),mode:document.getElementById('erMode').value,actif:document.getElementById('erActif').value==='true',annonces:[...document.querySelectorAll('.erAnn:checked')].map(c=>c.value)};
+      if(idx>=0)regles[idx]=nr;else regles.push(nr);
+      await reglSet("ia_regles",{regles});fermer();renderList();toast('Règle enregistrée');};
+  }
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Règles IA</h3><span class="sp"></span><button class="btn g" id="escAdd">+ Ajouter</button></div>
+    <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Chaque règle donne des instructions spécifiques à l'IA pour un sujet. Mode « brouillon » = à relire. Mode « auto » = envoyé directement (si le réglage global l'autorise).</p>
+    <div id="escList"></div></div></div>
+    <div class="panel"><div class="phead"><h3>Escalades</h3></div>
+    <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Quand l'IA détecte un sentiment négatif ou un mot-clé sensible, la conversation est signalée pour intervention humaine.</p>
+      <div class="field"><label><input type="checkbox" id="escActif" ${escCfg.actif?'checked':''}> Activer les escalades automatiques</label></div>
+      <div class="field"><label><input type="checkbox" id="escSent" ${escCfg.sentiment!==false?'checked':''}> Détecter le sentiment négatif (plainte, colère, menace)</label></div>
+      <div class="field"><label>Mots-clés d'escalade (virgules)</label><input id="escMots" value="${esc(escCfg.mots_cles||'')}"></div>
+      <div class="field"><label>Délai avant réponse humaine (min)</label><input type="number" id="escDelai" value="${escCfg.delai_humain||5}" min="0"></div>
+      <div class="field"><label>E-mail de notification</label><input id="escEmail" value="${esc(escCfg.notifier_email||'')}"></div>
+      <div style="margin-top:12px"><button class="btn g" id="escSave">Enregistrer</button> <span class="ok" id="escOk"></span></div></div></div>`;
+  renderList();
+  document.getElementById('escAdd').onclick=()=>editRegle(-1);
+  document.getElementById('escSave').onclick=async()=>{
+    const val={actif:document.getElementById('escActif').checked,sentiment:document.getElementById('escSent').checked,mots_cles:document.getElementById('escMots').value.trim(),delai_humain:Number(document.getElementById('escDelai').value||5),notifier_email:document.getElementById('escEmail').value.trim()};
+    const e=await reglSet("ia_escalades",val);if(e){document.getElementById('escOk').innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    document.getElementById('escOk').textContent="Enregistré ✓";toast("Escalades enregistrées");};
 }
 
 function renderPlaceholder(rubLabel,subLabel,desc){
