@@ -97,8 +97,12 @@
         nuits_min: 1
       };
     } else {
-      // Edge Function mode
-      const resp = await fetch(`${EDGE_FN_URL}?bien_id=${bienId}&months=3`);
+      // RPC mode (via Supabase function)
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/calendar_public`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        body: JSON.stringify({ p_bien_id: bienId, p_months: 3 })
+      });
       if (!resp.ok) throw new Error('Erreur calendrier');
       return await resp.json();
     }

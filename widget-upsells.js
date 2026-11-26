@@ -15,8 +15,8 @@
   'use strict';
 
   const SUPABASE_URL = 'https://eztwwzzjzwmhfzmcafyu.supabase.co';
-  const EDGE_FN_URL = SUPABASE_URL + '/functions/v1/upsells-public';
-  const ORDER_FN_URL = SUPABASE_URL + '/functions/v1/upsells-order';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6dHd3enpqendtaGZ6bWNhZnl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzIzNjQ4MDYsImV4cCI6MjA0Nzk0MDgwNn0.sb_publishable_v8lL0wuTAC7uHpuNuzE8WQ_O8vIOgg4';
+  const RPC_URL = SUPABASE_URL + '/rest/v1/rpc/';
 
   const C = {
     vert: '#14352A',
@@ -80,11 +80,21 @@
 
   container.innerHTML = `<div class="dpm-ups"><div class="dpm-ups-header"><h3>${L.title}</h3></div><div class="dpm-ups-body"><div class="dpm-ups-empty">${L.loading}</div></div></div>`;
 
-  // Fetch data
-  fetch(EDGE_FN_URL + '?bien_id=' + encodeURIComponent(bienId))
+  // Fetch data via Supabase RPC
+  fetch(RPC_URL + 'upsells_catalogue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+    body: JSON.stringify({ p_bien_id: bienId })
+  })
     .then(r => r.json())
     .then(data => {
       if (data.error) { container.querySelector('.dpm-ups-body').innerHTML = `<div class="dpm-ups-empty">${data.error}</div>`; return; }
+      // Adapt RPC response: prestations flat array → categories grouped
+      if (data.prestations && !data.categories) {
+        const cats = {};
+        (data.prestations || []).forEach(p => { const c = p.categorie || 'Autres'; if (!cats[c]) cats[c] = []; cats[c].push(p); });
+        data.categories = cats;
+      }
       render(data);
     })
     .catch(() => {
@@ -207,20 +217,19 @@
       btn.disabled = true;
 
       try {
-        const res = await fetch(ORDER_FN_URL, {
+        const res = await fetch(RPC_URL + 'upsells_commander', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
           body: JSON.stringify({
-            bien_id: bienId,
-            prestation_id: prestaId,
-            voyageur_nom: nom,
-            voyageur_email: email,
-            voyageur_tel: tel || null,
-            date,
-            heure: heure || null,
-            quantite: qty,
-            note: note || null,
-            source: 'site_web'
+            p_bien_id: bienId,
+            p_prestation_id: prestaId,
+            p_voyageur_nom: nom,
+            p_voyageur_email: email || null,
+            p_voyageur_tel: tel || null,
+            p_date: date,
+            p_heure: heure || null,
+            p_quantite: qty,
+            p_note: note || null
           })
         });
         const data = await res.json();
