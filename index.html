@@ -684,6 +684,79 @@ if(location.hash.startsWith('#checkin=')){
   // Stop here, don't load the app
 }
 
+/* ---- AUTO-TEST : #autotest ---- */
+if(location.hash==='#autotest'){
+  document.getElementById('auth').innerHTML=`<div class="card" style="max-width:640px">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>Tests automatiques</h1><div class="tag">Vérification des enregistrements</div></div></div>
+    <div id="atOut" style="font-size:13px;line-height:2"></div></div>`;
+  (async()=>{
+    const out=document.getElementById('atOut');
+    const log=(txt,ok)=>{out.innerHTML+=`<div>${ok===true?'✅':ok===false?'❌':'⏳'} ${txt}</div>`;};
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session){log('Non connecté — connecte-toi d\'abord puis reviens sur #autotest',false);return;}
+    log('Connecté : '+session.user.email,true);
+    /* Récupérer le tenant */
+    const {data:mt}=await sb.from('membre').select('tenant_id').eq('user_id',session.user.id).limit(1).single();
+    if(!mt){log('Pas de tenant trouvé',false);return;}
+    const tid=mt.tenant_id;
+    log('Tenant : '+tid,true);
+
+    /* TEST 1 : Enregistrer un bien */
+    log('--- Test 1 : Enregistrer un bien ---');
+    const bienTest={tenant_id:tid,nom:'TEST_AUTO_BIEN_'+Date.now(),type:'villa',statut:'brouillon',adresse:'123 test',capacite:4,nb_chambres:2,nb_sdb:1,prix_nuit_base:800};
+    const {data:b1,error:e1}=await sb.from('bien').insert(bienTest).select().single();
+    if(e1){log('Erreur insertion bien : '+e1.message,false);}
+    else{
+      log('Bien créé : '+b1.nom+' (id: '+b1.id.slice(0,8)+'…)',true);
+      /* Vérifier la relecture */
+      const {data:b1r}=await sb.from('bien').select('*').eq('id',b1.id).single();
+      log('Relecture OK : nom='+b1r.nom+', prix='+b1r.prix_nuit_base+', capacité='+b1r.capacite,b1r.nom===bienTest.nom&&b1r.prix_nuit_base===800);
+
+      /* TEST 2 : Créer une réservation liée */
+      log('--- Test 2 : Enregistrer une réservation ---');
+      const voyTest={tenant_id:tid,nom:'TEST_AUTO_VOY_'+Date.now(),email:'test-auto@dpm-test.com'};
+      const {data:v1}=await sb.from('voyageur').insert(voyTest).select().single();
+      log('Voyageur créé : '+v1.nom,!!v1);
+      const arr=new Date();arr.setDate(arr.getDate()+30);
+      const dep=new Date(arr);dep.setDate(dep.getDate()+3);
+      const resaTest={tenant_id:tid,bien_id:b1.id,voyageur_id:v1.id,arrivee:arr.toISOString().slice(0,10),depart:dep.toISOString().slice(0,10),statut:'confirmee',canal:'direct',prix_total:2400,montant_paye:0,nb_personnes:2};
+      const {data:r1,error:e2}=await sb.from('reservation').insert(resaTest).select().single();
+      if(e2){log('Erreur insertion résa : '+e2.message,false);}
+      else{
+        log('Réservation créée : '+r1.arrivee+' → '+r1.depart+', prix='+r1.prix_total,true);
+        const {data:r1r}=await sb.from('reservation').select('*').eq('id',r1.id).single();
+        log('Prix total vérifié = '+r1r.prix_total+' (attendu 2400)',r1r.prix_total===2400||r1r.prix_total==='2400');
+        log('Montant payé initial = '+r1r.montant_paye+' (attendu 0)',Number(r1r.montant_paye)===0);
+
+        /* TEST 3 : Encaissement */
+        log('--- Test 3 : Encaisser un paiement ---');
+        const {error:e3}=await sb.from('reservation').update({montant_paye:1000}).eq('id',r1.id);
+        if(e3){log('Erreur update paiement : '+e3.message,false);}
+        else{
+          const {data:r2}=await sb.from('reservation').select('montant_paye,prix_total').eq('id',r1.id).single();
+          log('Montant payé après encaissement = '+r2.montant_paye+' (attendu 1000)',Number(r2.montant_paye)===1000);
+          log('Reste à payer = '+(Number(r2.prix_total)-Number(r2.montant_paye))+' (attendu 1400)',Number(r2.prix_total)-Number(r2.montant_paye)===1400);
+          /* 2e encaissement */
+          const {error:e4}=await sb.from('reservation').update({montant_paye:2400}).eq('id',r1.id);
+          const {data:r3}=await sb.from('reservation').select('montant_paye').eq('id',r1.id).single();
+          log('Montant payé total = '+r3.montant_paye+' (attendu 2400)',Number(r3.montant_paye)===2400);
+          log('Paiement complet : reste = '+(2400-Number(r3.montant_paye)),Number(r3.montant_paye)===2400);
+        }
+
+        /* Nettoyage */
+        log('--- Nettoyage ---');
+        await sb.from('reservation').delete().eq('id',r1.id);
+        log('Réservation supprimée',true);
+        await sb.from('voyageur').delete().eq('id',v1.id);
+        log('Voyageur test supprimé',true);
+      }
+      await sb.from('bien').delete().eq('id',b1.id);
+      log('Bien test supprimé',true);
+    }
+    log('<br><b>Tests terminés.</b>');
+  })();
+}
+
 /* Bannière de cookies (RGPD) */
 if(!localStorage.getItem('dpm_cookies_ok')){
   const cb=document.createElement('div');
