@@ -6456,30 +6456,194 @@ async function renderParamFinanciers(){
 
 async function renderFormules(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
-  await loadOpts("proprietaire");
+  await Promise.all([loadOpts("bien"),loadOpts("proprietaire")]);
+  const cfg=await reglGet("formules_config");
+  const formules=(cfg&&Array.isArray(cfg.formules))?cfg.formules:defaultFormules();
+  const biens=state.opts.bien||[];
   const props=state.opts.proprietaire||[];
-  const rows=props.map(p=>`<tr><td>${esc(p.nom)}</td><td style="text-align:center">${p.commission_pct!=null?p.commission_pct+' %':'—'}</td></tr>`).join("");
+  /* Champs financiers standards (dictionnaire Hostaway) */
+  const CHAMPS_FIN=[
+    {k:"baseRate",label:"Tarif de base (baseRate)"},
+    {k:"pricePerExtraPerson",label:"Supplément personne (pricePerExtraPerson)"},
+    {k:"cleaningFee",label:"Frais de ménage (cleaningFee)"},
+    {k:"cityTax",label:"Taxe de séjour (cityTax)"},
+    {k:"vat",label:"TVA (vat)"},
+    {k:"otherTaxes",label:"Autres taxes (otherTaxes)"},
+    {k:"totalTax",label:"Total taxes (totalTax)"},
+    {k:"hostChannelFee",label:"Commission canal hôte (hostChannelFee)"},
+    {k:"guestChannelFee",label:"Frais canal voyageur (guestChannelFee)"},
+    {k:"paymentProcessingFee",label:"Frais de traitement paiement"},
+    {k:"couponDiscount",label:"Remise coupon"},
+    {k:"weeklyDiscount",label:"Remise hebdomadaire"},
+    {k:"monthlyDiscount",label:"Remise mensuelle"},
+    {k:"damageDeposit",label:"Dépôt de garantie"},
+    {k:"totalPaid",label:"Total payé"},
+    {k:"reservationExpensesAndExtras",label:"Dépenses & extras liés"},
+    {k:"refundSum",label:"Remboursements"},
+    {k:"totalReservationNights",label:"Nombre de nuits"},
+    {k:"numberOfGuests",label:"Nombre de voyageurs"},
+  ];
+  /* Évaluer une formule sur une réservation */
+  function evalFormule(expr, resa, formuleMap, depth){
+    if(depth>7)return 0; // max 7 niveaux d'imbrication
+    if(!expr)return 0;
+    // Remplacer les références aux champs et aux formules
+    let e=String(expr);
+    // Remplacer les noms de champs financiers
+    for(const cf of CHAMPS_FIN){
+      const re=new RegExp('\\b'+cf.k+'\\b','g');
+      let val=0;
+      if(cf.k==='baseRate') val=Number(resa.prix_nuit_base||resa.base_rate||0)*Math.max(1,Number(resa.nuits||1));
+      else if(cf.k==='cleaningFee') val=Number(resa.frais_menage||0);
+      else if(cf.k==='cityTax'||cf.k==='vat'||cf.k==='otherTaxes') val=Number(resa.taxe_sejour_nuit||0)*Math.max(1,Number(resa.nuits||1));
+      else if(cf.k==='totalTax') val=Number(resa.taxe_sejour_nuit||0)*Math.max(1,Number(resa.nuits||1));
+      else if(cf.k==='hostChannelFee') val=Number(resa.prix_total||0)*Number(resa.commission_canal_pct||0)/100;
+      else if(cf.k==='totalPaid') val=Number(resa.montant_paye||0);
+      else if(cf.k==='totalReservationNights') val=Math.max(1,Number(resa.nuits||1));
+      else if(cf.k==='numberOfGuests') val=Number(resa.nb_personnes||1);
+      else if(cf.k==='pricePerExtraPerson') val=Number(resa.prix_personne_supp||0)*Math.max(0,Number(resa.nb_personnes||1)-Number(resa.capacite||99));
+      else if(cf.k==='weeklyDiscount'){const n=Number(resa.nuits||1);val=n>=7?-Number(resa.remise_hebdo||0):0;}
+      else if(cf.k==='monthlyDiscount'){const n=Number(resa.nuits||1);val=n>=28?-Number(resa.remise_mensuelle||0):0;}
+      else if(cf.k==='damageDeposit') val=Number(resa.caution||0);
+      else if(cf.k==='guestChannelFee') val=0;
+      else if(cf.k==='reservationExpensesAndExtras') val=Number(resa._depenses||0);
+      else if(cf.k==='refundSum') val=Number(resa._remboursements||0);
+      e=e.replace(re,String(val));
+    }
+    // Remplacer les références à d'autres formules
+    for(const f of (formuleMap||[])){
+      const re=new RegExp('\\b'+f.nom.replace(/[^a-zA-Z0-9_]/g,'_')+'\\b','g');
+      if(re.test(e)){
+        const sub=evalFormule(f.expression, resa, formuleMap, depth+1);
+        e=e.replace(re,String(sub));
+      }
+    }
+    // Évaluer l'expression mathématique (sécurisé : que des chiffres et opérateurs)
+    try{
+      const safe=e.replace(/[^0-9+\-*/().\s]/g,'');
+      if(!safe.trim())return 0;
+      return Number(Function('"use strict";return ('+safe+')')())||0;
+    }catch(ex){return 0;}
+  }
+  function defaultFormules(){
+    return [
+      {nom:"totalPrice",label:"Prix total",expression:"baseRate + cleaningFee + pricePerExtraPerson + totalTax + weeklyDiscount + monthlyDiscount",masque:false,pct:false},
+      {nom:"rentalRevenue",label:"Revenu locatif",expression:"baseRate + cleaningFee + pricePerExtraPerson + weeklyDiscount + monthlyDiscount",masque:false,pct:false},
+      {nom:"pmCommission",label:"Commission gestionnaire",expression:"totalPrice * 0.20",masque:false,pct:false},
+      {nom:"ownerPayout",label:"Versement propriétaire",expression:"totalPrice - pmCommission - reservationExpensesAndExtras",masque:false,pct:false},
+    ];
+  }
+  const rows=formules.map((f,i)=>`<tr>
+    <td><b>${esc(f.nom)}</b></td><td>${esc(f.label||'')}</td>
+    <td style="font-family:monospace;font-size:12px">${esc(f.expression||'')}</td>
+    <td>${f.pct?'%':''} ${f.masque?'masquée':''}</td>
+    <td>${f.date_effet?fdate(f.date_effet):'—'}</td>
+    <td><button class="btn o sm fm-edit" data-i="${i}">✏️</button> <button class="btn d sm fm-del" data-i="${i}">🗑</button></td></tr>`).join('');
+  /* Surcharge par annonce */
+  const bienSurcharges=biens.filter(b=>{const p=b.parametres||{};return p.formules_override&&Object.keys(p.formules_override).length;});
+  /* Commission par propriétaire */
+  const propRows=props.map(p=>`<tr><td>${esc(p.nom)}</td><td style="text-align:center">${p.commission_pct!=null?p.commission_pct+' %':'—'}</td></tr>`).join("");
+  const bienRows=biens.map(b=>{const p=b.parametres||{};
+    return `<tr><td><b>${esc(b.nom)}</b></td><td style="text-align:center">${p.commission_override!=null?p.commission_override+' %':'<span class="muted">hérite</span>'}</td>
+    <td><button class="btn o sm" data-commov="${b.id}">Modifier</button></td></tr>`;}).join("");
   $("#content").innerHTML=`
-    <div class="panel"><div class="phead"><h3>Formules de calcul</h3></div>
-      <div style="padding:16px">
-        <ul class="phlist">
-          <li><b>Revenu locatif</b> = hébergement + frais voyageurs + taxes</li>
-          <li><b>Commission de gestion DPM</b> = prix total × commission&nbsp;%</li>
-          <li><b>Versement propriétaire (net)</b> = prix total − commission − dépenses</li>
-          <li><b>Part gestionnaire DPM</b> = commission + frais voyageurs</li>
-        </ul>
-        <div class="phnote">Les versements sont calculés par canal (Airbnb, Booking, direct…) à partir du prix total de chaque réservation. Le taux de commission est défini par propriétaire ci-dessous.</div>
+    <div class="panel"><div class="phead"><h3>Formules financières</h3><span class="sp"></span><button class="btn g" id="fmAdd">+ Ajouter une formule</button>
+      <button class="btn o" id="fmAssist">🧙 Assistant de formule</button></div>
+      <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Chaque formule est une expression mathématique sur les champs financiers standards et les autres formules (jusqu'à 7 niveaux d'imbrication). Elles alimentent l'analytique, les relevés propriétaires et l'activité de location.</p>
+      ${formules.length?`<table class="tbl" style="font-size:12px"><thead><tr><th>Nom</th><th>Libellé</th><th>Expression</th><th>Options</th><th>Date d'effet</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<p class="muted">Aucune formule. Utilisez l\'assistant ou ajoutez-en manuellement.</p>'}
       </div></div>
     <div class="panel"><div class="phead"><h3>Commission par propriétaire</h3></div>
-      <div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th style="text-align:center">Commission</th></tr></thead><tbody>${rows||'<tr><td colspan="2" class="muted">Aucun propriétaire</td></tr>'}</tbody></table></div></div>`;
-  /* Surcharge formule par annonce */
-  await loadOpts("bien");
-  const biens=state.opts.bien||[];
-  const bienRows=biens.map(b=>{const p=b.parametres||{};
-    return `<tr><td><b>${esc(b.nom)}</b></td><td style="text-align:center">${p.commission_override!=null?p.commission_override+' %':'<span class="muted">hérite du propriétaire</span>'}</td>
-    <td><button class="btn o sm" data-commov="${b.id}">Modifier</button></td></tr>`;}).join("");
-  $("#content").innerHTML+=`<div class="panel"><div class="phead"><h3>Surcharge par annonce</h3><span class="sp"></span><span class="muted">Permet de fixer un taux de commission différent pour un bien précis</span></div>
-    <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th style="text-align:center">Commission</th><th></th></tr></thead><tbody>${bienRows||'<tr><td colspan="3" class="muted">Aucun bien</td></tr>'}</tbody></table></div></div>`;
+      <div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th>Commission</th></tr></thead><tbody>${propRows||'<tr><td colspan="2" class="muted">Aucun</td></tr>'}</tbody></table></div></div>
+    <div class="panel"><div class="phead"><h3>Surcharge par annonce</h3></div>
+      <div style="overflow:auto"><table><thead><tr><th>Annonce</th><th>Commission</th><th></th></tr></thead><tbody>${bienRows||'<tr><td colspan="3" class="muted">Aucun</td></tr>'}</tbody></table></div></div>
+    <div class="panel"><div class="phead"><h3>Champs financiers disponibles</h3></div>
+      <div style="padding:16px"><div style="display:flex;flex-wrap:wrap;gap:6px">${CHAMPS_FIN.map(c=>`<span class="pill gray" style="font-family:monospace;font-size:11px" title="${esc(c.label)}">${c.k}</span>`).join('')}</div>
+      <p class="muted" style="margin-top:8px;font-size:12px">Utilisez ces noms dans les expressions. Les formules existantes peuvent aussi être référencées par leur nom.</p></div></div>`;
+  /* Éditeur de formule */
+  function editFormule(idx){
+    const f=idx>=0?{...formules[idx]}:{nom:'',label:'',expression:'',masque:false,pct:false,date_effet:'',evenement:'depart'};
+    const champBtns=CHAMPS_FIN.map(c=>`<button class="btn o sm fmChamp" data-k="${c.k}" style="font-family:monospace;font-size:11px" title="${esc(c.label)}">${c.k}</button>`).join(' ');
+    const frmBtns=formules.filter((_,i)=>i!==idx).map(ff=>`<button class="btn o sm fmChamp" data-k="${ff.nom}" style="font-family:monospace;font-size:11px;border-color:var(--gold)">${ff.nom}</button>`).join(' ');
+    ouvrir(`<div class="h"><h3>${idx>=0?'Modifier':'Nouvelle'} formule</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b">
+        <div class="row2"><div class="field"><label>Nom technique *</label><input id="fmNom" value="${esc(f.nom)}" placeholder="ex: ownerPayout"></div>
+          <div class="field"><label>Libellé</label><input id="fmLabel" value="${esc(f.label||'')}"></div></div>
+        <div class="field"><label>Expression *</label><textarea id="fmExpr" rows="3" style="font-family:monospace">${esc(f.expression||'')}</textarea></div>
+        <div style="margin-bottom:8px"><span class="muted" style="font-size:12px">Cliquez pour insérer :</span><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${champBtns}</div>
+        ${frmBtns?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${frmBtns}</div>`:''}</div>
+        <div class="row2"><div class="field"><label><input type="checkbox" id="fmPct" ${f.pct?'checked':''}> Afficher en %</label></div>
+          <div class="field"><label><input type="checkbox" id="fmMasque" ${f.masque?'checked':''}> Masquer</label></div></div>
+        <div class="row2"><div class="field"><label>Date d'effet</label><input type="date" id="fmDate" value="${f.date_effet||''}"></div>
+          <div class="field"><label>Événement</label><select id="fmEvt"><option ${f.evenement==='depart'?'selected':''}>depart</option><option ${f.evenement==='arrivee'?'selected':''}>arrivee</option><option ${f.evenement==='creation'?'selected':''}>creation</option></select></div></div>
+        <div class="err" id="fmErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="fmSave">Enregistrer</button></div>`);
+    document.querySelectorAll('.fmChamp').forEach(b=>b.onclick=()=>{const ta=document.getElementById('fmExpr');ta.value+=b.dataset.k;ta.focus();});
+    document.getElementById('fmSave').onclick=async()=>{
+      const nom=document.getElementById('fmNom').value.trim();
+      if(!nom){document.getElementById('fmErr').textContent='Nom obligatoire';return;}
+      /* Détection boucle simple : la formule ne peut pas se référencer elle-même */
+      const expr=document.getElementById('fmExpr').value.trim();
+      if(new RegExp('\\b'+nom.replace(/[^a-zA-Z0-9_]/g,'_')+'\\b').test(expr)){document.getElementById('fmErr').textContent='Boucle détectée : la formule se référence elle-même.';return;}
+      const nf={nom,label:document.getElementById('fmLabel').value.trim(),expression:expr,
+        pct:document.getElementById('fmPct').checked,masque:document.getElementById('fmMasque').checked,
+        date_effet:document.getElementById('fmDate').value||null,evenement:document.getElementById('fmEvt').value};
+      if(idx>=0)formules[idx]=nf;else formules.push(nf);
+      await reglSet("formules_config",{formules});fermer();toast('Formule enregistrée');renderFormules();
+    };
+  }
+  document.querySelectorAll('.fm-edit').forEach(b=>b.onclick=()=>editFormule(Number(b.dataset.i)));
+  document.querySelectorAll('.fm-del').forEach(b=>b.onclick=async()=>{
+    const i=Number(b.dataset.i);const f=formules[i];
+    /* Vérifier si d'autres formules la référencent */
+    const refs=formules.filter((ff,j)=>j!==i&&ff.expression&&ff.expression.includes(f.nom));
+    const msg=refs.length?`La formule « ${f.nom} » est utilisée dans : ${refs.map(r=>r.nom).join(', ')}. Elle sera remplacée par 0 partout. Supprimer quand même ?`:'Supprimer la formule « '+f.nom+' » ?';
+    if(!confirm(msg))return;
+    formules.splice(i,1);
+    await reglSet("formules_config",{formules});toast('Formule supprimée');renderFormules();
+  });
+  document.getElementById('fmAdd').onclick=()=>editFormule(-1);
+  /* Assistant de formule (questionnaire → formules générées) */
+  document.getElementById('fmAssist').onclick=()=>{
+    ouvrir(`<div class="h"><h3>Assistant de formule</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="muted" style="margin-bottom:12px">L'assistant génère les formules de base en fonction de votre modèle économique. <b>Attention : cela remplace toutes les formules existantes.</b></p>
+        <div class="field"><label>Modèle économique</label><select id="faModel">
+          <option value="independant">Opérateur indépendant (je gère mes propres biens)</option>
+          <option value="paiement" selected>Modèle de paiement (les voyageurs me paient, je reverse un % au propriétaire)</option>
+          <option value="facturation">Modèle de facturation (le propriétaire me facture, je facture les voyageurs)</option></select></div>
+        <div class="field"><label>Commission gestionnaire (%)</label><input type="number" id="faComm" value="20" min="0" max="100"></div>
+        <div class="err" id="faErr"></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="faGo">Générer les formules</button></div>`);
+    document.getElementById('faGo').onclick=async()=>{
+      const model=document.getElementById('faModel').value;
+      const comm=Number(document.getElementById('faComm').value||20);
+      let nf=[];
+      if(model==='independant'){
+        nf=[
+          {nom:"totalPrice",label:"Prix total",expression:"baseRate + cleaningFee + pricePerExtraPerson + totalTax + weeklyDiscount + monthlyDiscount"},
+          {nom:"rentalRevenue",label:"Revenu locatif",expression:"baseRate + cleaningFee + pricePerExtraPerson + weeklyDiscount + monthlyDiscount"},
+        ];
+      } else if(model==='paiement'){
+        nf=[
+          {nom:"totalPrice",label:"Prix total",expression:"baseRate + cleaningFee + pricePerExtraPerson + totalTax + weeklyDiscount + monthlyDiscount"},
+          {nom:"rentalRevenue",label:"Revenu locatif",expression:"baseRate + cleaningFee + pricePerExtraPerson + weeklyDiscount + monthlyDiscount"},
+          {nom:"pmCommission",label:"Commission gestionnaire ("+comm+"%)",expression:"totalPrice * "+comm+" / 100"},
+          {nom:"ownerPayout",label:"Versement propriétaire",expression:"totalPrice - pmCommission - hostChannelFee - reservationExpensesAndExtras"},
+          {nom:"managerPayout",label:"Part gestionnaire",expression:"pmCommission + hostChannelFee"},
+        ];
+      } else {
+        nf=[
+          {nom:"totalPrice",label:"Prix total",expression:"baseRate + cleaningFee + pricePerExtraPerson + totalTax + weeklyDiscount + monthlyDiscount"},
+          {nom:"rentalRevenue",label:"Revenu locatif",expression:"baseRate + cleaningFee + pricePerExtraPerson + weeklyDiscount + monthlyDiscount"},
+          {nom:"pmCommission",label:"Commission gestionnaire ("+comm+"%)",expression:"totalPrice * "+comm+" / 100"},
+          {nom:"ownerPayout",label:"Versement propriétaire",expression:"totalPrice - pmCommission"},
+        ];
+      }
+      nf.forEach(f=>{f.masque=false;f.pct=false;f.date_effet=null;f.evenement='depart';});
+      formules.length=0;formules.push(...nf);
+      await reglSet("formules_config",{formules});fermer();toast('Formules générées');renderFormules();
+    };
+  };
+  /* Surcharge commission par annonce */
   document.querySelectorAll('[data-commov]').forEach(btn=>btn.onclick=()=>{
     const bid=btn.dataset.commov;const b=biens.find(x=>x.id===bid);const p=b?.parametres||{};
     ouvrir(`<div class="h"><h3>Commission — ${esc(b?.nom)}</h3><button class="x" onclick="fermer()">×</button></div>
@@ -6494,6 +6658,8 @@ async function renderFormules(){
     };
   });
 }
+/* Exporter evalFormule pour usage dans les rapports */
+window.evalFormule_=function(expr,resa,formules,depth){return typeof evalFormule==='function'?evalFormule(expr,resa,formules,depth||0):0;};
 
 /* ---------- RELEVES PROPRIETAIRES ---------- */
 const MOISFR=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
