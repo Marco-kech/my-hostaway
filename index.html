@@ -4967,8 +4967,8 @@ async function renderCgFiches(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   if(!state.cgFichesTab) state.cgFichesTab="proprietaires";
   const [rpa,rpr,rc,rr,rv]=await Promise.all([
-    sb.from("partenaire").select("id,nom,categorie,contact,ville,tel,email,peut_editer,peut_promo,actif").order("nom"),
-    sb.from("proprietaire").select("id,nom,tel,email,ville,actif").order("nom"),
+    sb.from("partenaire").select("*").order("nom"),
+    sb.from("proprietaire").select("*").order("nom"),
     sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,langue,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
     sb.from("voyageur").select("id,prenom,nom").order("nom")]);
