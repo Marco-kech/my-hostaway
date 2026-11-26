@@ -569,6 +569,53 @@ if(location.hash.includes('type=recovery')){
 }
 
 /* Public check-in page (no auth needed) */
+if(location.hash.startsWith('#contrat=')){
+  const token=location.hash.split('=')[1];
+  document.getElementById('auth').innerHTML=`<div class="card" style="max-width:640px">
+    <div class="logo"><div class="logomark">DPM</div><div><h1>Contrat de location</h1><div class="tag">Signature en ligne</div></div></div>
+    <div id="ctPub"><div class="center"><span class="spin"></span></div></div></div>`;
+  (async()=>{
+    const {data:info,error}=await sb.rpc("checkin_infos",{p_token:token});
+    const box=document.getElementById("ctPub");
+    if(error||!info){box.innerHTML='<p class="err">Lien invalide ou expiré.</p>';return;}
+    const contrat=await reglGet("contrat_modele");
+    const corps=(contrat&&contrat.corps)||"<p>Aucun modèle de contrat n'a été configuré par l'hébergeur.</p>";
+    /* Remplacer les variables dynamiques */
+    let html=corps.replace(/\{bien\}/g,esc(info.bien||'')).replace(/\{arrivee\}/g,fdate(info.arrivee)).replace(/\{depart\}/g,fdate(info.depart))
+      .replace(/\{voyageur\}/g,esc(info.nom||'')).replace(/\{date_aujourdhui\}/g,new Date().toLocaleDateString('fr-FR'));
+    box.innerHTML=`<div style="border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;max-height:400px;overflow:auto;font-size:13px;line-height:1.6">${html}</div>
+      <p style="font-size:13px;margin-bottom:8px"><b>Signature du voyageur</b> — dessinez votre signature ci-dessous :</p>
+      <canvas id="ctSig" width="500" height="150" style="border:1px solid var(--line);border-radius:8px;cursor:crosshair;display:block;margin-bottom:12px;touch-action:none"></canvas>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn o sm" id="ctClear">Effacer</button>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="ctAccept"> J'accepte les conditions du contrat</label>
+      </div>
+      <div class="err" id="ctErr"></div>
+      <button class="btn g" id="ctSign" style="width:100%">Signer le contrat</button>`;
+    /* Canvas signature */
+    const cv=document.getElementById('ctSig'),cx=cv.getContext('2d');
+    cx.lineWidth=2;cx.lineCap='round';cx.strokeStyle='#14352A';
+    let drawing=false,hasStroke=false;
+    const pos=e=>{const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-r.left,t.clientY-r.top];};
+    cv.addEventListener('pointerdown',e=>{drawing=true;cx.beginPath();cx.moveTo(...pos(e));});
+    cv.addEventListener('pointermove',e=>{if(!drawing)return;cx.lineTo(...pos(e));cx.stroke();hasStroke=true;});
+    cv.addEventListener('pointerup',()=>{drawing=false;});
+    cv.addEventListener('pointerleave',()=>{drawing=false;});
+    document.getElementById('ctClear').onclick=()=>{cx.clearRect(0,0,cv.width,cv.height);hasStroke=false;};
+    document.getElementById('ctSign').onclick=async()=>{
+      const err=document.getElementById('ctErr');err.textContent='';
+      if(!document.getElementById('ctAccept').checked){err.textContent='Cochez la case pour accepter les conditions.';return;}
+      if(!hasStroke){err.textContent='Dessinez votre signature sur le canvas.';return;}
+      document.getElementById('ctSign').disabled=true;
+      const sigData=cv.toDataURL('image/png');
+      const horodatage=new Date().toISOString();
+      /* Enregistrer la signature dans la réservation via un RPC ou un update direct */
+      const {error:e2}=await sb.rpc("checkin_remplir",{p_token:token,p_infos:{contrat_signe:true,signature_contrat:sigData,horodatage_signature:horodatage}});
+      if(e2){err.textContent=e2.message;document.getElementById('ctSign').disabled=false;return;}
+      box.innerHTML='<p class="ok" style="text-align:center;font-size:16px;padding:20px 0">✅ Contrat signé !<br>Horodatage : '+horodatage+'<br>Merci et bon séjour !</p>';
+    };
+  })();
+}
 if(location.hash.startsWith('#checkin=')){
   const token=location.hash.split('=')[1];
   document.getElementById('auth').innerHTML=`<div class="card" style="max-width:560px">
@@ -637,6 +684,14 @@ if(location.hash.startsWith('#checkin=')){
   // Stop here, don't load the app
 }
 
+/* Bannière de cookies (RGPD) */
+if(!localStorage.getItem('dpm_cookies_ok')){
+  const cb=document.createElement('div');
+  cb.id='cookieBanner';
+  cb.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#14352A;color:#FBFAF6;padding:12px 20px;font-size:13px;display:flex;align-items:center;gap:12px;justify-content:space-between;z-index:9999';
+  cb.innerHTML='<span>Ce site utilise des cookies essentiels au fonctionnement. <a href="#" style="color:#C9A227;text-decoration:underline" onclick="document.getElementById(\'cookieBanner\').remove();return false">En savoir plus</a></span><button onclick="localStorage.setItem(\'dpm_cookies_ok\',\'1\');this.closest(\'div\').remove()" style="background:#C9A227;color:#14352A;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">Accepter</button><button onclick="this.closest(\'div\').remove()" style="background:transparent;color:#FBFAF6;border:1px solid #FBFAF6;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">Refuser</button>';
+  document.body.appendChild(cb);
+}
 $("#obOut").addEventListener("click",()=>sb.auth.signOut());
 $("#logout").addEventListener("click",()=>sb.auth.signOut());
 $("#obBtn").addEventListener("click",async()=>{
@@ -1084,6 +1139,7 @@ const RUBRIQUES=[
     ["liste","Canaux connectés",{m:"canaux"}],
     ["carte","Carte des annonces",{canauxcarte:1}],
     ["ical","Synchronisation iCal",{icalsync:1}],
+    ["plans","Plans tarifaires Booking",{plansbooking:1}],
     ["cronhist","Historique tâches auto",{cronhist:1}],
     ["imptarifs","Importer des tarifs",{importtarifs:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
@@ -1374,7 +1430,7 @@ async function renderInbox(){
   /* Tags dynamiques */
   const tagsBtn=document.getElementById('ibxTags');
   if(tagsBtn) tagsBtn.onclick=()=>{
-    const tags=['{prenom}','{nom}','{voyageur}','{email}','{tel}','{bien}','{adresse}','{ville}','{arrivee}','{depart}','{nuits}','{nb_personnes}','{canal}','{ref_canal}','{prix_total}','{montant_paye}','{reste_du}','{statut_paiement}','{heure_checkin}','{heure_checkout}','{code_acces}','{code_porte}','{wifi_nom}','{wifi_mdp}','{instructions_arrivee}','{contact_urgence}','{politique_annulation}','{reglement}','{hote_nom}','{hote_tel}','{lien_checkin}','{date_aujourdhui}'];
+    const tags=['{prenom}','{nom}','{voyageur}','{email}','{tel}','{bien}','{adresse}','{ville}','{arrivee}','{depart}','{nuits}','{nb_personnes}','{canal}','{ref_canal}','{prix_total}','{montant_paye}','{reste_du}','{statut_paiement}','{heure_checkin}','{heure_checkout}','{code_acces}','{code_porte}','{wifi_nom}','{wifi_mdp}','{instructions_arrivee}','{contact_urgence}','{politique_annulation}','{reglement}','{hote_nom}','{hote_tel}','{lien_checkin}','{lien_contrat}','{date_aujourdhui}'];
     ouvrir(`<div class="h"><h3>Insérer un tag dynamique</h3><button class="x" onclick="fermer()">×</button></div>
       <div class="b"><p class="muted" style="margin-bottom:10px">Les tags sont remplacés automatiquement par les données du voyageur et du bien lors de l'envoi.</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${tags.map(t=>`<button class="btn o sm tag-ins" data-tag="${t}" style="font-family:monospace">${t}</button>`).join('')}</div></div>`);
@@ -1440,10 +1496,11 @@ async function renderInbox(){
         '{statut_paiement}':r.statut_paiement||'','{statut}':r.statut||'','{politique_annulation}':p.politique_annulation||r.politique_annulation||'',
         '{reglement}':p.reglement_interieur||'','{date_aujourdhui}':new Date().toLocaleDateString('fr-FR'),
         '{hote_nom}':state.tenant?.nom||'DPM Conciergerie','{hote_prenom}':state.tenant?.nom?.split(' ')[0]||'','{hote_tel}':state.tenant?.tel||'',
-        '{nb_chambres}':String(b?.nb_chambres||''),'{capacite}':String(b?.capacite||''),'{lien_checkin}':''};
+        '{nb_chambres}':String(b?.nb_chambres||''),'{capacite}':String(b?.capacite||''),'{lien_checkin}':'','{lien_contrat}':''};
       /* Lien check-in */
       const {data:ck}=await sb.from('checkin_online').select('token').eq('reservation_id',r.id).maybeSingle();
       if(ck)tagMap['{lien_checkin}']=location.origin+location.pathname+'#checkin='+ck.token;
+      if(r.acces_voyageur)tagMap['{lien_contrat}']=location.origin+location.pathname+'#contrat='+r.acces_voyageur;
       for(const[tag,val] of Object.entries(tagMap)) corps=corps.replaceAll(tag,val);
     }}
     /* Pièces jointes */
@@ -1745,6 +1802,7 @@ function goRub(rk,sk){
   if(t.champperso)return renderChampsPerso(t.champperso);
   if(t.msgrecur)return renderMsgRecurrents();
   if(t.campagnes)return renderCampagnes();
+  if(t.plansbooking)return renderPlansTarifBooking();
   if(t.minnuits)return renderMinNuitsDyn();
   if(t.grpannonces)return renderGroupesAnnonces();
   if(t.seocfg)return renderSeoConfig();
@@ -1950,6 +2008,55 @@ async function renderEscaladesIA(){
     const val={actif:document.getElementById('escActif').checked,sentiment:document.getElementById('escSent').checked,mots_cles:document.getElementById('escMots').value.trim(),delai_humain:Number(document.getElementById('escDelai').value||5),notifier_email:document.getElementById('escEmail').value.trim()};
     const e=await reglSet("ia_escalades",val);if(e){document.getElementById('escOk').innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
     document.getElementById('escOk').textContent="Enregistré ✓";toast("Escalades enregistrées");};
+}
+
+/* ---- Plans tarifaires Booking (config par annonce) ---- */
+async function renderPlansTarifBooking(){
+  $("#topAdd").hidden=true;
+  const biens=await loadOpts("bien");
+  const sel=state.plansBien||"";
+  const cfg=sel?await reglGet("plans_booking_"+sel):null;
+  const plans=(cfg&&Array.isArray(cfg.plans))?cfg.plans:[];
+  const defaults=[
+    {nom:"Standard",majoration:0,politique:"moderee",sejour_min:1,sejour_max:365,fenetre:365},
+    {nom:"Non remboursable",majoration:-10,politique:"non_remboursable",sejour_min:1,sejour_max:365,fenetre:365},
+  ];
+  const list=(plans.length?plans:defaults);
+  const rows=list.map((p,i)=>`<tr>
+    <td><input data-pi="${i}" data-f="nom" value="${esc(p.nom||'')}" style="width:120px"></td>
+    <td><input data-pi="${i}" data-f="majoration" type="number" value="${p.majoration||0}" style="width:60px"> %</td>
+    <td><select data-pi="${i}" data-f="politique">${["flexible","moderee","stricte","non_remboursable"].map(o=>`<option ${o===p.politique?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td><input data-pi="${i}" data-f="sejour_min" type="number" value="${p.sejour_min||1}" style="width:50px"></td>
+    <td><input data-pi="${i}" data-f="sejour_max" type="number" value="${p.sejour_max||365}" style="width:50px"></td>
+    <td><input data-pi="${i}" data-f="fenetre" type="number" value="${p.fenetre||365}" style="width:60px"> j</td>
+    <td><button class="btn d sm ptDel" data-i="${i}">🗑</button></td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Plans tarifaires Booking</h3><span class="sp"></span>
+    <select id="ptBien" style="max-width:200px"><option value="">— Choisir un bien —</option>${biens.map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(b.nom)}</option>`).join('')}</select></div>
+    <div style="padding:16px"><p class="muted" style="margin-bottom:12px">Chaque plan tarifaire Booking définit un nom, une majoration (%), une politique d'annulation, un séjour min/max et une fenêtre de réservation. Ces plans sont utilisés lors de l'export vers Booking.</p>
+    ${sel?`<table class="tbl" style="font-size:12px"><thead><tr><th>Nom</th><th>Majoration</th><th>Politique</th><th>Min nuits</th><th>Max nuits</th><th>Fenêtre</th><th></th></tr></thead><tbody id="ptBody">${rows}</tbody></table>
+    <div style="margin-top:8px"><button class="btn o sm" id="ptAdd">+ Ajouter un plan</button></div>
+    <div style="margin-top:12px"><button class="btn g" id="ptSave">Enregistrer</button> <span class="ok" id="ptOk"></span></div>`:'<p class="muted">Sélectionnez un bien pour configurer ses plans tarifaires.</p>'}
+    </div></div>`;
+  document.getElementById('ptBien').onchange=e=>{state.plansBien=e.target.value;renderPlansTarifBooking();};
+  if(!sel)return;
+  const readPlans=()=>{
+    const trs=document.querySelectorAll('#ptBody tr');
+    return [...trs].map(tr=>{const o={};tr.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f;o[f]=el.type==='number'?Number(el.value):el.value;});return o;});
+  };
+  document.querySelectorAll('.ptDel').forEach(b=>b.onclick=()=>{b.closest('tr').remove();});
+  const addBtn=document.getElementById('ptAdd');
+  if(addBtn)addBtn.onclick=()=>{
+    const tb=document.getElementById('ptBody');
+    const i=tb.querySelectorAll('tr').length;
+    tb.insertAdjacentHTML('beforeend',`<tr><td><input data-pi="${i}" data-f="nom" value="" style="width:120px"></td><td><input data-pi="${i}" data-f="majoration" type="number" value="0" style="width:60px"> %</td><td><select data-pi="${i}" data-f="politique">${["flexible","moderee","stricte","non_remboursable"].map(o=>`<option>${o}</option>`).join('')}</select></td><td><input data-pi="${i}" data-f="sejour_min" type="number" value="1" style="width:50px"></td><td><input data-pi="${i}" data-f="sejour_max" type="number" value="365" style="width:50px"></td><td><input data-pi="${i}" data-f="fenetre" type="number" value="365" style="width:60px"> j</td><td><button class="btn d sm" onclick="this.closest('tr').remove()">🗑</button></td></tr>`);
+  };
+  const saveBtn=document.getElementById('ptSave');
+  if(saveBtn)saveBtn.onclick=async()=>{
+    const plans=readPlans();
+    const e=await reglSet("plans_booking_"+sel,{plans});
+    if(e){document.getElementById('ptOk').innerHTML='<span class="err">'+esc(e.message)+'</span>';return;}
+    document.getElementById('ptOk').textContent='Enregistré ✓';toast('Plans tarifaires enregistrés');
+  };
 }
 
 function renderPlaceholder(rubLabel,subLabel,desc){
@@ -2395,6 +2502,13 @@ async function openForm(k,row){
     if(res.error){$("#fErr").textContent=res.error.message;return;}
     if(chgAnnonce){try{const rt=await sb.from('tache').update({bien_id:d.bien_id}).eq('reservation_id',row.id).in('statut',['a_faire','accepte','en_cours']);if(rt.error)toast('Réservation déplacée, mais tâches non basculées : '+rt.error.message);}catch(e){}invalidate('tache');}
     invalidate(m.table); fermer(); toast("Enregistré"); logAction(row.id?'modification':'creation',m.table,null,m.add||m.table);
+    /* Détection d'écart : avertir si le montant payé dépasse le prix total après modification */
+    if(m.table==='reservation'&&res.data){
+      const r2=Array.isArray(res.data)?res.data[0]:res.data;
+      if(r2&&Number(r2.montant_paye||0)>Number(r2.prix_total||0)){
+        toast('⚠️ Attention : le montant payé ('+money(r2.montant_paye)+') dépasse le prix total ('+money(r2.prix_total)+')');
+      }
+    }
     goRub(state.rub,state.sub);
   };
 }
@@ -6508,6 +6622,19 @@ async function genererReponseIA(message, contexte){
   const cfg=await reglGet("ia");
   if(!cfg||!cfg.anthropic_key){return {error:"Clé API Anthropic non configurée. Allez dans Paramètres > IA."};}
   const ton=cfg.ton||'professionnelle et chaleureuse';
+  /* Vérifier le délai humain des escalades : si un message entrant récent attend une réponse humaine, on ne génère pas */
+  try{const escCfg=await reglGet('ia_escalades');
+    if(escCfg&&escCfg.actif&&escCfg.delai_humain>0){
+      /* Vérifier les mots-clés d'escalade */
+      const mots=(escCfg.mots_cles||'').split(',').map(m=>m.trim().toLowerCase()).filter(Boolean);
+      const msgLow=message.toLowerCase();
+      const motTrouve=mots.some(m=>msgLow.includes(m));
+      const sentimentNegatif=escCfg.sentiment&&/colère|plainte|inacceptable|scandale|honte|rembours|avocat|arnaque|vol|polic|danger|menac|furieu|inadmissible|honteu/i.test(message);
+      if(motTrouve||sentimentNegatif){
+        return {error:'⚠️ Escalade détectée ('+( motTrouve?'mot-clé':'sentiment négatif')+') — ce message nécessite une réponse humaine. Pas de réponse IA générée.'};
+      }
+    }
+  }catch(e){}
   const langue='français';
   const system=`Tu es l'assistant IA de DPM Conciergerie, une société de gestion locative haut de gamme à Marrakech.
 Tu réponds aux messages des voyageurs de manière ${ton.toLowerCase()}.
