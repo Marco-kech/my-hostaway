@@ -978,6 +978,11 @@ const MODULES = {
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["commission_pct","Commission %",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["commission_pct","Commission (%)",{type:"number"}],["notes","Notes (internes, non montrées au propriétaire)",{long:1}],
       ["reglement","Règlement — coordonnées pour ses reversements",{long:1}],["interlocuteurs","Interlocuteurs",{interloc:1}]]},
+  proprietaires_liste:{title:"Propriétaires",add:"Ajouter un propriétaire",table:"proprietaire",
+    cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["ville","Ville"],["commission_pct","Commission (%)",v=>v!=null?v+" %":"—"]],
+    fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["ville","Ville",{}],["ice","ICE / identifiant fiscal",{}],
+      ["commission_pct","Commission DPM (%)",{type:"number"}],["mode_paiement","Mode de paiement (virement, chèque…)",{}],["rib","Coordonnées bancaires (RIB / IBAN)",{long:1}],
+      ["notes","Notes",{long:1}]]},
   canaux:{title:"Canaux connectés",add:"Connecter un canal",table:"canal_connexion",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["canal","Canal",v=>pill(v)],["statut_sync","Sync"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["canal","Canal",{opts:["airbnb","booking","vrbo","expedia","abritel","direct","autre"],def:"airbnb"}],
@@ -1144,16 +1149,31 @@ const RUBRIQUES=[
     ["plans","Plans tarifaires Booking",{plansbooking:1}],
     ["cronhist","Historique tâches auto",{cronhist:1}],
     ["imptarifs","Importer des tarifs",{importtarifs:1}]]},
+  {k:"partenaires",label:"Partenaires",icon:"🤝",subs:[
+    ["liste","Liste des partenaires",{m:"partenaires"}],
+    ["presta","Leurs prestations",{cgprestapart:1}],
+    ["resa","Réservations reçues",{cgresapart:1}],
+    ["stats","Statistiques partenaires",{cgstatspart:1}],
+    ["app","Application partenaire ↗",{cgapppart:1}]]},
+  {k:"proprietaires",label:"Propriétaires",icon:"🏠",subs:[
+    ["liste","Liste des propriétaires",{m:"proprietaires_liste"}],
+    ["biens","Leurs biens",{cgbiensprop:1}],
+    ["planning","Planning & remplissage",{cgplanprop:1}],
+    ["revenus","Revenus consolidés",{cgrevprop:1}],
+    ["presta","Prestations internes",{cgprestaprop:1}],
+    ["app","Application propriétaire ↗",{cgappprop:1}]]},
+  {k:"voyageurs",label:"Voyageurs",icon:"✈",subs:[
+    ["livre","Livre d'or",{m:"voyageurs"}],
+    ["liens","Liens d'accès séjour",{cgliens:1}],
+    ["app","Application voyageur ↗",{cgappvoy:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
-    ["cmd","Commandes",{cgcommandes:1}],
-    ["stat","Statistiques",{cgstats:1}],
+    ["cmd","Commandes (toutes)",{cgcommandes:1}],
+    ["stat","Statistiques globales",{cgstats:1}],
     ["msg","Messages",{cgmessages:1}],
-    ["presta","Prestations",{m:"prestations"}],
-    ["part","Partenaires",{m:"partenaires"}],
+    ["presta","Toutes les prestations",{m:"prestations"}],
     ["serv","Services internes",{m:"services_internes"}],
     ["opt","Options par bien",{cgoptions:1}],
-    ["cpt","Comptes",{cgcomptes:1}],
-    ["liens","Liens voyageurs",{cgliens:1}]]},
+    ["cpt","Comptes & accès",{cgcomptes:1}]]},
   {k:"branch",label:"Branchements & outils",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
@@ -1793,7 +1813,21 @@ function goRub(rk,sk){
   if(t.cgoptions)return renderCgOptions();
   if(t.cgcomptes)return renderCgComptes();
   if(t.cgliens)return renderCgLiens();
-  if(t.cgcommandes)return renderCgCommandes();
+  /* Partenaires */
+  if(t.cgprestapart)return renderPrestaPartenaires();
+  if(t.cgresapart)return renderResaPartenaires();
+  if(t.cgstatspart)return renderStatsPartenaires();
+  if(t.cgapppart){window.open(location.origin+location.pathname.replace(/[^/]*$/,'')+'partenaire/','_blank');goRub('partenaires','liste');return;}
+  /* Propriétaires */
+  if(t.cgbiensprop)return renderBiensProp();
+  if(t.cgplanprop)return renderPlanningProp();
+  if(t.cgrevprop)return renderRevenusProp();
+  if(t.cgprestaprop)return renderPrestaProp();
+  if(t.cgappprop){window.open(location.origin+location.pathname.replace(/[^/]*$/,'')+'proprietaire/','_blank');goRub('proprietaires','liste');return;}
+  /* Voyageurs */
+  if(t.cgappvoy){window.open(location.origin+location.pathname.replace(/[^/]*$/,'')+'sejour/','_blank');goRub('voyageurs','livre');return;}
+  /* Propriétaires liste (alias vers le module existant) */
+    if(t.cgcommandes)return renderCgCommandes();
   if(t.cgmessages)return renderCgMessages();
   if(t.cgstats)return renderCgStats();
   if(t.journalact)return renderJournal();
@@ -2149,6 +2183,156 @@ async function renderMultiUnites(){
     }
     aa.disabled=false;toast(n+' attribuée(s)');renderMultiUnites();
   };
+}
+
+/* ---- ESPACE PARTENAIRES : sous-onglets ---- */
+async function renderPrestaPartenaires(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("partenaire"),loadOpts("prestation")]);
+  const parts=state.opts.partenaire||[];
+  const sel=state.cgPartSel||"";
+  const prestas=(state.opts.prestation||[]).filter(p=>p.type==='externe'&&(!sel||p.partenaire_id===sel));
+  const rows=prestas.map(p=>`<tr><td><b>${esc(p.nom)}</b></td><td>${esc(p.categorie||'')}</td><td>${sel?'':esc(refName('partenaire',p.partenaire_id))}</td>
+    <td>${money(p.prix_logement)}</td><td>${money(p.prix_exterieur)}</td><td>${money(p.net_partenaire)}</td><td>${pill(p.actif?'actif':'inactif')}</td>
+    <td><button class="btn o sm" onclick="openForm('prestations',state.opts.prestation.find(x=>x.id==='${p.id}'))">✏️</button></td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Prestations des partenaires</h3><span class="sp"></span>
+    <select id="cgPartF" style="max-width:200px"><option value="">Tous les partenaires</option>${parts.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select></div>
+    <div style="overflow:auto">${prestas.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Prestation</th><th>Catégorie</th>${sel?'':'<th>Partenaire</th>'}<th>Prix logement</th><th>Prix extérieur</th><th>Net partenaire</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune prestation partenaire.</div>'}</div></div>`;
+  document.getElementById('cgPartF').onchange=e=>{state.cgPartSel=e.target.value;renderPrestaPartenaires();};
+}
+
+async function renderResaPartenaires(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("partenaire"),loadOpts("prestation"),loadOpts("bien")]);
+  const parts=state.opts.partenaire||[];
+  const sel=state.cgPartResaSel||"";
+  const {data:cmds}=await sb.from("commande").select("*").order("date",{ascending:false}).limit(200);
+  const prestas=state.opts.prestation||[];
+  const filtered=(cmds||[]).filter(c=>{const p=prestas.find(x=>x.id===c.prestation_id);return p&&p.type==='externe'&&(!sel||p.partenaire_id===sel);});
+  const rows=filtered.map(c=>{const p=prestas.find(x=>x.id===c.prestation_id);
+    return `<tr><td>${fdate(c.date)}</td><td><b>${esc(p?p.nom:'?')}</b></td><td>${esc(refName('bien',c.bien_id))}</td>
+      <td>${money(c.montant)}</td><td>${pill(c.statut)}</td>
+      <td>${c.statut==='a_confirmer'?`<button class="btn g sm" onclick="cgConfirmCmd('${c.id}','confirme')">✓</button> <button class="btn d sm" onclick="cgConfirmCmd('${c.id}','refuse')">✗</button>`:''}</td></tr>`;}).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Réservations reçues (partenaires)</h3><span class="sp"></span>
+    <select id="cgPartRF" style="max-width:200px"><option value="">Tous</option>${parts.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select></div>
+    <div style="overflow:auto">${filtered.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Date</th><th>Prestation</th><th>Bien</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune réservation.</div>'}</div></div>`;
+  document.getElementById('cgPartRF').onchange=e=>{state.cgPartResaSel=e.target.value;renderResaPartenaires();};
+}
+async function cgConfirmCmd(id,statut){
+  const {error}=await sb.from("commande").update({statut}).eq("id",id);
+  if(error){toast("Erreur : "+error.message);return;}
+  toast(statut==='confirme'?'✅ Confirmée':'Refusée');goRub(state.rub,state.sub);
+}
+
+async function renderStatsPartenaires(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("partenaire"),loadOpts("prestation")]);
+  const parts=state.opts.partenaire||[];
+  const {data:cmds}=await sb.from("commande").select("montant,statut,prestation_id,date").in("statut",["confirme","fait","venu"]).limit(500);
+  const prestas=state.opts.prestation||[];
+  const stats=parts.map(p=>{
+    const pIds=prestas.filter(x=>x.partenaire_id===p.id).map(x=>x.id);
+    const mine=(cmds||[]).filter(c=>pIds.includes(c.prestation_id));
+    const ca=mine.reduce((s,c)=>s+Number(c.montant||0),0);
+    return {nom:p.nom,nb:mine.length,ca,panier:mine.length?Math.round(ca/mine.length):0};
+  }).sort((a,b)=>b.ca-a.ca);
+  const rows=stats.map(s=>`<tr><td><b>${esc(s.nom)}</b></td><td>${s.nb}</td><td>${money(s.ca)}</td><td>${money(s.panier)}</td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Statistiques partenaires</h3></div>
+    <div style="overflow:auto"><table class="tbl" style="font-size:13px"><thead><tr><th>Partenaire</th><th>Réservations</th><th>CA net</th><th>Panier moyen</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="muted">Aucune donnée.</td></tr>'}</tbody></table></div></div>`;
+}
+
+/* ---- ESPACE PROPRIÉTAIRES : sous-onglets ---- */
+async function renderBiensProp(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("bien"),loadOpts("proprietaire")]);
+  const props=state.opts.proprietaire||[];
+  const sel=state.cgPropSel||"";
+  const biens=(state.opts.bien||[]).filter(b=>!sel||b.proprietaire_id===sel);
+  const rows=biens.map(b=>`<tr><td><b>${esc(b.nom)}</b></td><td>${esc((b.parametres||{}).ville||'')}</td><td>${esc(refName('proprietaire',b.proprietaire_id))}</td>
+    <td>${pill(b.statut)}</td><td>${pill(b.proprete||'—')}</td><td>${money(b.prix_nuit_base)}</td>
+    <td><button class="btn o sm" onclick="ficheBien('${b.id}')">👁</button></td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Biens par propriétaire</h3><span class="sp"></span>
+    <select id="cgPropBF" style="max-width:200px"><option value="">Tous les propriétaires</option>${props.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select></div>
+    <div style="overflow:auto">${biens.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Bien</th><th>Ville</th><th>Propriétaire</th><th>Statut</th><th>Propreté</th><th>Prix/nuit</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucun bien.</div>'}</div></div>`;
+  document.getElementById('cgPropBF').onchange=e=>{state.cgPropSel=e.target.value;renderBiensProp();};
+}
+
+async function renderPlanningProp(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("bien"),loadOpts("proprietaire"),loadOpts("voyageur")]);
+  const props=state.opts.proprietaire||[];
+  const sel=state.cgPlanPropSel||"";
+  const biens=(state.opts.bien||[]).filter(b=>!sel||b.proprietaire_id===sel);
+  const mo=state.cgPlanMonth||new Date();
+  const y=mo.getFullYear(),m=mo.getMonth();
+  const days=new Date(y,m+1,0).getDate();
+  const sISO=new Date(y,m,1).toISOString().slice(0,10),eISO=new Date(y,m+1,0).toISOString().slice(0,10);
+  const {data:resas}=await sb.from("reservation").select("*").in("bien_id",biens.map(b=>b.id)).neq("statut","annulee").lte("arrivee",eISO).gte("depart",sISO);
+  const label=mo.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const hdr=Array.from({length:days},(_,i)=>`<th style="font-size:10px;min-width:22px;text-align:center">${i+1}</th>`).join('');
+  const grid=biens.map(b=>{
+    const cells=Array.from({length:days},(_,i)=>{
+      const d=new Date(y,m,i+1).toISOString().slice(0,10);
+      const r=(resas||[]).find(r=>r.bien_id===b.id&&d>=r.arrivee&&d<r.depart);
+      if(!r)return '<td style="background:#f0f0f0"></td>';
+      const isProp=r.statut==='sejour_proprietaire';
+      const bg=isProp?'#3498db':'var(--gold,#C9A227)';
+      const voy=(state.opts.voyageur||[]).find(v=>v.id===r.voyageur_id);
+      const tip=esc((voy?voy.nom:'')+'\n'+fdate(r.arrivee)+' → '+fdate(r.depart)+(voy&&voy.tel?'\n📱 '+voy.tel:''));
+      return `<td style="background:${bg}44;cursor:pointer" title="${tip}" onclick="ficheReservation('${r.id}')"></td>`;
+    }).join('');
+    return `<tr><td style="white-space:nowrap;font-weight:600;font-size:12px;position:sticky;left:0;background:var(--bg);z-index:1">${esc(b.nom)}</td>${cells}</tr>`;
+  }).join('');
+  const taux=biens.length?Math.round((resas||[]).reduce((s,r)=>{const a=Math.max(new Date(r.arrivee),new Date(y,m,1)),d=Math.min(new Date(r.depart),new Date(y,m+1,1));return s+Math.max(0,(d-a)/864e5);},0)*100/(biens.length*days))+'%':'—';
+  $("#content").innerHTML=`<div class="panel"><div class="phead">
+    <button class="btn o sm" id="cgPlanPrev">‹</button><h3 style="text-transform:capitalize">${label}</h3><button class="btn o sm" id="cgPlanNext">›</button>
+    <span class="sp"></span><select id="cgPlanPF" style="max-width:200px"><option value="">Tous les propriétaires</option>${props.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select>
+    <span class="muted" style="margin-left:12px">Occupation : <b>${taux}</b></span></div>
+    <div style="overflow:auto"><table class="tbl" style="font-size:11px"><thead><tr><th style="position:sticky;left:0;background:var(--bg);z-index:2">Bien</th>${hdr}</tr></thead><tbody>${grid||'<tr><td colspan="'+(days+1)+'" class="muted">Aucun bien.</td></tr>'}</tbody></table></div></div>`;
+  document.getElementById('cgPlanPrev').onclick=()=>{mo.setMonth(mo.getMonth()-1);state.cgPlanMonth=mo;renderPlanningProp();};
+  document.getElementById('cgPlanNext').onclick=()=>{mo.setMonth(mo.getMonth()+1);state.cgPlanMonth=mo;renderPlanningProp();};
+  document.getElementById('cgPlanPF').onchange=e=>{state.cgPlanPropSel=e.target.value;renderPlanningProp();};
+}
+
+async function renderRevenusProp(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("bien"),loadOpts("proprietaire"),loadOpts("prestation")]);
+  const props=state.opts.proprietaire||[];
+  const sel=state.cgRevPropSel||"";
+  const biens=(state.opts.bien||[]).filter(b=>!sel||b.proprietaire_id===sel);
+  const bIds=biens.map(b=>b.id);
+  const {data:resas}=await sb.from("reservation").select("bien_id,prix_total,montant_paye,arrivee,depart,statut").in("bien_id",bIds).neq("statut","annulee").limit(500);
+  const {data:cmds}=await sb.from("commande").select("bien_id,montant,statut,prestation_id").in("bien_id",bIds).in("statut",["confirme","fait","venu"]).limit(500);
+  const prestas=state.opts.prestation||[];
+  const revByProp={};
+  props.forEach(p=>{if(sel&&p.id!==sel)return;revByProp[p.id]={nom:p.nom,comm:Number(p.commission_pct||0),loc:0,upsell:0,nuits:0};});
+  (resas||[]).forEach(r=>{const b=biens.find(x=>x.id===r.bien_id);if(!b||!revByProp[b.proprietaire_id])return;
+    const n=Math.max(1,Math.round((new Date(r.depart)-new Date(r.arrivee))/864e5));
+    revByProp[b.proprietaire_id].loc+=Number(r.prix_total||0);revByProp[b.proprietaire_id].nuits+=n;});
+  (cmds||[]).forEach(c=>{const b=biens.find(x=>x.id===c.bien_id);if(!b||!revByProp[b.proprietaire_id])return;
+    const p=prestas.find(x=>x.id===c.prestation_id);if(p&&p.type==='interne')revByProp[b.proprietaire_id].upsell+=Number(c.montant||0);});
+  const arr=Object.values(revByProp).sort((a,b)=>(b.loc+b.upsell)-(a.loc+a.upsell));
+  const rows=arr.map(r=>{const total=r.loc+r.upsell;const comm=Math.round(total*r.comm/100);const net=total-comm;
+    return `<tr><td><b>${esc(r.nom)}</b></td><td>${r.nuits}</td><td>${money(r.loc)}</td><td>${money(r.upsell)}</td><td>${money(total)}</td><td>${r.comm}%</td><td>${money(comm)}</td><td><b>${money(net)}</b></td></tr>`;}).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Revenus consolidés propriétaires</h3><span class="sp"></span>
+    <select id="cgRevPF" style="max-width:200px"><option value="">Tous</option>${props.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select></div>
+    <div style="overflow:auto"><table class="tbl" style="font-size:13px"><thead><tr><th>Propriétaire</th><th>Nuits</th><th>Location</th><th>Upsell</th><th>Total</th><th>Commission</th><th>Comm. DPM</th><th>Net propriétaire</th></tr></thead><tbody>${rows||'<tr><td colspan="8" class="muted">Aucune donnée.</td></tr>'}</tbody></table></div></div>`;
+  document.getElementById('cgRevPF').onchange=e=>{state.cgRevPropSel=e.target.value;renderRevenusProp();};
+}
+
+async function renderPrestaProp(){
+  $("#topAdd").hidden=true;
+  await Promise.all([loadOpts("proprietaire"),loadOpts("prestation")]);
+  const props=state.opts.proprietaire||[];
+  const sel=state.cgPrestaPropSel||"";
+  const prestas=(state.opts.prestation||[]).filter(p=>p.type==='interne'&&(!sel||p.proprietaire_id===sel));
+  const rows=prestas.map(p=>`<tr><td><b>${esc(p.nom)}</b></td><td>${esc(p.categorie||'')}</td><td>${esc(refName('proprietaire',p.proprietaire_id))}</td>
+    <td>${money(p.prix_logement)}</td><td>${pill(p.actif?'actif':'inactif')}</td>
+    <td><button class="btn o sm" onclick="openForm('prestations',state.opts.prestation.find(x=>x.id==='${p.id}'))">✏️</button></td></tr>`).join('');
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Prestations internes (propriétaires)</h3><span class="sp"></span>
+    <select id="cgPPF" style="max-width:200px"><option value="">Tous</option>${props.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select></div>
+    <div style="overflow:auto">${prestas.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Prestation</th><th>Catégorie</th><th>Propriétaire</th><th>Prix</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune prestation interne.</div>'}</div></div>`;
+  document.getElementById('cgPPF').onchange=e=>{state.cgPrestaPropSel=e.target.value;renderPrestaProp();};
 }
 
 function renderPlaceholder(rubLabel,subLabel,desc){
