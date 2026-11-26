@@ -4968,7 +4968,7 @@ async function renderCgFiches(){
   if(!state.cgFichesTab) state.cgFichesTab="proprietaires";
   const [rpa,rpr,rc,rr,rv]=await Promise.all([
     sb.from("partenaire").select("id,nom,categorie,contact,ville,tel,email,peut_editer,peut_promo,actif").order("nom"),
-    sb.from("proprietaire").select("id,nom,contact,tel,email,peut_editer,peut_promo,actif").order("nom"),
+    sb.from("proprietaire").select("id,nom,tel,email,ville,actif").order("nom"),
     sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,langue,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
     sb.from("voyageur").select("id,prenom,nom").order("nom")]);
@@ -4978,14 +4978,14 @@ async function renderCgFiches(){
   const bienNoms={};(state.cache&&state.cache.biens||[]).forEach(b=>bienNoms[b.id]=b.nom);
   const voyNom=id=>{const v=voys.find(x=>x.id===id);return v?(v.prenom?v.prenom+" ":"")+v.nom:"—";};
   const tab=state.cgFichesTab;
-  const droitsHtml=(r)=>{const d=[];if(r.peut_editer)d.push("Édite ses "+(r.categorie?"prestations":"options"));if(r.peut_promo)d.push("Promos");return d.length?d.map(x=>`<span class="pill">${x}</span>`).join(" "):"—";};
+  const droitsHtml=(r)=>{const d=[];if(r.peut_editer)d.push("Édite ses "+(r.categorie?"prestations":"options"));if(r.peut_promo)d.push("Promos");return d.length?d.map(x=>`<span class="pill" style="font-size:11px">${x}</span>`).join(" "):"—";};
   const tbtn=(v,l,n)=>`<button class="btn sm ${tab===v?'':'o'}" data-ftab="${v}">${l} (${n})</button>`;
   let corps="";
   if(tab==="proprietaires"){
-    const lignes=props.map(p=>`<tr><td><b>${esc(p.nom||"—")}</b></td><td>${esc(p.contact||"—")}</td><td>${esc(p.tel||"—")}</td><td>${esc(p.email||"—")}</td><td>${droitsHtml(p)}</td>
+    const lignes=props.map(p=>`<tr><td><b>${esc(p.nom||"—")}</b></td><td>${esc(p.tel||"—")}</td><td>${esc(p.email||"—")}</td><td>${esc(p.ville||"—")}</td><td>${droitsHtml(p)}</td>
       <td><button class="btn o sm" data-fvoir="prop_${p.id}">👁 Voir son espace</button> <button class="btn o sm" data-fed="proprietaire_${p.id}">Modifier</button></td></tr>`).join("");
     corps=`<div style="text-align:right;padding:8px 14px"><button class="btn sm" onclick="openForm('proprietaires_liste')">+ Propriétaire</button></div>
-      ${props.length?`<div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th>Contact</th><th>Téléphone</th><th>E-mail</th><th>Droits</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      ${props.length?`<div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th>Téléphone</th><th>E-mail</th><th>Ville</th><th>Droits</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
       :`<div class="empty">Aucun propriétaire.</div>`}`;
   }else if(tab==="partenaires"){
     const lignes=parts.map(p=>`<tr><td><b>${esc(p.nom||"—")}</b></td><td>${esc(p.categorie||"—")}</td><td>${esc(p.contact||"—")}</td><td>${esc(p.ville||"—")}</td><td>${esc(p.tel||"—")}</td><td>${droitsHtml(p)}</td>
