@@ -1246,7 +1246,8 @@ const RUBRIQUES=[
     ["presta","Toutes les prestations",{m:"prestations"}],
     ["serv","Services internes",{m:"services_internes"}],
     ["opt","Options par bien",{cgoptions:1}],
-    ["cpt","Comptes & accès",{cgcomptes:1}]]},
+    ["cpt","Comptes & accès",{cgcomptes:1}],
+    ["fiches","Fiches & droits",{cgfiches:1}]]},
   {k:"branch",label:"Branchements & outils",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
     ["serrapp","Appareils",{serrappareils:1}],
@@ -1885,6 +1886,7 @@ function goRub(rk,sk){
   if(t.scoreaso)return renderScoreASO();
   if(t.cgoptions)return renderCgOptions();
   if(t.cgcomptes)return renderCgComptes();
+  if(t.cgfiches)return renderCgFiches();
   if(t.cgliens)return renderCgLiens();
   /* Partenaires */
   if(t.cgprestapart)return renderPrestaPartenaires();
@@ -2535,9 +2537,21 @@ function paintList(k){
   const textOf=r=>{let s=Object.keys(r).map(key=>{const v=r[key];return (v==null||typeof v==='object')?'':v;}).join(' ');
     m.cols.forEach(c=>{if(c[2]){try{s+=' '+(''+c[2](r[c[0]],r)).replace(/<[^>]+>/g,'');}catch(e){}}});return s.toLowerCase();};
   const isResa=k==='reservations';
+  const isPresta=k==='prestations';
   const inRange=d=>d&&(!st.from||d>=st.from)&&(!st.to||d<=st.to);
   const extra=isResa&&!!(st.from||st.to||st.canal);
-  const filtered=all.filter(r=>(!q||textOf(r).includes(q))&&(!isResa||(((!st.from&&!st.to)||inRange(r.arrivee)||inRange(r.depart))&&(!st.canal||r.canal===st.canal))));
+  /* Filtre prestations par type */
+  if(isPresta&&!st.typeFilter)st.typeFilter="all";
+  if(isPresta&&!st.fournFilter)st.fournFilter="";
+  const prestaFilter=r=>{
+    if(!isPresta)return true;
+    if(st.typeFilter==="dpm"&&r.type!=="dpm")return false;
+    if(st.typeFilter==="externe"&&r.type!=="externe")return false;
+    if(st.typeFilter==="interne"&&r.type!=="interne")return false;
+    if(st.fournFilter){if(r.type==="externe"&&r.partenaire_id!==st.fournFilter)return false; if(r.type==="interne"&&r.proprietaire_id!==st.fournFilter)return false; if(r.type==="dpm")return false;}
+    return true;
+  };
+  const filtered=all.filter(r=>(!q||textOf(r).includes(q))&&prestaFilter(r)&&(!isResa||(((!st.from&&!st.to)||inRange(r.arrivee)||inRange(r.depart))&&(!st.canal||r.canal===st.canal))));
   const total=filtered.length, size=st.size||20, pages=Math.max(1,Math.ceil(total/size));
   if(st.page>pages)st.page=pages; if(st.page<1)st.page=1;
   const start=(st.page-1)*size, pageRows=filtered.slice(start,start+size);
@@ -2556,6 +2570,16 @@ function paintList(k){
   const showing=total?`${start+1}–${Math.min(start+size,total)} sur ${total}`:'0';
   $("#content").innerHTML=`<div class="panel">
     <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${(q||extra)?' (filtré, '+all.length+' au total)':''}</span></div>
+    ${isPresta?(()=>{
+      const parts=(state.cache&&state.cache.partenaires)||[];
+      const props=(state.cache&&state.cache.proprietaires_liste)||[];
+      const fOpts=parts.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🤝 ${esc(p.nom||'')}</option>`).join("")
+        +props.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🏠 ${esc(p.nom||'')}</option>`).join("");
+      const tb=(v,l)=>`<button class="btn sm ${st.typeFilter===v?'':'o'}" data-ptype="${v}">${l}</button>`;
+      const cToutes=all.length,cDpm=all.filter(r=>r.type==='dpm').length,cPart=all.filter(r=>r.type==='externe').length,cInt=all.filter(r=>r.type==='interne').length;
+      return `<div style="display:flex;gap:6px;align-items:center;padding:10px 14px 0;flex-wrap:wrap;font-size:13px" id="prestaFilters">
+        ${tb("all","Toutes ("+cToutes+")")} ${tb("dpm","DPM ("+cDpm+")")} ${tb("externe","Partenaires ("+cPart+")")} ${tb("interne","Internes ("+cInt+")")}
+        <select id="lsFourn" style="font-size:13px;padding:6px 8px;min-width:180px"><option value="">Tous les partenaires et propriétaires</option>${fOpts}</select></div>`;})():''}
     ${isResa?`<div style="display:flex;gap:8px;align-items:center;padding:10px 14px 0;flex-wrap:wrap;font-size:12px">
       <span class="muted">Arrivée ou départ du</span><input type="date" id="lsFrom" value="${st.from||''}">
       <span class="muted">au</span><input type="date" id="lsTo" value="${st.to||''}">
@@ -2577,6 +2601,8 @@ function paintList(k){
   const prev=document.getElementById('lsPrev'); if(prev)prev.onclick=()=>{if(st.page>1){st.page--;paintList(k);}};
   const next=document.getElementById('lsNext'); if(next)next.onclick=()=>{if(st.page<pages){st.page++;paintList(k);}};
   const exp=document.getElementById('lsExport'); if(exp)exp.onclick=()=>exportCSV(k,filtered);
+  if(isPresta){document.querySelectorAll("[data-ptype]").forEach(b=>b.onclick=()=>{st.typeFilter=b.dataset.ptype;st.page=1;paintList(k);});
+    const fEl=document.getElementById('lsFourn');if(fEl)fEl.onchange=()=>{st.fournFilter=fEl.value;st.page=1;paintList(k);};}
   if(isResa){const f=document.getElementById('lsFrom'),t=document.getElementById('lsTo'),cn=document.getElementById('lsCanal'),rs=document.getElementById('lsReset');
     f.onchange=()=>{st.from=f.value;st.page=1;paintList(k);}; t.onchange=()=>{st.to=t.value;st.page=1;paintList(k);};
     cn.onchange=()=>{st.canal=cn.value;st.page=1;paintList(k);}; if(rs)rs.onclick=()=>{st.from="";st.to="";st.canal="";st.page=1;paintList(k);};}
@@ -4481,14 +4507,19 @@ function cgHorairesHtml(key,v){
     return `<div style="display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap"><label style="min-width:105px;margin:0"><input type="checkbox" id="f_${key}__o${d}" ${j.ouvert?"checked":""}> ${lab}</label>
       <span class="muted">de</span><select id="f_${key}__d${d}" style="width:auto">${hs(j.de==null?9:j.de)}</select><span class="muted">h à</span><select id="f_${key}__a${d}" style="width:auto">${hs(j.a==null?19:j.a)}</select><span class="muted">h</span></div>`;}).join("");
   const o=(val,lab)=>`<option value="${val}" ${mode===val?"selected":""}>${lab}</option>`;
+  const pasVal=(h&&h.pas)?h.pas:"";
+  const pasOpts=[15,30,45,60,90,120].map(n=>`<option value="${n}" ${Number(pasVal)===n?"selected":""}>${n} min</option>`).join("");
   return `<select id="f_${key}__mode" onchange="cgHorairesMaj('${key}')">${o("libre","Toujours disponible (aucune contrainte)")}${o("plages","Plages d'ouverture par jour")}${o("departs","Heures de départ fixes")}</select>
-    <div id="f_${key}__grid" style="margin-top:8px;${mode==="libre"?"display:none":""}">${rows}</div>
+    <div id="f_${key}__grid" style="margin-top:8px;${mode==="libre"?"display:none":""}">${rows}
+      <div id="f_${key}__pasRow" style="margin-top:8px;display:flex;align-items:center;gap:6px;${mode==="plages"?"":"display:none"}"><span class="muted">Créneaux proposés toutes les</span><select id="f_${key}__pas" style="width:auto"><option value="">— durée —</option>${pasOpts}</select></div></div>
     <input id="f_${key}__dep" style="margin-top:8px;${mode==="departs"?"":"display:none"}" placeholder="Heures de départ, ex. 09:00, 14:00, 16:30" value="${esc(((h&&h.departs)||[]).join(", "))}">`;
 }
 function cgHorairesMaj(key){
   const m=document.getElementById("f_"+key+"__mode").value;
   document.getElementById("f_"+key+"__grid").style.display=(m==="libre")?"none":"";
   document.getElementById("f_"+key+"__dep").style.display=(m==="departs")?"":"none";
+  const pasRow=document.getElementById("f_"+key+"__pasRow");
+  if(pasRow) pasRow.style.display=(m==="plages")?"":"none";
 }
 function cgHorairesLire(key){
   const m=document.getElementById("f_"+key+"__mode").value;
@@ -4497,6 +4528,7 @@ function cgHorairesLire(key){
   CG_JOURS.forEach(([d])=>{jours[d]={ouvert:document.getElementById(`f_${key}__o${d}`).checked,
     de:Number(document.getElementById(`f_${key}__d${d}`).value),a:Number(document.getElementById(`f_${key}__a${d}`).value)};});
   const h={mode:m,jours};
+  if(m==="plages"){const pasEl=document.getElementById("f_"+key+"__pas");if(pasEl&&pasEl.value)h.pas=Number(pasEl.value);}
   if(m==="departs"){h.departs=[...new Set(document.getElementById("f_"+key+"__dep").value.split(/[,;\s]+/).map(x=>x.trim().replace("h",":")).filter(x=>/^\d{1,2}:\d{2}$/.test(x))
     .map(x=>{const[a,b]=x.split(":");return a.padStart(2,"0")+":"+b;}).filter(x=>Number(x.slice(0,2))<24&&Number(x.slice(3))<60))].sort();}
   return h;
@@ -4928,6 +4960,81 @@ async function cgVoirComme(c,parts,props){
   const lien=estPart?"partenaire/":"proprietaire/";
   ouvrir(tete+`<div class="b"><p class="phnote" style="margin:0 0 4px">Aperçu en lecture seule des données de la fiche <b>${esc(fiche)}</b> (${estPart?"partenaire":"propriétaire"}), telles que ce compte les retrouve dans son espace. La présentation de son espace est différente : <a href="${lien}" target="_blank" rel="noopener">ouvrir l'espace ${estPart?"partenaire":"propriétaire"}</a>.</p>${corps}</div>
     <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+}
+
+/* ---------- FICHES & DROITS ---------- */
+async function renderCgFiches(){
+  $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
+  if(!state.cgFichesTab) state.cgFichesTab="proprietaires";
+  const [rpa,rpr,rc,rr,rv]=await Promise.all([
+    sb.from("partenaire").select("id,nom,categorie,contact,ville,tel,email,peut_editer,peut_promo,actif").order("nom"),
+    sb.from("proprietaire").select("id,nom,contact,tel,email,peut_editer,peut_promo,actif").order("nom"),
+    sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,langue,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
+    sb.from("voyageur").select("id,prenom,nom").order("nom")]);
+  const err=rpa.error||rpr.error||rc.error||rr.error||rv.error;
+  if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
+  const parts=rpa.data||[],props=rpr.data||[],comptes=rc.data||[],resas=rr.data||[],voys=rv.data||[];
+  const bienNoms={};(state.cache&&state.cache.biens||[]).forEach(b=>bienNoms[b.id]=b.nom);
+  const voyNom=id=>{const v=voys.find(x=>x.id===id);return v?(v.prenom?v.prenom+" ":"")+v.nom:"—";};
+  const tab=state.cgFichesTab;
+  const droitsHtml=(r)=>{const d=[];if(r.peut_editer)d.push("Édite ses "+(r.categorie?"prestations":"options"));if(r.peut_promo)d.push("Promos");return d.length?d.map(x=>`<span class="pill">${x}</span>`).join(" "):"—";};
+  const tbtn=(v,l,n)=>`<button class="btn sm ${tab===v?'':'o'}" data-ftab="${v}">${l} (${n})</button>`;
+  let corps="";
+  if(tab==="proprietaires"){
+    const lignes=props.map(p=>`<tr><td><b>${esc(p.nom||"—")}</b></td><td>${esc(p.contact||"—")}</td><td>${esc(p.tel||"—")}</td><td>${esc(p.email||"—")}</td><td>${droitsHtml(p)}</td>
+      <td><button class="btn o sm" data-fvoir="prop_${p.id}">👁 Voir son espace</button> <button class="btn o sm" data-fed="proprietaire_${p.id}">Modifier</button></td></tr>`).join("");
+    corps=`<div style="text-align:right;padding:8px 14px"><button class="btn sm" onclick="openForm('proprietaires_liste')">+ Propriétaire</button></div>
+      ${props.length?`<div style="overflow:auto"><table><thead><tr><th>Propriétaire</th><th>Contact</th><th>Téléphone</th><th>E-mail</th><th>Droits</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">Aucun propriétaire.</div>`}`;
+  }else if(tab==="partenaires"){
+    const lignes=parts.map(p=>`<tr><td><b>${esc(p.nom||"—")}</b></td><td>${esc(p.categorie||"—")}</td><td>${esc(p.contact||"—")}</td><td>${esc(p.ville||"—")}</td><td>${esc(p.tel||"—")}</td><td>${droitsHtml(p)}</td>
+      <td><button class="btn o sm" data-fvoir="part_${p.id}">👁 Voir son espace</button> <button class="btn o sm" data-fed="partenaire_${p.id}">Modifier</button></td></tr>`).join("");
+    corps=`<div style="text-align:right;padding:8px 14px"><button class="btn sm" onclick="openForm('partenaires')">+ Partenaire</button></div>
+      ${parts.length?`<div style="overflow:auto"><table><thead><tr><th>Partenaire</th><th>Catégorie</th><th>Contact</th><th>Ville</th><th>Téléphone</th><th>Droits</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">Aucun partenaire.</div>`}`;
+  }else if(tab==="sejours"){
+    const resasAcc=resas.filter(r=>r.statut==="confirmee"||r.statut==="terminee").slice(0,50);
+    const lignes=resasAcc.map(r=>{
+      const lienUrl=r.acces_voyageur?`${location.origin}${location.pathname.replace(/[^/]*$/,'')}sejour/#/s/${r.acces_voyageur}`:"";
+      return `<tr><td><b>${esc(voyNom(r.voyageur_id))}</b></td><td>${esc(bienNoms[r.bien_id]||"—")}</td><td>${fdate(r.arrivee)} → ${fdate(r.depart)}</td><td>${esc(r.langue||"Français")}</td>
+        <td>${lienUrl?`<a href="${lienUrl}" target="_blank">Ouvrir ↗</a>`:"—"}</td></tr>`;}).join("");
+    corps=`<p class="phnote" style="padding:8px 14px 0;margin:0">Le lien unique est exactement ce que reçoit le voyageur (sans compte). « Voir son espace » montre la même chose dans l'application.</p>
+      ${resasAcc.length?`<div style="overflow:auto"><table><thead><tr><th>Voyageur</th><th>Bien</th><th>Dates</th><th>Langue</th><th>Lien unique</th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">Aucun séjour avec accès actif.</div>`}`;
+  }else if(tab==="collaborateurs"){
+    const collabs=comptes.filter(c=>c.role==="collaborateur"||c.role==="admin");
+    corps=`<p class="phnote" style="padding:8px 14px 0;margin:0">Pour ajouter un collaborateur : invitez-le via l'adresse de l'application, il crée son compte puis apparaît ici en attente de validation.</p>
+      <div class="empty">La gestion des collaborateurs avec rubriques visibles sera disponible prochainement.</div>`;
+  }else if(tab==="comptes"){
+    const attente=comptes.filter(c=>c.statut==="en_attente").length;
+    const lignes=comptes.map(c=>{
+      const fiche=c.role==="partenaire"?parts.find(x=>x.id===c.partenaire_id):props.find(x=>x.id===c.proprietaire_id);
+      return `<tr><td><b>${esc(c.nom||"—")}</b></td><td>${esc(c.email||"—")}</td><td>${esc(c.role==="partenaire"?"Partenaire":"Propriétaire")}</td><td>${esc(fiche?fiche.nom:"— non rattaché —")}</td><td>${pill(c.statut==="desactive"?"inactif":c.statut)}</td>
+        <td><button class="btn o sm" onclick="goRub('conciergerie','cpt')">Gérer</button></td></tr>`;}).join("");
+    corps=`${attente?`<div style="padding:8px 14px"><span class="pill gold">${attente} en attente</span></div>`:""}
+      ${comptes.length?`<div style="overflow:auto"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Fiche rattachée</th><th>Statut</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">Aucun compte.</div>`}`;
+  }
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Fiches & droits</h3></div>
+    <p class="phnote" style="padding:4px 14px 0;margin:0">Propriétaires, partenaires, séjours et comptes de connexion. « Voir son espace » affiche l'application exactement comme la voit cette personne.</p>
+    <div style="display:flex;gap:6px;padding:10px 14px;flex-wrap:wrap">
+      ${tbtn("proprietaires","Propriétaires",props.length)} ${tbtn("partenaires","Partenaires",parts.length)} ${tbtn("sejours","Séjours",resas.filter(r=>r.acces_voyageur).length)} ${tbtn("collaborateurs","Collaborateurs",0)} ${tbtn("comptes","Comptes",comptes.length)}
+    </div>${corps}</div>`;
+  document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{state.cgFichesTab=b.dataset.ftab;renderCgFiches();});
+  document.querySelectorAll("[data-fvoir]").forEach(b=>b.onclick=()=>{
+    const [type,id]=b.dataset.fvoir.split("_",2);
+    if(type==="part")fichePartenaire(id); else ficheProprietaire(id);});
+  document.querySelectorAll("[data-fed]").forEach(b=>b.onclick=()=>{
+    const [mod,id]=b.dataset.fed.split("_",2);
+    const k=mod==="partenaire"?"partenaires":"proprietaires_liste";
+    const row=(state.cache&&state.cache[k]||[]).find(x=>x.id===id);
+    if(row)openForm(k,row); else {toast("Chargement…");loadAndOpenForm(k,id);}});
+}
+async function loadAndOpenForm(k,id){
+  const m=MODULES[k]; if(!m)return;
+  const {data}=await sb.from(m.table).select("*").eq("id",id).single();
+  if(data)openForm(k,data); else toast("Fiche introuvable");
 }
 
 async function renderScoreASO(){
