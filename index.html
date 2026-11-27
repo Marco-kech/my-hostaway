@@ -3154,12 +3154,15 @@ async function renderDashboard(){
         let imported=0,linked=0;
         for(const l of htListings){
           const htId=l._id;
-          const {data:existing}=await sb.from("canal_bien").select("id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).maybeSingle();
-          if(existing)continue; /* déjà importé */
+          /* limit(1) et non maybeSingle : avec plusieurs lignes, maybeSingle renvoie une erreur, le bien passait pour absent et était recréé à chaque ouverture. */
+          const {data:existingL,error:errEx}=await sb.from("canal_bien").select("id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).limit(1);
+          if(errEx||(existingL&&existingL.length))continue; /* déjà importé, ou doute : on ne crée rien */
           const nom=l.nickname||l.name||l.title||'Annonce Host Tools';
           const channel=l.channel||'airbnb';
           /* Chercher un bien existant avec le même nom */
-          const {data:bienExist}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).maybeSingle();
+          const {data:bienExistL,error:errBe}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).order("cree_le").limit(1);
+          if(errBe)continue;
+          const bienExist=(bienExistL||[])[0];
           let bienId;
           if(bienExist){bienId=bienExist.id;}
           else{
@@ -5308,10 +5311,13 @@ async function renderCanauxCarte(){
       const desc=l.description||l.publicDescription||'';
       const nbPhotos=l.photos?.length||0;
       /* Vérifier si déjà lié via externe_id */
-      const {data:existing}=await sb.from("canal_bien").select("id,bien_id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).maybeSingle();
-      if(existing){logBridge(`⏭ ${nom} — déjà importé`,true);skipped++;continue;}
+      const {data:existingL,error:errEx}=await sb.from("canal_bien").select("id,bien_id").eq("externe_id",htId).eq("tenant_id",state.tenant.id).limit(1);
+      if(errEx){logBridge(`⚠ ${nom} — vérification impossible, rien créé`,false);skipped++;continue;}
+      if(existingL&&existingL.length){logBridge(`⏭ ${nom} — déjà importé`,true);skipped++;continue;}
       /* Chercher un bien avec le même nom pour éviter les doublons */
-      const {data:bienExist}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).maybeSingle();
+      const {data:bienExistL,error:errBe}=await sb.from("bien").select("id").eq("nom",nom).eq("tenant_id",state.tenant.id).order("cree_le").limit(1);
+      if(errBe){logBridge(`⚠ ${nom} — vérification impossible, rien créé`,false);skipped++;continue;}
+      const bienExist=(bienExistL||[])[0];
       let bienId;
       if(bienExist){
         bienId=bienExist.id;
