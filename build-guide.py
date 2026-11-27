@@ -599,10 +599,344 @@ Site direct 0% → le voyageur en direct paie 1 000 DH/nuit (meilleur prix).<br>
 # ============= CHAPITRE 15 — PRESTATIONS =============
 body += """
 <div class="section">
-<h2>7–14. Tâches, Avis, Rapports, Dépenses, Paiements, Relevés, Tarification, Canaux</h2>
-<p><i>Ces rubriques suivent le même principe : une liste avec recherche et filtres, un formulaire de création/modification, et des automatisations. Les chapitres détaillés des tâches (Kanban, automatisation), des rapports financiers (analytique, occupation, prévisionnel), de la tarification (saisonnière, dynamique) et du gestionnaire de canaux (iCal, Booking) sont documentés dans les fiches d'aide contextuelle de l'application (bouton ❓).</i></p>
+<h2>7. Tâches — Kanban, automatisation, checklists</h2>
 
-<hr>
+<h3>7.1 Vue Kanban</h3>
+<p>La rubrique <b>Tâches → Gérer les tâches</b> affiche un tableau Kanban en 3 colonnes : <b>À faire → En cours → Fait</b>. Glissez-déposez une tâche d'une colonne à l'autre pour changer son statut.</p>
+
+<h3>7.2 Créer une tâche</h3>
+""" + step(1, "Cliquez <b>+ Nouvelle tâche</b>") + """
+""" + step(2, "Remplissez le formulaire :") + """
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Titre</b> ✱</td><td>Description courte de la tâche</td><td>Ménage départ Riad Jasmin</td></tr>
+<tr><td>Type</td><td>ménage, checkin, checkout, petit_déjeuner, transport, maintenance, inspection, autre</td><td>ménage</td></tr>
+<tr><td>Bien</td><td>Le bien concerné</td><td>Riad Jasmin</td></tr>
+<tr><td>Réservation</td><td>Réservation liée (optionnel)</td><td>Famille Dupont</td></tr>
+<tr><td>Affecté à</td><td>L'intervenant responsable</td><td>Fatima (agent ménage)</td></tr>
+<tr><td>Superviseur</td><td>La personne qui vérifie (optionnel)</td><td>Kenza</td></tr>
+<tr><td>Commence le</td><td>Date prévue</td><td>15/12/2026</td></tr>
+<tr><td>Heure</td><td>Heure de début</td><td>10:00</td></tr>
+<tr><td>Doit se terminer avant</td><td>Date d'échéance</td><td>15/12/2026</td></tr>
+<tr><td>Coût</td><td>Coût de la tâche (facturé au propriétaire)</td><td>350 DH</td></tr>
+<tr><td>Statut</td><td>a_faire, accepté, en_cours, fait, annulée</td><td>a_faire</td></tr>
+<tr><td>Description</td><td>Détails, liste de ce qu'il faut faire</td><td>Ménage complet + changement draps</td></tr>
+</table>
+
+<h3>7.3 Tâches automatiques</h3>
+<p>Créez des règles qui génèrent automatiquement des tâches à chaque événement :</p>
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Nom</b> ✱</td><td>Nom de la tâche qui sera créée</td><td>Ménage de départ</td></tr>
+<tr><td>Catégorie</td><td>Type de tâche (ménage, transport…)</td><td>ménage</td></tr>
+<tr><td><b>Événement déclencheur</b></td><td>Arrivée ou départ du voyageur</td><td>départ</td></tr>
+<tr><td><b>Décalage (heures)</b></td><td>0 = à l'heure de l'événement, -2 = 2h avant, +2 = 2h après</td><td>0 (au moment du départ)</td></tr>
+<tr><td>Échéance</td><td>même_jour ou prochaine_arrivée</td><td>prochaine_arrivée</td></tr>
+<tr><td>Canal</td><td>Déclencher seulement pour ce canal (vide = tous)</td><td>vide (tous)</td></tr>
+<tr><td>Bien</td><td>Déclencher seulement pour ce bien (vide = tous)</td><td>vide (tous)</td></tr>
+<tr><td>Condition</td><td>Condition supplémentaire : paiement complet, séjour min 3 nuits, canal direct…</td><td>vide</td></tr>
+<tr><td>Affecté à</td><td>L'intervenant qui recevra la tâche</td><td>Fatima</td></tr>
+</table>
+
+<div class="example">
+<b>Exemple concret :</b> Créer une tâche automatique « Ménage de départ »<br>
+• Événement : <b>départ</b>, Décalage : <b>0h</b>, Échéance : <b>prochaine_arrivée</b><br>
+• Affecté à : Fatima, Coût : 350 DH, Type : ménage<br>
+→ À chaque départ de voyageur, une tâche « Ménage de départ » est créée automatiquement pour Fatima, avec comme deadline la prochaine arrivée sur le même bien.
+</div>
+
+<h3>7.4 Modèles de checklist</h3>
+<p>Préparez des listes de vérification réutilisables : checklist ménage (20 points à vérifier), checklist accueil (10 points), checklist départ (8 points). Chaque checklist peut être rattachée à une tâche.</p>
+<p>L'<b>Agenda</b> montre toutes les tâches sur un calendrier. Les <b>Tâches archivées</b> conservent l'historique.</p>
+</div>
+"""
+
+# ============= CHAPITRE 8 — AVIS =============
+body += """
+<div class="section">
+<h2>8. Avis — Gestion et automatisation</h2>
+
+<h3>8.1 Gérer les avis</h3>
+<p>Tous les avis reçus des voyageurs, avec filtres par bien, canal et note.</p>
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th></tr>
+<tr><td>Réservation / Bien / Voyageur</td><td>Rattachement à la réservation concernée</td></tr>
+<tr><td>Canal + Origine</td><td>D'où vient l'avis (Airbnb, Booking, Google, TripAdvisor…)</td></tr>
+<tr><td>Note globale /5</td><td>Note principale</td></tr>
+<tr><td>Notes détaillées</td><td>Propreté, Communication, Emplacement, Qualité-prix (chacune sur 5)</td></tr>
+<tr><td>Commentaire</td><td>Texte du voyageur</td></tr>
+<tr><td>Réponse de l'hôte</td><td>Votre réponse publique</td></tr>
+<tr><td>Étiquettes</td><td>Tags libres pour catégoriser (ex : « piscine », « petit-déjeuner »)</td></tr>
+<tr><td>Afficher sur le site</td><td>Publier dans le moteur de réservation direct</td></tr>
+<tr><td>Statut</td><td>publié, en_attente, masqué, programmé</td></tr>
+</table>
+
+<h3>8.2 Avis automatiques</h3>
+<p>Programmez l'envoi automatique d'une demande d'avis après le séjour :</p>
+<div class="example">
+<b>Exemple :</b> Règle « Demande d'avis J+3 »<br>
+• Événement : <b>départ</b>, Délai : <b>3 jours</b><br>
+• Bien : vide (tous les biens), Canal : vide (tous les canaux)<br>
+→ 3 jours après chaque départ, un message est préparé (brouillon) demandant au voyageur de laisser un avis.
+</div>
+
+<h3>8.3 Modèles d'avis</h3>
+<p>Réponses types pré-rédigées pour gagner du temps : réponse à un avis positif, réponse à un avis négatif, réponse neutre. Chaque modèle inclut le texte de réponse et les notes à attribuer.</p>
+
+<h3>8.4 Analyses IA (Qualité des avis)</h3>
+<p>Synthèse automatique des avis par bien : points forts récurrents, points faibles, tendances sur les 3 derniers mois. Utile pour prioriser les améliorations.</p>
+</div>
+"""
+
+# ============= CHAPITRE 9 — RAPPORTS FINANCIERS =============
+body += """
+<div class="section">
+<h2>9. Rapports financiers</h2>
+
+<h3>9.1 Analytique</h3>
+<p>Tableau de bord financier avec graphiques. Filtrable par bien, par période et par canal :</p>
+<ul>
+<li><b>Revenus par mois</b> : barres empilées par canal (Airbnb, Booking, direct…)</li>
+<li><b>Revenus par bien</b> : classement des biens par chiffre d'affaires</li>
+<li><b>Comparaison N/N-1</b> : évolution par rapport à la même période l'année précédente</li>
+<li><b>Prix moyen par nuit</b> : calculé sur les réservations confirmées</li>
+</ul>
+
+<h3>9.2 Activité de location</h3>
+<p>Détail ligne par ligne de chaque nuit louée : bien, voyageur, montant, canal, commission plateforme. Export CSV pour votre comptable.</p>
+
+<h3>9.3 Taux d'occupation</h3>
+<p>Par bien et par période : pourcentage de nuits louées vs nuits disponibles. Visualisation calendaire (couleur par jour). Utile pour ajuster les tarifs des périodes creuses.</p>
+
+<h3>9.4 Formules</h3>
+<p>Personnalisez les calculs financiers utilisés dans les rapports et relevés :</p>
+<ul>
+<li>Formule de commission plateforme (% déduit du revenu brut)</li>
+<li>Formule de ménage (forfait ou variable selon la durée)</li>
+<li>Formule de reversement propriétaire (% après déduction des charges)</li>
+</ul>
+
+<h3>9.5 Taxes et Paramètres financiers</h3>
+<p><b>Taxes :</b> configurez la taxe de séjour par bien (montant par nuit par personne). <b>Paramètres financiers :</b> devise, format de montant, règles d'arrondi.</p>
+
+<h3>9.6 Export comptable</h3>
+<p>Exportez toutes les écritures financières (revenus, dépenses, commissions) au format CSV, prêt à importer dans votre logiciel comptable. Filtrable par période.</p>
+
+<h3>9.7 Prévisionnel</h3>
+<p>Projection des revenus futurs basée sur :</p>
+<ul>
+<li>Les réservations déjà confirmées (revenus garantis)</li>
+<li>Le taux d'occupation historique (estimation des revenus probables)</li>
+<li>Les tarifs saisonniers paramétrés</li>
+</ul>
+
+<h3>9.8 Rapport mensuel</h3>
+<p>Génération d'un rapport mensuel complet, prêt à envoyer au propriétaire : revenus bruts, dépenses, commissions, occupation, prestations vendues, net à reverser. Format PDF.</p>
+</div>
+"""
+
+# ============= CHAPITRE 10 — DÉPENSES =============
+body += """
+<div class="section">
+<h2>10. Dépenses & suppléments</h2>
+
+<h3>10.1 Créer une dépense</h3>
+""" + step(1, "Allez dans <b>Dépenses & suppléments → Dépenses</b> (ou Suppléments)") + """
+""" + step(2, "Cliquez <b>+ Ajouter</b>") + """
+""" + step(3, "Remplissez :") + """
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Type</b></td><td><b>Dépense</b> = charge (ménage, réparation…) / <b>Supplément</b> = refacturé au voyageur (ménage de départ, linge extra…)</td><td>dépense</td></tr>
+<tr><td><b>Date</b> ✱</td><td>Date de la dépense</td><td>15/12/2026</td></tr>
+<tr><td><b>Libellé</b> ✱</td><td>Description</td><td>Remplacement robinet sdb</td></tr>
+<tr><td>Catégorie</td><td>Ménage, Maintenance, Réparation, Fournitures, Linge, Loyer, Taxe foncière, Commission, Utilities, Autre</td><td>Réparation</td></tr>
+<tr><td>Bien</td><td>Bien concerné</td><td>Riad Jasmin</td></tr>
+<tr><td>Propriétaire</td><td>Propriétaire concerné</td><td>(auto via le bien)</td></tr>
+<tr><td>Réservation</td><td>Réservation liée (optionnel)</td><td>vide</td></tr>
+<tr><td><b>Montant</b> ✱</td><td>Montant en DH</td><td>450 DH</td></tr>
+<tr><td>Pièce jointe</td><td>Photo de la facture / du ticket</td><td>facture.pdf</td></tr>
+<tr><td>Masquer dans les relevés</td><td>Ne pas inclure dans le relevé propriétaire</td><td>Non</td></tr>
+</table>
+
+<h3>10.2 Catégories personnalisées</h3>
+<p>Créez vos propres catégories dans <b>Catégories</b> pour organiser les dépenses selon votre plan comptable.</p>
+
+<h3>10.3 Automatisations de dépenses</h3>
+<p>Pour les dépenses récurrentes (loyer mensuel, abonnement internet, assurance…) :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Nom</td><td>Libellé de la dépense créée</td><td>Abonnement internet</td></tr>
+<tr><td>Nature</td><td>Dépense ou supplément</td><td>dépense</td></tr>
+<tr><td>Répétition</td><td>Mensuel, hebdomadaire, annuel</td><td>mensuel</td></tr>
+<tr><td>Jour du mois</td><td>Jour de création automatique</td><td>1er</td></tr>
+<tr><td>Bien</td><td>Bien concerné (vide = tous)</td><td>Riad Jasmin</td></tr>
+<tr><td>Montant</td><td>Montant récurrent</td><td>500 DH</td></tr>
+</table>
+<div class="note">💡 Bouton <b>Exécuter maintenant</b> : crée immédiatement la dépense sans attendre la prochaine échéance.</div>
+</div>
+"""
+
+# ============= CHAPITRE 11 — PAIEMENTS =============
+body += """
+<div class="section">
+<h2>11. Paiements voyageurs</h2>
+
+<h3>11.1 Encaissements</h3>
+<p>Suivi de tous les paiements reçus. Chaque encaissement est lié à une réservation et indique le montant, la date, le mode de paiement (plateforme, virement, espèces, CMI, PayPal) et le statut (payé, en attente, échoué).</p>
+
+<h3>11.2 Factures voyageurs</h3>
+<p>Générez des factures officielles :</p>
+<table>
+<tr><th>Champ</th><th>Description</th></tr>
+<tr><td><b>Numéro</b> ✱</td><td>Numéro de facture (numérotation manuelle ou auto)</td></tr>
+<tr><td>Réservation / Voyageur / Bien</td><td>Rattachement</td></tr>
+<tr><td><b>Date de facture</b> ✱</td><td>Date d'émission</td></tr>
+<tr><td>Date d'échéance</td><td>Date limite de paiement</td></tr>
+<tr><td><b>Montant HT</b> ✱</td><td>Montant hors taxes</td></tr>
+<tr><td>TVA %</td><td>Taux de TVA applicable (défaut 10%)</td></tr>
+<tr><td>Montant TVA / TTC</td><td>Calculés automatiquement</td></tr>
+<tr><td>Statut</td><td>brouillon, émise, payée, annulée</td></tr>
+<tr><td>Notes / lignes</td><td>Détail des lignes de facturation</td></tr>
+</table>
+
+<h3>11.3 Dépôts de garantie</h3>
+<p>Cycle de vie d'une caution :</p>
+<div class="example">
+<b>Pré-autorisation :</b> en_attente → capturé (si dégâts) → libéré (si RAS)<br>
+<b>Dépôt classique :</b> en_attente → capturé (encaissé) → remboursé (après le départ)
+</div>
+<table>
+<tr><th>Champ</th><th>Description</th></tr>
+<tr><td>Type</td><td>Pré-autorisation (bloqué sur la CB) ou dépôt classique (encaissé)</td></tr>
+<tr><td>Montant</td><td>Montant de la caution</td></tr>
+<tr><td>Statut</td><td>en_attente → capturé → libéré / remboursé / annulé</td></tr>
+</table>
+
+<h3>11.4 Paramètres PayPal et CMI</h3>
+<p>Configurez vos modes de paiement en ligne dans <b>Paramètres PayPal</b> (clé API, mode sandbox/production) et <b>Paramètres → Paiement CMI</b> (pour les paiements par carte au Maroc).</p>
+</div>
+"""
+
+# ============= CHAPITRE 12 — RELEVÉS PROPRIÉTAIRE =============
+body += """
+<div class="section">
+<h2>12. Relevés propriétaire</h2>
+
+<h3>12.1 Générer un relevé mensuel</h3>
+<p>Un relevé récapitule ce qui revient à un propriétaire pour un mois donné :</p>
+<div class="example">
+<b>Exemple — Relevé de novembre 2026 pour « Propriétaire Démo » :</b><br>
+• Revenus bruts des réservations : 24 000 DH<br>
+• − Commission DPM (20%) : −4 800 DH<br>
+• − Dépenses (ménage × 3, réparation plomberie) : −1 550 DH<br>
+• + Prestations internes vendues (petit-déjeuner × 12) : +1 800 DH<br>
+• − Commission DPM sur prestations internes (20%) : −360 DH<br>
+• <b>= Net à reverser : 19 090 DH</b>
+</div>
+
+<h3>12.2 Relevés automatiques</h3>
+<p>Programmez la génération automatique chaque mois :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Nom</td><td>Nom du relevé</td><td>Relevé mensuel tous propriétaires</td></tr>
+<tr><td>Propriétaire</td><td>Vide = tous les propriétaires</td><td>vide</td></tr>
+<tr><td>Jour du mois</td><td>Jour de génération (1-28)</td><td>5 (le 5 de chaque mois)</td></tr>
+<tr><td>Message</td><td>Texte d'accompagnement</td><td>Bonjour, veuillez trouver ci-joint…</td></tr>
+</table>
+
+<h3>12.3 Tableau de bord propriétaire</h3>
+<p>Vision consolidée : revenus par bien, par mois, comparaison avec les mois précédents. Accessible aussi depuis l'espace propriétaire.</p>
+</div>
+"""
+
+# ============= CHAPITRE 13 — TARIFICATION =============
+body += """
+<div class="section">
+<h2>13. Tarification</h2>
+
+<h3>13.1 Tarifs saisonniers</h3>
+<p>Définissez des périodes avec un prix/nuit différent du tarif de base :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Bien ✱</td><td>Le bien concerné</td><td>Riad Jasmin</td></tr>
+<tr><td>Nom</td><td>Nom de la saison</td><td>Haute saison été</td></tr>
+<tr><td>Début / Fin ✱</td><td>Dates de la période</td><td>01/07 → 31/08</td></tr>
+<tr><td>Prix / nuit ✱</td><td>Prix pendant cette période</td><td>2 500 DH</td></tr>
+<tr><td>Nuits minimum</td><td>Minimum de nuits pour cette période</td><td>5</td></tr>
+<tr><td>Priorité</td><td>En cas de chevauchement, le tarif de priorité la plus élevée gagne</td><td>10</td></tr>
+</table>
+<div class="example">
+<b>Exemple de chevauchement :</b><br>
+Période 1 : « Été » (01/07–31/08) → 2 500 DH, priorité 5<br>
+Période 2 : « Semaine du Festival » (10/07–17/07) → 3 500 DH, priorité 10<br>
+→ Du 10 au 17 juillet, le prix sera 3 500 DH (priorité 10 > 5). Le reste de l'été, 2 500 DH.
+</div>
+
+<h3>13.2 Calendrier tarifaire</h3>
+<p>Vision jour par jour du prix effectif de chaque bien, en combinant le tarif de base, les tarifs saisonniers et les majorations par canal.</p>
+
+<h3>13.3 Extras & frais</h3>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Nom ✱</td><td>Nom de l'extra</td><td>Taxe de séjour</td></tr>
+<tr><td>Bien</td><td>Bien concerné (vide = tous)</td><td>vide</td></tr>
+<tr><td>Mode de facturation</td><td>par_séjour, par_nuit, par_personne, par_personne_nuit</td><td>par_nuit</td></tr>
+<tr><td>Prix ✱</td><td>Montant</td><td>25 DH</td></tr>
+<tr><td>Obligatoire</td><td>Oui = ajouté d'office, Non = optionnel pour le voyageur</td><td>Oui</td></tr>
+</table>
+<div class="example">
+<b>Exemple :</b> Taxe de séjour 25 DH/nuit/personne, obligatoire<br>
+Séjour de 5 nuits, 2 personnes → 25 × 5 × 2 = <b>250 DH</b> ajoutés au total
+</div>
+
+<h3>13.4 Tarification dynamique</h3>
+<p>Ajustement automatique des prix en fonction de la demande et des prix concurrents. Intégration possible avec PriceLabs ou Beyond Pricing. Configuration dans cette rubrique.</p>
+
+<h3>13.5 Minimum de nuits</h3>
+<p>Paramétrez le nombre minimum de nuits par bien et par période. Ex : 2 nuits en basse saison, 5 nuits en haute saison, 7 nuits pendant les fêtes.</p>
+</div>
+"""
+
+# ============= CHAPITRE 14 — CANAUX =============
+body += """
+<div class="section">
+<h2>14. Gestionnaire de canaux</h2>
+
+<h3>14.1 Canaux connectés</h3>
+<p>Chaque bien peut être connecté à une ou plusieurs plateformes :</p>
+<table>
+<tr><th>Canal</th><th>Synchronisation</th></tr>
+<tr><td>Airbnb</td><td>Calendrier, tarifs, réservations, messages</td></tr>
+<tr><td>Booking.com</td><td>Calendrier, tarifs, réservations</td></tr>
+<tr><td>VRBO / Abritel</td><td>Calendrier, tarifs, réservations</td></tr>
+<tr><td>Expedia</td><td>Calendrier, réservations</td></tr>
+<tr><td>Direct</td><td>Réservations manuelles ou via moteur de réservation</td></tr>
+</table>
+""" + step(1, "Allez dans <b>Gestionnaire de canaux → Canaux connectés</b>") + """
+""" + step(2, "Cliquez <b>+ Connecter un canal</b>") + """
+""" + step(3, "Sélectionnez le <b>bien</b> et le <b>canal</b>") + """
+""" + step(4, "Collez l'<b>URL iCal d'import</b> (fournie par la plateforme)") + """
+""" + step(5, "Enregistrez. La synchronisation démarre automatiquement.") + """
+
+<h3>14.2 Synchronisation iCal</h3>
+<p>L'iCal est un format standard de calendrier. Chaque plateforme fournit une URL d'export (calendrier de la plateforme) et accepte une URL d'import (votre calendrier).</p>
+<ul>
+<li><b>Import</b> : collez l'URL iCal de la plateforme dans le champ « URL iCal (import) ». My Hostaway récupère les réservations de cette plateforme.</li>
+<li><b>Export</b> : My Hostaway génère une URL iCal pour chaque bien. Collez-la dans la plateforme pour synchroniser les disponibilités.</li>
+</ul>
+<div class="warn">⚠️ La synchronisation iCal a un délai de 15-30 minutes. Pour une synchronisation en temps réel, utilisez les API directes (Airbnb, Booking).</div>
+
+<h3>14.3 Plans tarifaires Booking</h3>
+<p>Configuration des plans tarifaires spécifiques à Booking.com : non remboursable (prix réduit), flexible (prix standard), petit-déjeuner inclus.</p>
+
+<h3>14.4 Carte des annonces</h3>
+<p>Carte géographique montrant tous vos biens et leurs connexions aux plateformes.</p>
+</div>
+"""
+
+# ============= CHAPITRE 15 — PRESTATIONS (déjà détaillé) =============
+body += """
+<div class="section">
 <h2>15. Conciergerie — Prestations</h2>
 <p>Les prestations sont le cœur de l'activité conciergerie DPM. Ce chapitre explique chaque aspect en détail.</p>
 
@@ -905,10 +1239,148 @@ body += """
 # ============= CHAPITRE 25 — ANNEXES =============
 body += """
 <div class="section">
-<h2>21–24. Utilisateurs, Moteur de réservation, Branchements, Paramètres</h2>
-<p><i>Ces rubriques techniques sont documentées dans les fiches d'aide contextuelle de l'application (bouton ❓). Consultez-les directement dans l'application en naviguant vers la rubrique puis en cliquant sur ❓.</i></p>
+<h2>21. Utilisateurs & groupes</h2>
 
-<hr>
+<h3>21.1 Liste des utilisateurs</h3>
+<p>Tous les membres de votre équipe avec leurs rôles et droits :</p>
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th></tr>
+<tr><td><b>Nom complet</b> ✱</td><td>Nom affiché dans l'application</td></tr>
+<tr><td>E-mail</td><td>Adresse e-mail de connexion</td></tr>
+<tr><td>Titre du poste</td><td>Fonction dans l'entreprise</td></tr>
+<tr><td>Téléphone</td><td>Numéro de contact</td></tr>
+<tr><td>Rôle / groupe</td><td>Détermine les droits d'accès (voir ci-dessous)</td></tr>
+<tr><td>Statut</td><td>actif, invité, suspendu</td></tr>
+</table>
+
+<h3>21.2 Rôles disponibles</h3>
+<table>
+<tr><th>Rôle</th><th>Accès</th></tr>
+<tr><td>Propriétaire du compte</td><td>Accès total, gestion des abonnements et de la facturation</td></tr>
+<tr><td>Administrateur</td><td>Accès total sauf facturation du compte</td></tr>
+<tr><td>Gestionnaire</td><td>Biens, réservations, messages, tâches, prestations — pas de paramètres</td></tr>
+<tr><td>Agent de ménage</td><td>Ses tâches de ménage uniquement</td></tr>
+<tr><td>Chauffeur</td><td>Ses tâches de transport uniquement</td></tr>
+<tr><td>Petit-déjeuner</td><td>Ses tâches de petit-déjeuner uniquement</td></tr>
+<tr><td>Propriétaire d'un bien</td><td>Ses biens, ses réservations, ses revenus</td></tr>
+<tr><td>Partenaire</td><td>Ses prestations, ses commandes</td></tr>
+</table>
+
+<h3>21.3 Intervenants</h3>
+<p>Liste séparée des intervenants terrain (femmes de ménage, chauffeurs, techniciens) auxquels on assigne des tâches. Champs : nom, rôle, téléphone, email, biens rattachés.</p>
+
+<h3>21.4 Groupes & droits</h3>
+<p>Personnalisez les droits par groupe : quelles rubriques sont visibles, quelles actions sont autorisées (lecture seule, création, modification, suppression).</p>
+</div>
+"""
+
+body += """
+<div class="section">
+<h2>22. Moteur de réservation (site direct)</h2>
+<p>Your Hostaway inclut un moteur de réservation directe — un mini-site où les voyageurs réservent sans passer par Airbnb ou Booking (0% de commission plateforme).</p>
+
+<h3>22.1 Design</h3>
+<p>Personnalisez l'apparence : couleurs, logo, images de fond, texte d'accroche. Le site s'adapte automatiquement aux couleurs de votre marque.</p>
+
+<h3>22.2 Annonces publiées</h3>
+<p>Choisissez quels biens apparaissent sur le site de réservation directe. Chaque bien publié affiche ses photos, sa description, ses tarifs et un bouton « Réserver ».</p>
+
+<h3>22.3 Pages</h3>
+<p>Créez des pages supplémentaires : À propos, Conditions générales, FAQ, Contact. Éditeur de texte riche (titres, images, liens).</p>
+
+<h3>22.4 Livret d'accueil numérique</h3>
+<p>Remplace le guide papier de la villa. Le voyageur accède depuis son espace à :</p>
+<ul>
+<li>Instructions du logement (wifi, code porte, fonctionnement piscine…)</li>
+<li>Recommandations restaurants, activités, transports</li>
+<li>Numéros utiles (urgences, pharmacie, taxi…)</li>
+<li>Règlement intérieur</li>
+</ul>
+
+<h3>22.5 SEO & Analytics</h3>
+<p>Configuration des balises meta (titre, description), intégration Google Analytics et Facebook Pixel. Paramétrage du sitemap.</p>
+
+<h3>22.6 Traductions</h3>
+<p>Traduisez le site dans plusieurs langues. Chaque texte (boutons, messages, descriptions) peut avoir une traduction dans les langues activées.</p>
+</div>
+"""
+
+body += """
+<div class="section">
+<h2>23. Branchements & outils</h2>
+
+<h3>23.1 Serrures intelligentes</h3>
+<p>Connectez des serrures connectées (Nuki, Yale, August…) pour générer automatiquement un code d'accès unique par réservation :</p>
+<ul>
+<li><b>Serrures :</b> listez vos serrures avec leur identifiant et le bien rattaché</li>
+<li><b>Appareils :</b> état de la batterie, dernière connexion</li>
+<li><b>Historique accès :</b> chaque utilisation d'un code est tracée (qui, quand, quelle porte)</li>
+</ul>
+<div class="example">
+<b>Fonctionnement :</b> à la création d'une réservation confirmée, un code temporaire est généré (valide de J-arrivée 14h à J-départ 11h). Le code est affiché dans l'espace voyageur et dans les instructions d'arrivée.
+</div>
+
+<h3>23.2 Assurance</h3>
+<p>Configuration d'une assurance voyageur proposée à la réservation (partenariat avec un assureur).</p>
+
+<h3>23.3 Marketplace</h3>
+<p>Intégrations avec des outils tiers : PriceLabs (tarification dynamique), Beyond Pricing, Wheelhouse, etc.</p>
+</div>
+"""
+
+body += """
+<div class="section">
+<h2>24. Paramètres</h2>
+
+<h3>24.1 Détails du compte</h3>
+<p>Nom de l'entreprise, adresse, logo, coordonnées, numéro SIRET/RC, mentions légales. Ces informations apparaissent sur les factures et les contrats générés.</p>
+
+<h3>24.2 Langues</h3>
+<p>Langues disponibles dans les espaces voyageur, partenaire et propriétaire. Ajoutez ou retirez des langues selon votre clientèle.</p>
+
+<h3>24.3 Intégrations email</h3>
+<p>Configurez le serveur SMTP pour l'envoi d'emails depuis l'application (confirmations, factures, relevés). Champs : serveur, port, identifiant, mot de passe, adresse d'expédition.</p>
+
+<h3>24.4 WhatsApp Business</h3>
+<p>Connectez votre compte WhatsApp Business pour envoyer et recevoir des messages WhatsApp directement depuis la boîte de réception. Nécessite la validation Meta Business.</p>
+
+<h3>24.5 SMS</h3>
+<p>Configuration du fournisseur SMS (Twilio, etc.) pour l'envoi de notifications par SMS aux voyageurs.</p>
+
+<h3>24.6 Webhooks</h3>
+<p>Notifications automatiques vers des services externes. Chaque webhook est déclenché par un événement :</p>
+<table>
+<tr><th>Événement</th><th>Exemple d'utilisation</th></tr>
+<tr><td>Nouvelle réservation</td><td>Notifier un channel Slack</td></tr>
+<tr><td>Paiement reçu</td><td>Mettre à jour un tableur Google Sheets</td></tr>
+<tr><td>Check-in complété</td><td>Envoyer un code de serrure</td></tr>
+<tr><td>Nouvelle commande prestation</td><td>Notifier le partenaire par un autre système</td></tr>
+</table>
+
+<h3>24.7 API</h3>
+<p>Clés API pour les développeurs : permettent d'accéder aux données de My Hostaway depuis des applications externes (site web, application mobile, intégration CRM).</p>
+
+<h3>24.8 Notifications</h3>
+<p>Paramétrez quelles notifications vous recevez et par quel canal : email, push, in-app. Par type d'événement (réservation, message, paiement, tâche).</p>
+
+<h3>24.9 Journal d'activité</h3>
+<p>Historique complet de toutes les actions effectuées dans l'application : qui a fait quoi, quand, sur quel élément. Utile pour le suivi et la traçabilité.</p>
+
+<h3>24.10 Politiques d'annulation</h3>
+<p>Modèles de politique d'annulation réutilisables :</p>
+<table>
+<tr><th>Politique</th><th>Conditions</th></tr>
+<tr><td>Flexible</td><td>Remboursement intégral jusqu'à 24h avant l'arrivée</td></tr>
+<tr><td>Modérée</td><td>Remboursement intégral jusqu'à 5 jours avant. 50% ensuite.</td></tr>
+<tr><td>Stricte</td><td>Remboursement 50% jusqu'à 7 jours avant. 0% ensuite.</td></tr>
+<tr><td>Non remboursable</td><td>Aucun remboursement (prix réduit)</td></tr>
+</table>
+</div>
+"""
+
+# ============= ANNEXES =============
+body += """
+<div class="section">
 <h2>25. Annexes</h2>
 
 <h3>A. Glossaire</h3>
