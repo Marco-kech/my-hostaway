@@ -209,7 +209,8 @@ toc_items = [
     ("22", "Moteur de réservation (site direct)", [
         "22.1 Design, Annonces publiées, Pages",
         "22.2 Livret d'accueil numérique",
-        "22.3 SEO & Analytics, Traductions",
+        "22.3 Aperçu public",
+        "22.4 SEO & Analytics, Traductions",
     ]),
     ("23", "Branchements & outils", [
         "23.1 Serrures intelligentes",
@@ -370,20 +371,73 @@ body += """
 # ============= CHAPITRE 5 — RÉSERVATIONS =============
 body += """
 <div class="section">
-<h2>3–4. Calendrier et Boîte de réception</h2>
-<h3>3. Calendrier</h3>
-<p><b>Vue multiple :</b> tous les biens sur une frise temporelle horizontale. Chaque réservation est une barre colorée (vert = confirmée, jaune = en attente, rouge = annulée). Glissez horizontalement pour naviguer dans le temps.</p>
-<p><b>Vue mensuelle :</b> calendrier classique avec les réservations positionnées sur les jours. Cliquez sur une réservation pour ouvrir sa fiche complète.</p>
-<p><b>Vue annuelle :</b> grille 12 mois × nombre de biens, avec le taux d'occupation en couleur (vert foncé = haute occupation, rouge = basse). Idéal pour repérer les périodes creuses.</p>
+<h2>3. Calendrier — 3 vues</h2>
 
-<h3>4. Boîte de réception</h3>
-<h4>Conversations</h4>
+<h3>3.1 Vue Multiple (tous les biens)</h3>
+<p>Tous vos biens sont affichés côte à côte sur une frise temporelle horizontale. Chaque réservation est une barre colorée :</p>
+<table>
+<tr><th>Couleur</th><th>Statut</th></tr>
+<tr><td style="background:#2ecc71;color:white;text-align:center">Vert</td><td>Réservation confirmée</td></tr>
+<tr><td style="background:#f1c40f;text-align:center">Jaune</td><td>Demande en attente</td></tr>
+<tr><td style="background:#e74c3c;color:white;text-align:center">Rouge</td><td>Annulée</td></tr>
+<tr><td style="background:#95a5a6;color:white;text-align:center">Gris</td><td>Bloqué / séjour propriétaire</td></tr>
+</table>
+<p>Glissez horizontalement pour naviguer dans le temps. Cliquez sur une barre pour ouvrir la fiche de réservation.</p>
+
+<h3>3.2 Vue Mensuelle</h3>
+<p>Calendrier classique mois par mois. Chaque jour montre les réservations positionnées. Cliquez sur un jour vide pour créer une réservation manuelle. Cliquez sur une réservation pour ouvrir sa fiche.</p>
+<p>Utilisez les flèches ← → pour changer de mois. Le filtre « Bien » permet d'afficher un seul bien.</p>
+
+<h3>3.3 Vue Annuelle (taux d'occupation)</h3>
+<p>Grille 12 mois × nombre de biens. Chaque cellule est colorée selon le taux d'occupation du mois :</p>
+<ul>
+<li><b>Vert foncé</b> : occupation > 75% (très bon)</li>
+<li><b>Vert clair</b> : occupation 50-75% (correct)</li>
+<li><b>Orange</b> : occupation 25-50% (à améliorer)</li>
+<li><b>Rouge</b> : occupation < 25% (alerte)</li>
+</ul>
+<p>Idéal pour repérer les périodes creuses et ajuster les tarifs ou lancer des promotions.</p>
+</div>
+
+<div class="section">
+<h2>4. Boîte de réception — Messagerie complète</h2>
+
+<h3>4.1 Conversations</h3>
 <p>Tous les échanges centralisés. Les messages des plateformes (Airbnb, Booking, WhatsApp) arrivent ici avec la photo et le nom du voyageur, rattachés à la réservation.</p>
+<p>Chaque conversation affiche :</p>
+<ul>
+<li>Le <b>nom du voyageur</b> et sa <b>photo</b></li>
+<li>Le <b>bien</b> et les <b>dates</b> de sa réservation</li>
+<li>Le <b>canal d'origine</b> (Airbnb, Booking, WhatsApp, direct)</li>
+<li>Le <b>dernier message</b> avec son heure</li>
+<li>Un badge <b>Non lu</b> si le message n'a pas été vu</li>
+</ul>
+<p>Répondez directement depuis l'application : le message est envoyé sur la plateforme d'origine.</p>
 
-<h4>Réponses IA</h4>
-<p>L'assistant IA rédige des réponses suggérées basées sur votre <b>Base de connaissances</b>. Ajoutez-y toutes les informations pratiques : adresse exacte, wifi, code porte, horaires de check-in, recommandations restaurants, règlement intérieur. Chaque fait peut être rattaché à un bien précis ou être général (tous les biens).</p>
+<h3>4.2 Réponses IA et Base de connaissances</h3>
+<p>L'assistant IA rédige des réponses suggérées basées sur votre <b>Base de connaissances</b>.</p>
+<h4>Comment remplir la Base de connaissances :</h4>
+""" + step(1, "Allez dans <b>Boîte de réception → Base de connaissances</b>") + """
+""" + step(2, "Cliquez <b>+ Ajouter un fait</b>") + """
+""" + step(3, "Remplissez : le <b>sujet</b> (ex : « wifi »), la <b>réponse</b> (ex : « Le wifi est DPM-Guest, mot de passe 12345 »), et le <b>bien</b> (ou « Tous les biens »)") + """
+""" + step(4, "Enregistrez. L'IA utilisera ce fait quand un voyageur posera la question.") + """
+<div class="note">💡 Plus la base est riche, plus les réponses IA sont pertinentes. Ajoutez : adresse, wifi, code porte, check-in/out, parking, restaurants, recommandations, règlement intérieur.</div>
 
-<h4>Messages automatisés</h4>
+<h3>4.3 Modèles de message</h3>
+<p>Créez des messages types réutilisables. Chaque modèle a un <b>titre</b> (pour le retrouver) et un <b>corps</b> (le texte du message). Variables disponibles :</p>
+<table>
+<tr><th>Variable</th><th>Remplacée par</th></tr>
+<tr><td><code>{prenom}</code></td><td>Prénom du voyageur</td></tr>
+<tr><td><code>{bien}</code></td><td>Nom du bien</td></tr>
+<tr><td><code>{arrivee}</code></td><td>Date d'arrivée</td></tr>
+<tr><td><code>{depart}</code></td><td>Date de départ</td></tr>
+<tr><td><code>{wifi_nom}</code></td><td>Nom du réseau wifi</td></tr>
+<tr><td><code>{wifi_mdp}</code></td><td>Mot de passe wifi</td></tr>
+<tr><td><code>{code_porte}</code></td><td>Code de porte / boîte à clés</td></tr>
+<tr><td><code>{lien_sejour}</code></td><td>Lien vers l'espace voyageur</td></tr>
+</table>
+
+<h3>4.4 Messages automatisés — déclencheurs et brouillons</h3>
 <p>Programmez des messages déclenchés automatiquement :</p>
 <table>
 <tr><th>Déclencheur</th><th>Exemple</th></tr>
@@ -393,6 +447,33 @@ body += """
 <tr><td>Après le départ (J+1)</td><td>Remerciement et demande d'avis</td></tr>
 </table>
 <div class="warn">⚠️ <b>Sécurité :</b> Les messages automatisés créent toujours des <b>brouillons</b> à valider avant envoi. Aucun message n'est jamais envoyé automatiquement sans votre validation.</div>
+
+<h4>Messages récurrents</h4>
+<p>Envoyez des rappels périodiques aux voyageurs pendant leur séjour (jour des poubelles, nettoyage piscine, jour du marché). Chaque rappel se programme par jour de la semaine et par heure.</p>
+
+<h4>Campagnes de re-engagement</h4>
+<p>Envoyez automatiquement un e-mail aux anciens voyageurs après leur départ (réduction fidélité, nouveautés) :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Délai après check-out</td><td>Nombre de jours avant l'envoi</td><td>30 jours</td></tr>
+<tr><td>Sujet</td><td>Objet de l'e-mail</td><td>On vous attend de nouveau !</td></tr>
+<tr><td>Corps</td><td>Texte du message</td><td>Profitez de -10% sur votre prochain séjour…</td></tr>
+</table>
+
+<h4>Gérer les envois</h4>
+<p>Tableau de bord de tous les messages envoyés ou en attente d'envoi. Statut : brouillon, envoyé, planifié, annulé. Permet de retrouver et vérifier n'importe quel message.</p>
+
+<h4>Règles & escalades</h4>
+<p>Définissez des règles automatiques pour les messages non répondus :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Nom</td><td>Nom de la règle</td><td>Alerte message non répondu</td></tr>
+<tr><td>Délai (heures)</td><td>Après combien d'heures sans réponse</td><td>4 heures</td></tr>
+<tr><td>Canal</td><td>Airbnb, Booking, tous</td><td>tous</td></tr>
+<tr><td>Action</td><td>notification (alerte), escalader (transférer à un responsable)</td><td>notification</td></tr>
+<tr><td>Destinataire</td><td>Qui reçoit l'alerte</td><td>Kenza (responsable)</td></tr>
+</table>
+<div class="note">💡 Les règles d'escalade sont essentielles pour maintenir un bon taux de réponse Airbnb (< 24h).</div>
 </div>
 """
 
@@ -479,11 +560,33 @@ body += """
 <tr><td>Utilisations max</td><td>Nombre de fois que le code peut être utilisé</td><td>50</td></tr>
 </table>
 
-<h3>5.7 Filtres de la liste</h3>
+<h3>5.7 Champs personnalisés (Réservations)</h3>
+<p>Ajoutez des champs sur mesure au formulaire de réservation, au-delà des champs standards :</p>
+""" + step(1, "Allez dans <b>Réservations → Champs personnalisés</b>") + """
+""" + step(2, "Cliquez <b>+ Ajouter</b>") + """
+""" + step(3, "Définissez le <b>nom</b> du champ, son <b>type</b> (texte, nombre, liste déroulante, case à cocher, date) et s'il est <b>obligatoire</b>") + """
+<div class="example">
+<b>Exemples de champs personnalisés utiles :</b><br>
+• « Heure d'arrivée prévue » (texte) — pour anticiper l'accueil<br>
+• « Végétarien » (case à cocher) — pour le chef privé<br>
+• « Nombre d'enfants » (nombre) — pour le lit bébé<br>
+• « Occasion spéciale » (liste : anniversaire, lune de miel, aucune) — pour préparer une attention
+</div>
+
+<h3>5.8 Importer des réservations</h3>
+<p>Importez un lot de réservations depuis un fichier CSV :</p>
+""" + step(1, "Allez dans <b>Réservations → Importer</b>") + """
+""" + step(2, "Téléchargez le <b>modèle CSV</b> fourni") + """
+""" + step(3, "Remplissez-le avec vos réservations (colonnes : bien, voyageur, arrivée, départ, canal, prix, statut)") + """
+""" + step(4, "Importez le fichier. L'application vérifie les doublons (même bien + mêmes dates).") + """
+<div class="note">💡 Utile pour migrer depuis un autre logiciel de gestion locative.</div>
+
+<h3>5.9 Filtres de la liste</h3>
 <p>La liste des réservations offre des filtres avancés :</p>
 <ul>
 <li><b>Par date :</b> arrivée ou départ dans une fourchette (du … au …)</li>
 <li><b>Par canal :</b> direct, airbnb, booking, vrbo, etc.</li>
+<li><b>Par statut :</b> confirmée, en attente, annulée, terminée</li>
 <li><b>Recherche textuelle :</b> nom du voyageur, nom du bien, référence</li>
 <li><b>Export CSV :</b> téléchargez la liste filtrée au format tableur</li>
 </ul>
@@ -599,6 +702,44 @@ Site direct 0% → le voyageur en direct paie 1 000 DH/nuit (meilleur prix).<br>
 <li>Note moyenne des avis</li>
 </ul>
 <div class="note">💡 Un score > 80 améliore votre classement sur les plateformes. Visez 90+ pour chaque bien.</div>
+
+<h3>6.9 Multi-unités / Chambres</h3>
+<p>Pour un riad ou un hôtel qui loue des chambres individuellement :</p>
+<ul>
+<li>Créez un <b>bien parent</b> (le riad entier) avec le type d'unité « parent »</li>
+<li>Créez des <b>biens enfants</b> (chaque chambre) avec le type d'unité « enfant » et le parent rattaché</li>
+<li>Chaque chambre a ses propres tarifs, disponibilités et annonces sur les plateformes</li>
+<li>Le parent peut aussi être loué en entier (toutes les chambres en exclusivité)</li>
+</ul>
+
+<h3>6.10 Dupliquer une annonce</h3>
+<p>Pour créer rapidement un bien similaire :</p>
+""" + step(1, "Allez dans <b>Annonces → Dupliquer une annonce</b>") + """
+""" + step(2, "Sélectionnez le <b>bien source</b> (celui à copier)") + """
+""" + step(3, "Donnez un <b>nouveau nom</b> au bien dupliqué") + """
+""" + step(4, "Cliquez <b>Dupliquer</b>. Tous les champs sont copiés (description, tarifs, équipements…) sauf les réservations et les connexions aux plateformes.") + """
+<div class="note">💡 Idéal pour un propriétaire qui a 2 appartements similaires dans la même résidence.</div>
+
+<h3>6.11 Champs personnalisés (Annonces)</h3>
+<p>Ajoutez des champs sur mesure au formulaire de bien, par exemple « Numéro de contrat », « Date du mandat », « Contact gardien ». Fonctionne comme les champs personnalisés des réservations (voir 5.7).</p>
+
+<h3>6.12 Groupes d'annonces</h3>
+<p>Regroupez vos biens par catégorie pour simplifier la gestion : « Villas Palmeraie », « Riads Médina », « Appartements Guéliz ». Les groupes permettent de filtrer rapidement et d'appliquer des actions en masse.</p>
+
+<h3>6.13 Ordre des annonces</h3>
+<p>Définissez l'ordre d'affichage de vos biens dans l'application et sur votre moteur de réservation direct. Glissez-déposez les biens pour les réordonner. Les biens les plus rentables ou les plus demandés en premier.</p>
+
+<h3>6.14 Édition en masse</h3>
+<p>Modifiez un champ sur plusieurs biens à la fois :</p>
+""" + step(1, "Allez dans <b>Annonces → Édition en masse</b>") + """
+""" + step(2, "Cochez les biens à modifier") + """
+""" + step(3, "Choisissez le <b>champ</b> à modifier (ex : « Prix de base », « Nuits minimum », « Politique d'annulation »)") + """
+""" + step(4, "Entrez la <b>nouvelle valeur</b>") + """
+""" + step(5, "Cliquez <b>Appliquer</b>. Tous les biens cochés sont mis à jour.") + """
+<div class="warn">⚠️ Vérifiez votre sélection avant d'appliquer — les changements sont immédiats sur tous les biens cochés.</div>
+
+<h3>6.15 Importer des biens (CSV)</h3>
+<p>Importez vos biens depuis un fichier CSV avec les colonnes : nom, type, adresse, ville, pays, chambres, capacité, prix_base, devise. Utile pour migrer depuis un autre logiciel.</p>
 </div>
 """
 
@@ -933,10 +1074,23 @@ body += """
 <div class="warn">⚠️ La synchronisation iCal a un délai de 15-30 minutes. Pour une synchronisation en temps réel, utilisez les API directes (Airbnb, Booking).</div>
 
 <h3>14.3 Plans tarifaires Booking</h3>
-<p>Configuration des plans tarifaires spécifiques à Booking.com : non remboursable (prix réduit), flexible (prix standard), petit-déjeuner inclus.</p>
+<p>Configuration des plans tarifaires spécifiques à Booking.com :</p>
+<table>
+<tr><th>Plan</th><th>Description</th><th>Effet</th></tr>
+<tr><td><b>Standard (flexible)</b></td><td>Annulation gratuite selon votre politique</td><td>Prix normal</td></tr>
+<tr><td><b>Non remboursable</b></td><td>Pas d'annulation possible</td><td>Prix réduit de 5-15% (configuré)</td></tr>
+<tr><td><b>Petit-déjeuner inclus</b></td><td>Tarif incluant le petit-déjeuner</td><td>Prix majoré du coût du petit-déjeuner</td></tr>
+</table>
+<p>Chaque plan se configure ici et se synchronise avec votre extranet Booking.</p>
 
 <h3>14.4 Carte des annonces</h3>
-<p>Carte géographique montrant tous vos biens et leurs connexions aux plateformes.</p>
+<p>Carte géographique interactive montrant tous vos biens positionnés par leurs coordonnées GPS. Chaque marqueur affiche le nom du bien, le nombre de canaux connectés et le taux d'occupation.</p>
+
+<h3>14.5 Historique des tâches automatiques</h3>
+<p>Journal des synchronisations automatiques entre My Hostaway et les plateformes : heure, type (import/export), bien concerné, statut (succès/échec). Utile pour diagnostiquer un problème de synchronisation.</p>
+
+<h3>14.6 Importer des tarifs</h3>
+<p>Importez vos tarifs saisonniers depuis un fichier CSV. Colonnes requises : bien, date_debut, date_fin, prix_nuit, nuits_min. Utile pour reprendre des tarifs depuis un autre logiciel.</p>
 </div>
 """
 
@@ -1157,7 +1311,17 @@ body += """
 <li><b>Dernières commandes</b> : les 10 dernières commandes sur ses prestations avec date, bien, montant, statut</li>
 </ul>
 
-<h3>16.3 Espace partenaire — ce que voit le partenaire</h3>
+<h3>16.3 Leurs prestations (vue dédiée)</h3>
+<p>Le sous-onglet <b>Partenaires → Leurs prestations</b> affiche toutes les prestations classées par partenaire. Pour chaque partenaire, vous voyez la liste de ses prestations avec prix, commission, net, horaires et statut (active/inactive). Cliquez sur ✏️ pour modifier directement une prestation.</p>
+<div class="note">💡 Ce sous-onglet offre une vue transversale — toutes les prestations de tous les partenaires sur un seul écran, alors que la fiche partenaire ne montre que les siennes.</div>
+
+<h3>16.4 Réservations reçues (vue dédiée)</h3>
+<p>Le sous-onglet <b>Partenaires → Réservations reçues</b> affiche toutes les commandes reçues par les partenaires. Filtrable par partenaire, par statut et par date. Chaque ligne montre : prestation, voyageur, bien, date, quantité, montant, statut.</p>
+
+<h3>16.5 Statistiques partenaires</h3>
+<p>Sous-onglet <b>Partenaires → Statistiques</b> : chiffre d'affaires par partenaire, top des prestations les plus commandées, évolution mensuelle. Filtrable par partenaire et par période.</p>
+
+<h3>16.6 Espace partenaire — ce que voit le partenaire</h3>
 <p>L'espace partenaire (/partenaire/) est une application web séparée. Le partenaire :</p>
 """ + step(1, "Crée un compte depuis l'URL /partenaire/ (formulaire d'inscription)") + """
 """ + step(2, "Sa demande apparaît dans <b>Comptes & accès</b> avec statut « en_attente »") + """
@@ -1171,16 +1335,54 @@ body += """
 body += """
 <div class="section">
 <h2>17. Conciergerie — Propriétaires</h2>
-<p>Le processus est similaire aux partenaires. Chaque propriétaire a une fiche avec :</p>
+
+<h3>17.1 Créer un propriétaire</h3>
+""" + step(1, "Allez dans <b>Propriétaires → Liste</b>") + """
+""" + step(2, "Cliquez <b>+ Ajouter un propriétaire</b>") + """
+""" + step(3, "Remplissez :") + """
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Nom</b> ✱</td><td>Nom du propriétaire</td><td>M. Dupont</td></tr>
+<tr><td>Email</td><td>Email de contact</td><td>dupont@gmail.com</td></tr>
+<tr><td>Téléphone</td><td>Numéro principal</td><td>+33 6 12 34 56 78</td></tr>
+<tr><td>Adresse, Ville, Pays</td><td>Adresse postale</td><td>Paris, France</td></tr>
+<tr><td>ICE</td><td>Identifiant entreprise (si société)</td><td>—</td></tr>
+<tr><td>Commission DPM (%)</td><td>% retenu par DPM sur les revenus locatifs</td><td>20%</td></tr>
+<tr><td>Mode de paiement</td><td>Comment DPM reverse les revenus</td><td>Virement bancaire</td></tr>
+<tr><td>RIB / IBAN</td><td>Coordonnées bancaires pour les reversements</td><td>FR76 1234…</td></tr>
+<tr><td>Note</td><td>Informations internes</td><td>Propriétaire absent, joignable par WhatsApp</td></tr>
+</table>
+
+<h3>17.2 Fiche propriétaire complète</h3>
+<p>Chaque propriétaire a une fiche complète (cliquez <b>👁</b>) avec :</p>
 <ul>
-<li><b>Informations :</b> nom, email, tél, adresse, ville, ICE, commission DPM %, mode de paiement</li>
-<li><b>Ses biens :</b> liste des biens rattachés avec statut et prix/nuit</li>
+<li><b>Informations :</b> toutes les données saisies ci-dessus</li>
 <li><b>Performance :</b> biens gérés, réservations confirmées, revenus cumulés</li>
 <li><b>Prestations internes :</b> avec bouton <b>+ Ajouter une prestation</b> (pré-rempli type=interne + proprietaire_id)</li>
 <li><b>Dernières réservations :</b> les 10 dernières sur ses biens</li>
 </ul>
-<p>L'espace propriétaire (/proprietaire/) fonctionne comme l'espace partenaire : inscription, validation par l'admin, consultation de ses données.</p>
+<h3>17.3 Leurs biens (vue dédiée)</h3>
+<p>Le sous-onglet <b>Propriétaires → Leurs biens</b> affiche tous les biens classés par propriétaire. Pour chaque propriétaire : liste de ses biens avec nom, type, statut, occupation du mois, prix/nuit. Utile pour voir d'un coup quel propriétaire possède quoi.</p>
 
+<h3>17.4 Planning & remplissage</h3>
+<p>Le sous-onglet <b>Propriétaires → Planning & remplissage</b> affiche un calendrier par propriétaire montrant l'occupation de chacun de ses biens. Chaque cellule est colorée selon le statut du jour (occupé, disponible, en ménage). Permet au propriétaire (et à vous) de visualiser les trous à combler.</p>
+
+<h3>17.5 Revenus consolidés</h3>
+<p>Le sous-onglet <b>Propriétaires → Revenus consolidés</b> affiche un tableau mensuel par propriétaire : revenus bruts, dépenses, commission DPM, prestations internes, net à reverser. Mois par mois avec comparaison.</p>
+
+<h3>17.6 Prestations internes</h3>
+<p>Le sous-onglet <b>Propriétaires → Prestations internes</b> liste toutes les prestations de type « interne » classées par propriétaire. Chaque prestation montre le prix, la commission DPM et le net propriétaire.</p>
+
+<h3>17.7 Espace propriétaire — ce que voit le propriétaire</h3>
+<p>L'espace propriétaire (/proprietaire/) est une application web séparée. Le propriétaire :</p>
+""" + step(1, "Crée un compte depuis l'URL /proprietaire/ (formulaire « Devenir propriétaire »)") + """
+""" + step(2, "Sa demande apparaît dans <b>Comptes & accès</b> avec statut « en_attente »") + """
+""" + step(3, "L'admin rattache le compte à la bonne fiche propriétaire et clique <b>Valider</b>") + """
+""" + step(4, "Le propriétaire se connecte et voit : ses biens, ses réservations, ses revenus (net après commission DPM et dépenses), son planning, ses statistiques, ses messages") + """
+<p>Pour vérifier ce que voit un propriétaire, utilisez le bouton <b>« Voir comme »</b> dans Comptes & accès.</p>
+</div>
+
+<div class="section">
 <h2>18. Conciergerie — Voyageurs</h2>
 <h3>18.1 Livre d'or</h3>
 <p>Liste de tous les voyageurs avec : nom, email, téléphone, ville, pays, pièce d'identité, préférence marketing. Cliquez 👁 pour ouvrir la fiche complète.</p>
@@ -1303,11 +1505,17 @@ body += """
 <li>Règlement intérieur</li>
 </ul>
 
-<h3>22.5 SEO & Analytics</h3>
-<p>Configuration des balises meta (titre, description), intégration Google Analytics et Facebook Pixel. Paramétrage du sitemap.</p>
+<h3>22.5 Aperçu public</h3>
+<p>Cliquez sur <b>Moteur de réservation → Aperçu public</b> pour voir votre site tel que le voit le voyageur. L'aperçu s'ouvre dans un nouvel onglet. Vérifiez : les photos apparaissent-elles ? Les prix sont-ils corrects ? Le bouton « Réserver » fonctionne-t-il ? Les traductions sont-elles correctes ?</p>
 
-<h3>22.6 Traductions</h3>
-<p>Traduisez le site dans plusieurs langues. Chaque texte (boutons, messages, descriptions) peut avoir une traduction dans les langues activées.</p>
+<h3>22.6 Paramètres du site</h3>
+<p>Configuration générale : nom du site, URL personnalisée, langue par défaut, devise, politique de confidentialité, CGV.</p>
+
+<h3>22.7 SEO & Analytics</h3>
+<p>Configuration des balises meta (titre, description) pour le référencement, intégration Google Analytics (code UA ou G-) et Facebook Pixel. Paramétrage du sitemap automatique.</p>
+
+<h3>22.8 Traductions</h3>
+<p>Traduisez le site dans plusieurs langues. Chaque texte (boutons, messages, descriptions) peut avoir une traduction dans les langues activées. Langues disponibles : français, anglais, arabe, espagnol, allemand, italien, néerlandais, portugais.</p>
 </div>
 """
 

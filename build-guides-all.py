@@ -123,8 +123,8 @@ Un voyageur commande 2 massages → vous recevez 2 × 510 = <b>1 020 DH</b>
 </div>
 
 <div class="section">
-<h2>4. Réservations (commandes reçues)</h2>
-<p>Toutes les commandes de voyageurs sur vos prestations. Pour chaque commande :</p>
+<h2>4. Réservations reçues (commandes)</h2>
+<p>Toutes les réservations de prestations commandées par les voyageurs. Pour chaque commande :</p>
 <table>
 <tr><th>Colonne</th><th>Description</th></tr>
 <tr><td>Date</td><td>Date et heure de la prestation</td></tr>
@@ -203,12 +203,14 @@ proprietaire_body = """
 <p>Votre espace est accessible à l'adresse :<br><b>https://marco-kech.github.io/my-hostaway/proprietaire/</b></p>
 <p>Vous pouvez aussi l'installer sur votre téléphone : ouvrez le lien dans Chrome, puis « Ajouter à l'écran d'accueil ».</p>
 
-<h3>1.2 Créer votre compte</h3>
-""" + step(1, "Ouvrez le lien ci-dessus") + """
-""" + step(2, "Cliquez <b>« Devenir propriétaire »</b>") + """
-""" + step(3, "Remplissez le formulaire : nom, email, téléphone") + """
-""" + step(4, "DPM valide votre demande et rattache votre compte à votre fiche propriétaire") + """
-""" + step(5, "Connectez-vous avec votre email et mot de passe") + """
+<h3>1.2 Créer votre compte (inscription)</h3>
+""" + step(1, "Ouvrez le lien ci-dessus dans votre navigateur") + """
+""" + step(2, "Cliquez le bouton <b>« Devenir propriétaire »</b> sur la page de connexion") + """
+""" + step(3, "Remplissez le formulaire d'inscription : votre nom complet, votre adresse email et choisissez un mot de passe") + """
+""" + step(4, "Votre demande est envoyée à l'équipe DPM") + """
+""" + step(5, "DPM valide votre demande et rattache votre compte à votre fiche propriétaire (sous 24-48h)") + """
+""" + step(6, "Vous recevez un email de confirmation. Connectez-vous avec votre email et votre mot de passe.") + """
+<div class="note">💡 En attendant la validation, vous verrez un message « Votre demande est en cours de traitement ». DPM traite les demandes sous 24-48h.</div>
 </div>
 
 <div class="section">
