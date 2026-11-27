@@ -4971,12 +4971,12 @@ async function renderCgFiches(){
     sb.from("proprietaire").select("*").order("nom"),
     sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
-    sb.from("voyageur").select("id,prenom,nom").order("nom")]);
+    sb.from("voyageur").select("id,nom").order("nom")]);
   const err=rpa.error||rpr.error||rc.error||rr.error||rv.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
   const parts=rpa.data||[],props=rpr.data||[],comptes=rc.data||[],resas=rr.data||[],voys=rv.data||[];
   const bienNoms={};(state.cache&&state.cache.biens||[]).forEach(b=>bienNoms[b.id]=b.nom);
-  const voyNom=id=>{const v=voys.find(x=>x.id===id);return v?(v.prenom?v.prenom+" ":"")+v.nom:"—";};
+  const voyNom=id=>{const v=voys.find(x=>x.id===id);return v?v.nom:"—";};
   const tab=state.cgFichesTab;
   const droitsHtml=(r)=>{const d=[];if(r.peut_editer)d.push("Édite ses "+(r.categorie?"prestations":"options"));if(r.peut_promo)d.push("Promos");return d.length?d.map(x=>`<span class="pill" style="font-size:11px">${x}</span>`).join(" "):"—";};
   const tbtn=(v,l,n)=>`<button class="btn sm ${tab===v?'':'o'}" data-ftab="${v}">${l} (${n})</button>`;
