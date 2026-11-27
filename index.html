@@ -243,8 +243,12 @@ tr:hover td{background:rgba(201,162,39,.04)}
 }
 @media(max-width:560px){
   #content{padding:10px}
-  #top{padding:8px 10px;top:auto;position:relative}
-  #top h2{font-size:16px}
+  #top{padding:8px 10px;top:auto;position:relative;flex-wrap:wrap;gap:8px}
+  #top h2{font-size:16px;flex:1 1 100%;min-width:0;overflow-wrap:anywhere}
+  #top .sp{display:none}
+  #searchWrap{flex:1 1 120px;min-width:0}
+  #globalSearch{width:100%!important;min-width:0}
+  #topAdd{max-width:100%;white-space:normal}
   .kpis{grid-template-columns:1fr 1fr;gap:8px}
   .kpi{padding:12px}
   .kpi .v{font-size:20px}
@@ -6049,7 +6053,7 @@ async function renderExportCompta(){
     <tbody>${rows.map(r=>`<tr><td>${fdate(r.date)}</td><td>${esc(r.ref)}</td><td>${esc(r.bien)}</td><td>${pill(r.canal)}</td><td>${r.nuits}</td><td>${money(r.ca)}</td><td>${money(r.comm)}</td><td>${money(r.menage)}</td><td>${money(r.taxe)}</td><td><b>${money(r.net)}</b></td><td>${pill(r.statut)}</td></tr>`).join("")}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="5">TOTAUX (${rows.length} réservations)</td><td>${money(totCA)}</td><td>${money(totComm)}</td><td>${money(totMen)}</td><td>${money(totTax)}</td><td>${money(totNet)}</td><td></td></tr>
     </tbody></table>`;
-  $("#content").innerHTML=hdr+tbl;
+  $("#content").innerHTML=hdr+`<div style="overflow:auto">`+tbl+`</div>`;
   ["ecBien","ecDu","ecAu","ecFmt"].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=()=>{EC[{ecBien:"bien",ecDu:"du",ecAu:"au",ecFmt:"format"}[id]]=el.value;renderExportCompta();}});
   document.getElementById("ecGen").onclick=()=>{
     const sep=EC.format==="xlsx"?"\t":",";
