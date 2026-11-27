@@ -976,10 +976,19 @@ const MODULES = {
       ["actif","Actif",{opts:["true","false"],def:"true"}]],
     valide:d=>{ if(!!d.proprietaire_id===!!d.partenaire_id) return "Choisissez soit un propriétaire, soit un partenaire (un seul des deux)."; }},
   prestations:{title:"Prestations",add:"Ajouter une prestation",table:"prestation",
-    cols:[["nom","Prestation"],["categorie","Catégorie"],["type","Type",v=>pill(v)],
-      ["partenaire_id","Vendue par",(v,r)=>r&&r.type==="interne"?refName("proprietaire",r.proprietaire_id):(v?refName("partenaire",v):"DPM")],
-      ["prix_logement","Prix au logement",v=>money(v)],["prix_exterieur","Prix à l'extérieur",v=>money(v)],
-      ["net_partenaire","Net partenaire",v=>money(v)],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
+    cols:[["nom","Prestation",(v,r)=>{let s='<b>'+esc(v||'—')+'</b>';if(r&&r.categorie)s+='<br><span class="muted" style="font-size:11px">'+esc(r.categorie)+'</span>';
+      if(r&&r.horaires&&typeof r.horaires==='object'){const h=r.horaires;let ht='';
+        if(h.mode==='departs'&&h.departs&&h.departs.length){ht='🕒 Départs '+h.departs.join(', ');if(h.pas)ht+=' ('+h.pas+' min)';const fermes=CG_JOURS.filter(([d])=>h.jours&&h.jours[d]&&!h.jours[d].ouvert).map(([,l])=>l.slice(0,3));if(fermes.length)ht+=' · '+fermes.join(', ')+' fermé';}
+        else if(h.mode==='plages'){const ouv=CG_JOURS.filter(([d])=>h.jours&&h.jours[d]&&h.jours[d].ouvert);const fermes=CG_JOURS.filter(([d])=>h.jours&&h.jours[d]&&!h.jours[d].ouvert).map(([,l])=>l.slice(0,3));
+          if(ouv.length){const j0=h.jours[ouv[0][0]];const same=ouv.every(([d])=>{const j=h.jours[d];return j.de===j0.de&&j.a===j0.a;});
+            if(same){ht='🕒 '+(ouv.length===7?'':'')+(j0.de===0&&j0.a===24?'24h/24':`${j0.de}h–${j0.a}h`);if(h.pas)ht+=' ('+h.pas+' min)';if(fermes.length)ht+=' · '+fermes.join(', ')+' fermé';}
+            else{ht='🕒 Horaires variables';if(fermes.length)ht+=' · '+fermes.join(', ')+' fermé';}}}
+        if(ht)s+='<br><span class="muted" style="font-size:10.5px">'+ht+'</span>';}return s;}],
+      ["type","Type",v=>pill(v)],
+      ["partenaire_id","Fournisseur",(v,r)=>r&&r.type==="interne"?refName("proprietaire",r.proprietaire_id):(v?refName("partenaire",v):"DPM")],
+      ["prix_logement","Prix",v=>money(v)],
+      ["commission_logement","Commission",(v,r)=>{if(!r||r.type!=='externe')return'<span class="muted">comm. DPM</span>';const m=r.mode_commission_logement==='montant';return v?(v+(m?' DH':' %')):'—';}],
+      ["net_partenaire","Net partenaire",v=>money(v)],["actif","Active",v=>v?pill("actif"):pill("inactif")]],
     fields:[["nom","Nom de la prestation",{req:1}],["categorie","Catégorie (bien-être, repas, excursion…)",{}],
       ["type","Type",{opts:["externe","interne","dpm"],def:"externe",req:1}],
       ["partenaire_id","Partenaire (obligatoire si « externe »)",{ref:"partenaire"}],
@@ -2602,6 +2611,7 @@ function paintList(k){
       <button class="btn o sm" id="lsExport" title="Exporter en CSV">⬇ CSV</button>
     </div>
     <div style="overflow:auto">${total?`<table><thead><tr>${m.cols.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${q?'Aucun résultat pour « '+esc(st.q)+' ».':'Aucun élément.'+(m.add?' Cliquez sur « '+m.add+' ».':'')}</div>`}</div>
+    ${isPresta&&total?'<p class="muted" style="font-size:11px;padding:4px 14px 8px;margin:0">Commission DPM = (prix facturé − net partenaire) × quantité, sur les prestations partenaires confirmées. Les prestations internes ont une commission fixée par bien.</p>':''}
   </div>`;
   const qEl=document.getElementById('lsQ');
   if(qEl)qEl.oninput=()=>{st.q=qEl.value;st.page=1;const pos=qEl.selectionStart;paintList(k);const n=document.getElementById('lsQ');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
@@ -4522,8 +4532,18 @@ function cgHorairesHtml(key,v){
   const pasOpts=[15,30,45,60,90,120].map(n=>`<option value="${n}" ${Number(pasVal)===n?"selected":""}>${n} min</option>`).join("");
   return `<select id="f_${key}__mode" onchange="cgHorairesMaj('${key}')">${o("libre","Toujours disponible (aucune contrainte)")}${o("plages","Plages d'ouverture par jour")}${o("departs","Heures de départ fixes")}</select>
     <div id="f_${key}__grid" style="margin-top:8px;${mode==="libre"?"display:none":""}">${rows}
-      <div id="f_${key}__pasRow" style="margin-top:8px;display:flex;align-items:center;gap:6px;${mode==="plages"?"":"display:none"}"><span class="muted">Créneaux proposés toutes les</span><select id="f_${key}__pas" style="width:auto"><option value="">— durée —</option>${pasOpts}</select></div></div>
+      <div id="f_${key}__pasRow" style="margin-top:8px;display:flex;align-items:center;gap:6px;${mode==="plages"?"":"display:none"}"><span class="muted">Créneaux proposés toutes les</span><select id="f_${key}__pas" style="width:auto"><option value="">— durée —</option>${pasOpts}</select></div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn o sm" onclick="cgHorairesPreset('${key}','247')">24h/24, 7j/7</button><button type="button" class="btn o sm" onclick="cgHorairesPreset('${key}','8_20')">Tous les jours 8h–20h</button></div></div>
     <input id="f_${key}__dep" style="margin-top:8px;${mode==="departs"?"":"display:none"}" placeholder="Heures de départ, ex. 09:00, 14:00, 16:30" value="${esc(((h&&h.departs)||[]).join(", "))}">`;
+}
+function cgHorairesPreset(key,preset){
+  CG_JOURS.forEach(([d])=>{
+    const cb=document.getElementById("f_"+key+"__o"+d); if(cb)cb.checked=true;
+    const de=document.getElementById("f_"+key+"__d"+d);
+    const a=document.getElementById("f_"+key+"__a"+d);
+    if(preset==="247"){if(de)de.value="0";if(a)a.value="24";}
+    else{if(de)de.value="8";if(a)a.value="20";}
+  });
 }
 function cgHorairesMaj(key){
   const m=document.getElementById("f_"+key+"__mode").value;
@@ -4975,15 +4995,16 @@ async function cgVoirComme(c,parts,props){
 async function renderCgFiches(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   if(!state.cgFichesTab) state.cgFichesTab="proprietaires";
-  const [rpa,rpr,rc,rr,rv]=await Promise.all([
+  const [rpa,rpr,rc,rr,rv,rm]=await Promise.all([
     sb.from("partenaire").select("*").order("nom"),
     sb.from("proprietaire").select("*").order("nom"),
     sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
     sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
-    sb.from("voyageur").select("id,nom").order("nom")]);
+    sb.from("voyageur").select("id,nom").order("nom"),
+    sb.from("membre").select("*").order("nom")]);
   const err=rpa.error||rpr.error||rc.error||rr.error||rv.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
-  const parts=rpa.data||[],props=rpr.data||[],comptes=rc.data||[],resas=rr.data||[],voys=rv.data||[];
+  const parts=rpa.data||[],props=rpr.data||[],comptes=rc.data||[],resas=rr.data||[],voys=rv.data||[],membres=(rm&&rm.data)||[];
   const bienNoms={};(state.cache&&state.cache.biens||[]).forEach(b=>bienNoms[b.id]=b.nom);
   const voyNom=id=>{const v=voys.find(x=>x.id===id);return v?v.nom:"—";};
   const tab=state.cgFichesTab;
@@ -5012,9 +5033,19 @@ async function renderCgFiches(){
       ${resasAcc.length?`<div style="overflow:auto"><table><thead><tr><th>Voyageur</th><th>Bien</th><th>Dates</th><th>Lien unique</th></tr></thead><tbody>${lignes}</tbody></table></div>`
       :`<div class="empty">Aucun séjour avec accès actif.</div>`}`;
   }else if(tab==="collaborateurs"){
-    const collabs=comptes.filter(c=>c.role==="collaborateur"||c.role==="admin");
-    corps=`<p class="phnote" style="padding:8px 14px 0;margin:0">Pour ajouter un collaborateur : invitez-le via l'adresse de l'application, il crée son compte puis apparaît ici en attente de validation.</p>
-      <div class="empty">La gestion des collaborateurs avec rubriques visibles sera disponible prochainement.</div>`;
+    const collabs=membres.filter(m=>["administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner"].includes(m.role));
+    const RUBS_VISIBLES=["Biens","Réservations","Prestations","Partenaires","Propriétaires","Paiements","Rapports","Paramètres"];
+    const roleLib={administrateur:"Administrateur complet",gestionnaire:"Gestionnaire",agent_menage:"Agent ménage",chauffeur:"Chauffeur",petit_dejeuner:"Petit-déjeuner"};
+    const lignes=collabs.map(m=>{
+      const rubs=m.rubriques_visibles;
+      const rubsHtml=(!rubs||!Array.isArray(rubs)||!rubs.length)?`<span style="font-size:11px;color:var(--gold)">Administrateur complet</span>`:rubs.map(r=>`<span class="pill" style="font-size:10px">${esc(r)}</span>`).join(' ');
+      return `<tr><td><b>${esc(m.nom||'—')}</b>${m.titre?'<br><span class="muted" style="font-size:11px">'+esc(m.titre)+'</span>':''}</td><td>${esc(m.email||'—')}</td><td>${rubsHtml}</td><td>${pill(m.statut||'actif')}</td>
+        <td><button class="btn o sm" data-fedrub="${m.id}">Modifier ses rubriques</button></td></tr>`;}).join('');
+    const lienInvit=location.origin+location.pathname;
+    corps=`<div style="text-align:right;padding:8px 14px"><button class="btn sm" id="cgInviteCollab">+ Inviter un collaborateur (copier le lien)</button></div>
+      <p class="phnote" style="padding:0 14px;margin:0">Pour ajouter un collaborateur : cliquez « + Inviter un collaborateur », envoyez-lui le lien copié (WhatsApp / e-mail). Il crée son compte, apparaît ici en attente ; vous ouvrez sa ligne, cochez les rubriques qu'il peut voir, passez le statut sur Actif et enregistrez. Un compte sans aucune case cochée est « Administrateur complet » (tout voir, gérer les droits).</p>
+      ${collabs.length?`<div style="overflow:auto"><table><thead><tr><th>Collaborateur</th><th>E-mail</th><th>Rubriques visibles</th><th>Statut</th><th></th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      :`<div class="empty">Aucun collaborateur pour l'instant. Invitez-en un avec le bouton ci-dessus.</div>`}`;
   }else if(tab==="comptes"){
     const attente=comptes.filter(c=>c.statut==="en_attente").length;
     const lignes=comptes.map(c=>{
@@ -5028,7 +5059,7 @@ async function renderCgFiches(){
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Fiches & droits</h3></div>
     <p class="phnote" style="padding:4px 14px 0;margin:0">Propriétaires, partenaires, séjours et comptes de connexion. « Voir son espace » affiche l'application exactement comme la voit cette personne.</p>
     <div style="display:flex;gap:6px;padding:10px 14px;flex-wrap:wrap">
-      ${tbtn("proprietaires","Propriétaires",props.length)} ${tbtn("partenaires","Partenaires",parts.length)} ${tbtn("sejours","Séjours",resas.filter(r=>r.acces_voyageur).length)} ${tbtn("collaborateurs","Collaborateurs",0)} ${tbtn("comptes","Comptes",comptes.length)}
+      ${tbtn("proprietaires","Propriétaires",props.length)} ${tbtn("partenaires","Partenaires",parts.length)} ${tbtn("sejours","Séjours",resas.filter(r=>r.acces_voyageur).length)} ${tbtn("collaborateurs","Collaborateurs",membres.filter(m=>["administrateur","gestionnaire","agent_menage","chauffeur","petit_dejeuner"].includes(m.role)).length)} ${tbtn("comptes","Comptes",comptes.length)}
     </div>${corps}</div>`;
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{state.cgFichesTab=b.dataset.ftab;renderCgFiches();});
   document.querySelectorAll("[data-fvoir]").forEach(b=>b.onclick=()=>{
@@ -5039,6 +5070,28 @@ async function renderCgFiches(){
     const k=mod==="partenaire"?"partenaires":"proprietaires_liste";
     const row=(state.cache&&state.cache[k]||[]).find(x=>x.id===id);
     if(row)openForm(k,row); else {toast("Chargement…");loadAndOpenForm(k,id);}});
+  /* Collaborateurs : copier lien d'invitation */
+  const invBtn=document.getElementById("cgInviteCollab");
+  if(invBtn)invBtn.onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+location.pathname);toast("Lien d'invitation copié !");}catch(e){toast("Copiez ce lien : "+location.origin+location.pathname);}};
+  /* Collaborateurs : modifier rubriques */
+  const RUBS_VISIBLES=["Biens","Réservations","Prestations","Partenaires","Propriétaires","Paiements","Rapports","Paramètres"];
+  document.querySelectorAll("[data-fedrub]").forEach(b=>b.onclick=()=>{
+    const mid=b.dataset.fedrub, m=membres.find(x=>x.id===mid); if(!m)return;
+    const rubs=Array.isArray(m.rubriques_visibles)?m.rubriques_visibles:[];
+    const checks=RUBS_VISIBLES.map(r=>`<label style="display:block;margin:4px 0"><input type="checkbox" value="${r}" ${rubs.includes(r)?'checked':''}> ${r}</label>`).join('');
+    const statOpts=["actif","invite","suspendu"].map(s=>`<option value="${s}" ${m.statut===s?'selected':''}>${s}</option>`).join('');
+    ouvrir(`<div class="h"><h3>Rubriques de ${esc(m.nom||m.email||'—')}</h3><button class="x" onclick="fermer()">×</button></div>
+      <div class="b"><p class="phnote">Cochez les rubriques que ce collaborateur peut voir. Si aucune n'est cochée, il est « Administrateur complet ».</p>
+        <div id="cgRubChecks">${checks}</div>
+        <div class="field" style="margin-top:12px"><label>Statut</label><select id="cgRubStat">${statOpts}</select></div></div>
+      <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn" id="cgRubSave">Enregistrer</button></div>`);
+    document.getElementById("cgRubSave").onclick=async()=>{
+      const sel=[...document.querySelectorAll("#cgRubChecks input:checked")].map(c=>c.value);
+      const stat=document.getElementById("cgRubStat").value;
+      const {error}=await sb.from("membre").update({rubriques_visibles:sel.length?sel:null,statut:stat}).eq("id",mid);
+      if(error){toast("Erreur : "+error.message);return;}
+      toast("Rubriques mises à jour");fermer();renderCgFiches();};
+  });
 }
 async function loadAndOpenForm(k,id){
   const m=MODULES[k]; if(!m)return;
@@ -8376,7 +8429,8 @@ async function ficheProprietaire(id){
           <div class="fsec">Performance</div>
           ${f('Biens gérés',biens.length)}${f('Réservations conf.',conf.length)}
           ${f('Revenus cumulés',money(rev))}
-          ${prestas.length?`<div class="fsec" style="margin-top:12px">Prestations internes</div>${prestaRows}`:''}
+          <div class="fsec" style="margin-top:12px">Prestations internes <button class="btn g sm" id="fprAddPresta" style="margin-left:8px;font-size:11px">+ Ajouter une prestation</button></div>
+          ${prestas.length?prestas.map(pr=>`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><b>${esc(pr.nom)}</b> — ${esc(pr.categorie||'')} — ${money(pr.prix_logement)} ${pill(pr.actif?'actif':'inactif')} <button class="btn o sm" style="font-size:10px;padding:2px 6px;margin-left:4px" onclick="fermer();openForm('prestations',state.opts.prestation.find(x=>x.id==='${pr.id}'))">✏️</button></div>`).join(''):'<div class="muted" style="font-size:12px;padding:4px 0">Aucune prestation interne. Cliquez sur « + Ajouter » pour en créer.</div>'}
         </div>
       </div>
       ${biensRows?`<div class="fsec" style="margin-top:16px">Ses biens</div>${biensRows}`:''}
@@ -8385,6 +8439,7 @@ async function ficheProprietaire(id){
     <div class="f"><button class="btn o" onclick="fermer()">Fermer</button>
       <button class="btn o" id="fprEdit">✏️ Modifier</button></div>`);
   document.getElementById("fprEdit").onclick=()=>{fermer();openForm('proprietaires_liste',p);};
+  document.getElementById("fprAddPresta").onclick=()=>{fermer();openForm('prestations',{type:'interne',proprietaire_id:id});};
 }
 
 /* ---------- CONTRAT AUTOMATIQUE PDF ---------- */
