@@ -4970,7 +4970,7 @@ async function renderCgFiches(){
     sb.from("partenaire").select("*").order("nom"),
     sb.from("proprietaire").select("*").order("nom"),
     sb.from("cg_compte").select("*").order("cree_le",{ascending:false}),
-    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,langue,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
+    sb.from("reservation").select("id,bien_id,voyageur_id,arrivee,depart,statut,acces_voyageur").in("statut",["confirmee","terminee"]).order("arrivee",{ascending:false}),
     sb.from("voyageur").select("id,prenom,nom").order("nom")]);
   const err=rpa.error||rpr.error||rc.error||rr.error||rv.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
@@ -4997,10 +4997,10 @@ async function renderCgFiches(){
     const resasAcc=resas.filter(r=>r.statut==="confirmee"||r.statut==="terminee").slice(0,50);
     const lignes=resasAcc.map(r=>{
       const lienUrl=r.acces_voyageur?`${location.origin}${location.pathname.replace(/[^/]*$/,'')}sejour/#/s/${r.acces_voyageur}`:"";
-      return `<tr><td><b>${esc(voyNom(r.voyageur_id))}</b></td><td>${esc(bienNoms[r.bien_id]||"—")}</td><td>${fdate(r.arrivee)} → ${fdate(r.depart)}</td><td>${esc(r.langue||"Français")}</td>
+      return `<tr><td><b>${esc(voyNom(r.voyageur_id))}</b></td><td>${esc(bienNoms[r.bien_id]||"—")}</td><td>${fdate(r.arrivee)} → ${fdate(r.depart)}</td>
         <td>${lienUrl?`<a href="${lienUrl}" target="_blank">Ouvrir ↗</a>`:"—"}</td></tr>`;}).join("");
     corps=`<p class="phnote" style="padding:8px 14px 0;margin:0">Le lien unique est exactement ce que reçoit le voyageur (sans compte). « Voir son espace » montre la même chose dans l'application.</p>
-      ${resasAcc.length?`<div style="overflow:auto"><table><thead><tr><th>Voyageur</th><th>Bien</th><th>Dates</th><th>Langue</th><th>Lien unique</th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      ${resasAcc.length?`<div style="overflow:auto"><table><thead><tr><th>Voyageur</th><th>Bien</th><th>Dates</th><th>Lien unique</th></tr></thead><tbody>${lignes}</tbody></table></div>`
       :`<div class="empty">Aucun séjour avec accès actif.</div>`}`;
   }else if(tab==="collaborateurs"){
     const collabs=comptes.filter(c=>c.role==="collaborateur"||c.role==="admin");
