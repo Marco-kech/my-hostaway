@@ -8925,10 +8925,13 @@ function showHelp(){
   const rub=state.rub||'apercu';
   const h=AIDE[rub]||{titre:'Aide',desc:'Sélectionnez une rubrique dans le menu pour afficher l\'aide correspondante.',astuces:[]};
   const astuces=h.astuces.map(a=>'<li>'+a+'</li>').join('');
+  const tours=TOURS[rub];
+  const tourBtn=tours?`<button class="btn g sm" onclick="fermer();startTour('${rub}')" style="margin-top:10px">🎯 Visite guidée de cette page</button>`:'';
   ouvrir(`<div class="h"><h3>❓ ${esc(h.titre)}</h3><button class="x" onclick="fermer()">×</button></div>
     <div class="b" style="max-height:60vh;overflow:auto">
       <p style="margin-bottom:12px">${esc(h.desc)}</p>
       ${astuces?'<div style="background:var(--gold-soft);border-radius:8px;padding:12px;margin-top:8px"><b style="color:var(--gold)">💡 Astuces</b><ul style="margin:6px 0 0;padding-left:18px">'+astuces+'</ul></div>':''}
+      ${tourBtn}
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
         <b>Raccourcis clavier</b>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:6px;font-size:12px">
@@ -8938,8 +8941,126 @@ function showHelp(){
           <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Échap</code><span>Fermer le formulaire</span>
         </div>
       </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
+        <b>📚 Guides PDF téléchargeables</b>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;font-size:12px">
+          <a href="guide-my-hostaway.pdf" target="_blank" style="color:var(--gold)">📄 Guide complet administrateur (26 chapitres)</a>
+          <a href="guide-partenaire.pdf" target="_blank" style="color:var(--gold)">🤝 Guide partenaire</a>
+          <a href="guide-proprietaire.pdf" target="_blank" style="color:var(--gold)">🏠 Guide propriétaire</a>
+          <a href="guide-voyageur.pdf" target="_blank" style="color:var(--gold)">✈️ Guide voyageur</a>
+        </div>
+      </div>
     </div>
-    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button><a href="guide-my-hostaway.pdf" target="_blank" class="btn" style="text-decoration:none">📄 Télécharger le guide PDF</a></div>`);
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+}
+
+/* ========== GUIDED TOUR SYSTEM ========== */
+const TOURS={
+  apercu:[
+    {sel:'#sidebar',txt:"Le menu principal. 22 rubriques organisées en blocs. Cliquez sur une rubrique pour la déplier.",pos:'right'},
+    {sel:'.topbar',txt:"La barre du haut : recherche globale, mode sombre 🌙, notifications 🔔, aide ❓ et bouton + Ajouter.",pos:'bottom'},
+    {sel:'#content .kpi-row, #content .panel:first-child',txt:"Les KPI de la conciergerie : commissions DPM, montants à reverser, CA services internes, occupation.",pos:'bottom'},
+    {sel:'#content table',txt:"Les demandes de prestations en attente. Confirmez ou refusez chaque commande ici.",pos:'top'},
+  ],
+  resa:[
+    {sel:'.topbar .btn.g',txt:"Cliquez ici pour créer une nouvelle réservation manuelle (en direct).",pos:'bottom'},
+    {sel:'#content table',txt:"La liste de toutes vos réservations. Cliquez sur 👁 pour ouvrir une fiche, 📄 pour le contrat PDF.",pos:'top'},
+    {sel:'.tabs',txt:"Les sous-onglets : Liste, Importation, Check-in en ligne, Coupons.",pos:'bottom'},
+  ],
+  annonces:[
+    {sel:'.topbar .btn.g',txt:"Ajoutez un nouveau bien ici. Le formulaire comporte 9 sections à remplir.",pos:'bottom'},
+    {sel:'#content table',txt:"La liste de vos biens avec statut, type et occupation.",pos:'top'},
+  ],
+  conciergerie:[
+    {sel:'.tabs',txt:"5 sous-rubriques : Demandes de prestations, Statistiques, Toutes les prestations, Équipes internes, Fiches & droits.",pos:'bottom'},
+    {sel:'#content',txt:"Le contenu change selon le sous-onglet sélectionné. Commencez par « Demandes » pour traiter les commandes en attente.",pos:'top'},
+  ],
+  partenaires:[
+    {sel:'.topbar .btn.g',txt:"Ajoutez un nouveau partenaire. Remplissez sa fiche avec activité, contact et droits.",pos:'bottom'},
+    {sel:'#content table',txt:"La liste de vos partenaires. Cliquez sur 👁 pour la fiche complète (interlocuteurs, prestations, statistiques).",pos:'top'},
+  ],
+  proprietaires:[
+    {sel:'.topbar .btn.g',txt:"Ajoutez un nouveau propriétaire avec ses coordonnées et son RIB.",pos:'bottom'},
+    {sel:'#content table',txt:"Vos propriétaires. Cliquez sur 👁 pour la fiche (biens, revenus, prestations internes).",pos:'top'},
+  ],
+  taches:[
+    {sel:'#content',txt:"Le Kanban : glissez les tâches entre « À faire », « En cours » et « Fait ».",pos:'top'},
+    {sel:'.tabs',txt:"Sous-onglets : Gérer les tâches, Tâches automatiques, Modèles, Agenda, Archivées.",pos:'bottom'},
+  ],
+  depenses:[
+    {sel:'.topbar .btn.g',txt:"Ajoutez une dépense ou un supplément. Les pièces jointes (factures) sont acceptées.",pos:'bottom'},
+    {sel:'#content table',txt:"Liste des dépenses avec catégorie, bien, montant et pièces jointes.",pos:'top'},
+  ],
+  rapports:[
+    {sel:'.tabs',txt:"10 sous-onglets : Analytique, Activité de location, Occupation, Formules, Taxes, Export, Prévisionnel, Rapport mensuel…",pos:'bottom'},
+    {sel:'#content',txt:"Graphiques et tableaux financiers. Filtrez par bien, par canal et par période.",pos:'top'},
+  ],
+};
+let tourState=null;
+function startTour(rub){
+  const steps=TOURS[rub];if(!steps||!steps.length)return;
+  tourState={rub,steps,idx:0};
+  showTourStep();
+}
+function showTourStep(){
+  if(!tourState)return;
+  endTourHighlight();
+  const{steps,idx}=tourState;
+  if(idx>=steps.length){endTour();return;}
+  const step=steps[idx];
+  const el=document.querySelector(step.sel);
+  // Create overlay
+  let ov=document.getElementById('tourOverlay');
+  if(!ov){ov=document.createElement('div');ov.id='tourOverlay';document.body.appendChild(ov);}
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;pointer-events:auto';
+  // Highlight element
+  if(el){
+    el.style.position=el.style.position||'relative';
+    el.style.zIndex='99999';
+    el.style.boxShadow='0 0 0 4px var(--gold),0 0 20px rgba(201,162,39,0.4)';
+    el.classList.add('tour-highlight');
+    el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+  // Tooltip
+  let tip=document.getElementById('tourTip');
+  if(!tip){tip=document.createElement('div');tip.id='tourTip';document.body.appendChild(tip);}
+  tip.style.cssText=`position:fixed;z-index:100000;background:var(--bg);border:2px solid var(--gold);border-radius:12px;
+    padding:16px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);font-size:13px;color:var(--fg)`;
+  tip.innerHTML=`<div style="font-weight:600;color:var(--gold);margin-bottom:6px">Étape ${idx+1}/${steps.length}</div>
+    <div style="margin-bottom:12px">${step.txt}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      ${idx>0?'<button class="btn o sm" onclick="tourPrev()">← Précédent</button>':''}
+      ${idx<steps.length-1?`<button class="btn g sm" onclick="tourNext()">Suivant →</button>`:`<button class="btn g sm" onclick="endTour()">Terminer ✓</button>`}
+      <button class="btn o sm" onclick="endTour()" style="font-size:11px;opacity:.7">Quitter</button>
+    </div>`;
+  // Position tooltip
+  setTimeout(()=>{
+    if(el){
+      const r=el.getBoundingClientRect();
+      const tw=tip.offsetWidth,th=tip.offsetHeight;
+      let top,left;
+      if(step.pos==='bottom'){top=r.bottom+12;left=r.left+r.width/2-tw/2;}
+      else if(step.pos==='right'){top=r.top;left=r.right+12;}
+      else{top=r.top-th-12;left=r.left+r.width/2-tw/2;}
+      tip.style.top=Math.max(8,Math.min(window.innerHeight-th-8,top))+'px';
+      tip.style.left=Math.max(8,Math.min(window.innerWidth-tw-8,left))+'px';
+    }else{
+      tip.style.top='50%';tip.style.left='50%';tip.style.transform='translate(-50%,-50%)';
+    }
+  },100);
+}
+function tourNext(){if(tourState){tourState.idx++;showTourStep();}}
+function tourPrev(){if(tourState&&tourState.idx>0){tourState.idx--;showTourStep();}}
+function endTourHighlight(){
+  document.querySelectorAll('.tour-highlight').forEach(el=>{
+    el.style.zIndex='';el.style.boxShadow='';el.classList.remove('tour-highlight');
+  });
+}
+function endTour(){
+  endTourHighlight();
+  document.getElementById('tourOverlay')?.remove();
+  document.getElementById('tourTip')?.remove();
+  tourState=null;
 }
 
 /* ========== NOUVELLES FONCTIONNALITÉS (Nov 2026) ========== */

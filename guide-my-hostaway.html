@@ -179,7 +179,12 @@ hr{border:none;border-top:1px solid #e0e0e0;margin:12px 0}
 <li class="l2">24.2 Paiement CMI, WhatsApp, SMS</li>
 <li class="l2">24.3 Webhooks, API, Journal d'activité</li>
 <li class="l2">24.4 Politiques d'annulation</li>
-<li><b>25. Annexes</b></li>
+<li><b>25. Scénarios de bout en bout</b></li>
+<li class="l2">A. Un nouveau bien arrive — de A à Z</li>
+<li class="l2">B. Un voyageur réserve — tout le cycle</li>
+<li class="l2">C. Un partenaire rejoint DPM — intégration complète</li>
+<li class="l2">D. Fin de mois — clôture et relevés</li>
+<li><b>26. Annexes</b></li>
 <li class="l2">A. Glossaire</li>
 <li class="l2">B. Calcul des commissions — exemples détaillés</li>
 <li class="l2">C. FAQ — Questions fréquentes</li>
@@ -1268,7 +1273,7 @@ Chaque créneau correspond à un slot de 30 minutes (durée du massage).
 </div>
 
 <div class="section">
-<h2>25. Annexes</h2>
+<h2>26. Annexes</h2>
 
 <h3>A. Glossaire</h3>
 <table>
@@ -1327,11 +1332,64 @@ Chaque créneau correspond à un slot de 30 minutes (durée du massage).
 </table>
 </div>
 
+<div class="section">
+<h2>25. Scénarios de bout en bout</h2>
+<p>Ces scénarios décrivent les processus complets, de A à Z, pour les situations les plus courantes.</p>
+
+<h3>A. Un nouveau bien arrive — de A à Z</h3>
+<p>Un propriétaire confie la gestion de son riad à DPM. Voici toutes les étapes dans l'application :</p>
+
+<div class="step"><div class="num">1</div><div class="txt"><b>Créer le propriétaire</b> — Conciergerie → Propriétaires → + Ajouter. Remplissez la fiche : nom, email, téléphone, coordonnées bancaires pour les reversements.</div></div>
+<div class="step"><div class="num">2</div><div class="txt"><b>Créer le bien</b> — Annonces → + Ajouter un bien. Remplissez les 9 sections : identité (nom, type, rattachement au propriétaire), description, localisation, capacité, tarifs (prix/nuit, ménage, caution), arrivée & accès (code porte, wifi), chambres & équipements, fenêtre de réservation.</div></div>
+<div class="step"><div class="num">3</div><div class="txt"><b>Définir la commission propriétaire</b> — Dans la fiche du bien, champ « Commission prestations (%) ». C'est la commission DPM sur les prestations internes vendues par le personnel du propriétaire.</div></div>
+<div class="step"><div class="num">4</div><div class="txt"><b>Ajouter les photos</b> — Onglet Photos du bien. 15-25 photos recommandées. La première sera la photo de couverture.</div></div>
+<div class="step"><div class="num">5</div><div class="txt"><b>Configurer les tarifs saisonniers</b> — Tarification → Tarifs saisonniers → + Ajouter. Créez une ligne pour chaque saison (haute, basse, fêtes…) avec le prix/nuit et le minimum de nuits.</div></div>
+<div class="step"><div class="num">6</div><div class="txt"><b>Connecter les canaux</b> — Gestionnaire de canaux → + Connecter un canal. Ajoutez Airbnb, Booking, VRBO. Collez les URL iCal.</div></div>
+<div class="step"><div class="num">7</div><div class="txt"><b>Activer les prestations pour ce bien</b> — Conciergerie → Options par bien. Cochez les prestations disponibles pour les voyageurs de ce bien (spa, transport, chef privé…).</div></div>
+<div class="step"><div class="num">8</div><div class="txt"><b>Ajouter les prestations internes</b> — Si le propriétaire propose ses propres services (petit-déjeuner, dîner…), allez dans sa fiche propriétaire → + Ajouter prestation. Type « interne », rattaché au propriétaire et au bien.</div></div>
+<div class="step"><div class="num">9</div><div class="txt"><b>Préparer les messages automatisés</b> — Boîte de réception → Messages automatisés → + Ajouter. Créez au minimum : instructions check-in (J-5), bienvenue (J), proposition prestations (J+2), remerciement (D+1).</div></div>
+<div class="step"><div class="num">10</div><div class="txt"><b>Configurer les tâches automatiques</b> — Tâches → Tâches automatiques. Créez « Ménage de départ » (au départ, affecté à l'agent ménage, coût du ménage).</div></div>
+<div class="step"><div class="num">11</div><div class="txt"><b>Créer le compte propriétaire</b> — Le propriétaire s'inscrit sur /proprietaire/. Validez sa demande dans Fiches & droits → Comptes, rattachez-le à sa fiche.</div></div>
+<div class="step"><div class="num">12</div><div class="txt"><b>Mettre en ligne</b> — Dans la fiche du bien, passez le statut à « en_ligne ». Le bien est visible et réservable.</div></div>
+
+<div class="important">✅ <b>Vérification finale :</b> Ouvrez le Score ASO du bien (Annonces → Score ASO) et visez un score > 80. Vérifiez que le calendrier est synchronisé avec les plateformes.</div>
+
+<h3>B. Un voyageur réserve — tout le cycle</h3>
+<p>Du moment où la réservation arrive jusqu'au départ du voyageur :</p>
+
+<div class="step"><div class="num">1</div><div class="txt"><b>Réception de la réservation</b> — La réservation arrive via la plateforme (Airbnb, Booking…) et apparaît dans Réservations avec le statut « demande » ou « en_attente ». Notification dans la barre du haut 🔔.</div></div>
+<div class="step"><div class="num">2</div><div class="txt"><b>Accepter la demande</b> — Ouvrez la réservation, vérifiez les dates et le prix, cliquez ✅ Accepter. La plateforme est notifiée.</div></div>
+<div class="step"><div class="num">3</div><div class="txt"><b>Messages automatiques J-5</b> — 5 jours avant l'arrivée, le message d'instructions check-in est préparé en brouillon. Vérifiez-le et envoyez-le. Le voyageur reçoit : adresse, code porte, wifi, instructions.</div></div>
+<div class="step"><div class="num">4</div><div class="txt"><b>Tâche ménage automatique</b> — Si la réservation précédente vient de se terminer, une tâche ménage est créée automatiquement pour l'agent ménage. Vérifiez dans Tâches → Kanban.</div></div>
+<div class="step"><div class="num">5</div><div class="txt"><b>Check-in en ligne</b> — Le voyageur remplit son check-in en ligne (pièce d'identité, heure d'arrivée). Vérifiez dans Réservations → Check-in en ligne.</div></div>
+<div class="step"><div class="num">6</div><div class="txt"><b>Jour d'arrivée — Message de bienvenue</b> — Le message de bienvenue est préparé en brouillon avec le lien vers l'espace voyageur. Envoyez-le.</div></div>
+<div class="step"><div class="num">7</div><div class="txt"><b>Pendant le séjour — Prestations</b> — Le voyageur accède à son espace (/sejour/#/s/token), consulte le catalogue et commande des prestations. Les demandes apparaissent dans le Tableau de bord et dans Conciergerie → Demandes. Confirmez-les.</div></div>
+<div class="step"><div class="num">8</div><div class="txt"><b>J+2 — Proposition de prestations</b> — Le message automatique propose les prestations phares. Envoyez-le si le voyageur n'a encore rien commandé.</div></div>
+<div class="step"><div class="num">9</div><div class="txt"><b>Jour du départ — Ménage</b> — L'agent ménage réalise le ménage de départ. Il passe la tâche en « Fait » dans l'application. L'état de propreté du bien passe à « propre ».</div></div>
+<div class="step"><div class="num">10</div><div class="txt"><b>D+1 — Remerciement</b> — Le message de remerciement et demande d'avis est préparé. Envoyez-le.</div></div>
+<div class="step"><div class="num">11</div><div class="txt"><b>Avis et relevé</b> — Si le voyageur laisse un avis, il apparaît dans Avis. En fin de mois, les revenus de cette réservation apparaissent dans le relevé propriétaire.</div></div>
+
+<h3>C. Un partenaire rejoint DPM — intégration complète</h3>
+<div class="step"><div class="num">1</div><div class="txt"><b>Créer la fiche partenaire</b> — Conciergerie → Partenaires → + Ajouter. Remplissez : nom, activité, contact, téléphone, email, adresse. Définissez les droits (peut modifier ses prestations ? peut créer des promotions ?).</div></div>
+<div class="step"><div class="num">2</div><div class="txt"><b>Ajouter ses prestations</b> — Conciergerie → Prestations → + Ajouter. Pour chaque prestation : type « externe », fournisseur = le partenaire, prix facturé au voyageur, net partenaire, horaires de disponibilité.</div></div>
+<div class="step"><div class="num">3</div><div class="txt"><b>Activer les prestations sur les biens concernés</b> — Conciergerie → Options par bien. Cochez les nouvelles prestations sur les biens où elles sont proposées.</div></div>
+<div class="step"><div class="num">4</div><div class="txt"><b>Créer son compte</b> — Le partenaire s'inscrit sur /partenaire/. Validez la demande dans Fiches & droits → Comptes. Rattachez le compte à sa fiche partenaire.</div></div>
+<div class="step"><div class="num">5</div><div class="txt"><b>Vérifier</b> — Utilisez « Voir son espace » dans Fiches & droits → Partenaires pour voir ce que le partenaire voit. Vérifiez que ses prestations et commandes apparaissent correctement.</div></div>
+
+<h3>D. Fin de mois — clôture et relevés</h3>
+<div class="step"><div class="num">1</div><div class="txt"><b>Vérifier les commandes en attente</b> — Tableau de bord → vérifiez qu'il n'y a plus de commandes en « en_attente ». Confirmez ou refusez-les toutes.</div></div>
+<div class="step"><div class="num">2</div><div class="txt"><b>Vérifier les dépenses</b> — Dépenses & suppléments → vérifiez que toutes les dépenses du mois sont saisies (ménages, réparations, consommables).</div></div>
+<div class="step"><div class="num">3</div><div class="txt"><b>Générer les relevés propriétaires</b> — Relevés propriétaire → + Nouveau relevé. Sélectionnez le mois et le propriétaire (ou « tous »). Vérifiez le montant net avant de générer.</div></div>
+<div class="step"><div class="num">4</div><div class="txt"><b>Vérifier les commissions partenaires</b> — Conciergerie → Statistiques. Vérifiez le total « À reverser aux partenaires ». Préparez les virements.</div></div>
+<div class="step"><div class="num">5</div><div class="txt"><b>Exporter pour la comptabilité</b> — Rapports financiers → Export comptable. Exportez le CSV du mois pour votre comptable.</div></div>
+<div class="step"><div class="num">6</div><div class="txt"><b>Consulter les statistiques</b> — Rapports financiers → Analytique. Comparez avec le mois précédent : revenus, occupation, prix moyen.</div></div>
+</div>
+
 <div class="section" style="text-align:center;padding-top:50px">
 <div style="font-size:13px;color:#C9A227;letter-spacing:3px;margin-bottom:8px">DPM CONCIERGERIE</div>
 <h2 style="border:none;font-size:22px">My Hostaway — Guide complet d'utilisation</h2>
 <p style="color:#888;font-size:11px;margin-top:16px">
-Document généré le 27 novembre 2026<br>
+Document généré le 28 novembre 2026 — Version 2.0 (avec scénarios)<br>
 DPM Consulting Group — Marrakech, Maroc<br><br>
 Application : https://marco-kech.github.io/my-hostaway/<br>
 Aide intégrée : bouton ❓ dans la barre du haut de l'application

@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Espace Voyageur</title><style>
+@page{size:A4;margin:18mm 16mm 22mm 16mm;
+  @bottom-center{content:"Guide Voyageur — DPM Conciergerie · Page " counter(page);font-size:7.5px;color:#999}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:10.5px;line-height:1.5;color:#222}
+h1{font-size:26px;color:#14352A;margin:0 0 6px;font-family:Georgia,serif}
+h2{font-size:16px;color:#14352A;margin:28px 0 8px;padding-bottom:3px;border-bottom:2px solid #C9A227;page-break-after:avoid}
+h3{font-size:12.5px;color:#1d4a3a;margin:14px 0 5px;page-break-after:avoid}
+h4{font-size:11px;color:#333;margin:10px 0 3px;page-break-after:avoid}
+p,li{margin-bottom:3px}
+ul,ol{padding-left:16px}
+.cover{background:linear-gradient(135deg,#14352A 0%,#1d4a3a 100%);color:#F7F6F1;padding:50px 36px;border-radius:10px;margin-bottom:20px;page-break-after:always}
+.cover h1{color:#C9A227;font-size:34px;margin-bottom:8px}
+.cover .sub{font-size:15px;opacity:.85;margin-bottom:20px}
+.cover .info{font-size:10px;opacity:.6;margin-top:30px}
+.section{page-break-before:always}
+.note{background:#f0edd8;border-left:3px solid #C9A227;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+.warn{background:#fdf0e8;border-left:3px solid #d4772c;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+.important{background:#e8f0e8;border-left:3px solid #2e7d52;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+table{width:100%;border-collapse:collapse;margin:6px 0;font-size:9.5px}
+th,td{padding:4px 6px;text-align:left;border:1px solid #ddd}
+th{background:#14352A;color:#F7F6F1;font-weight:600;font-size:9px}
+tr:nth-child(even){background:#fafaf5}
+.box{background:#f7f6f1;border:1px solid #e5e2d8;border-radius:6px;padding:10px;margin:6px 0}
+.box h4{margin:0 0 3px;color:#14352A}
+.step{display:flex;gap:8px;margin:4px 0;align-items:flex-start}
+.step .num{background:#C9A227;color:#14352A;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.step .txt{flex:1}
+.example{background:#f5f5ff;border:1px solid #d0d0e8;border-radius:4px;padding:8px;margin:6px 0;font-size:10px}
+.example b{color:#14352A}
+hr{border:none;border-top:1px solid #e0e0e0;margin:12px 0}
+</style></head><body>
+    <div class="cover">
+      <div style="font-size:12px;letter-spacing:3px;margin-bottom:16px;color:#C9A227">DPM CONCIERGERIE</div>
+      <h1>✈️ Espace Voyageur</h1>
+      <div class="sub">Guide pour les voyageurs — Commander des prestations pendant votre séjour</div>
+      <div class="info">
+        Version 1.0 — novembre 2026<br>
+        Adresse : Lien personnel reçu par WhatsApp ou email<br>
+        DPM Consulting Group — Marrakech, Maroc
+      </div>
+    </div>
+    
+<div class="section">
+<h2>1. Bienvenue</h2>
+<p>Pendant votre séjour dans une villa ou un riad géré par DPM Conciergerie à Marrakech, vous avez accès à un espace personnel en ligne. Cet espace vous permet de :</p>
+<ul>
+<li>Retrouver toutes les <b>informations pratiques</b> de votre logement (adresse, wifi, code d'accès)</li>
+<li>Découvrir et <b>commander des prestations</b> (massage, excursion, transfert aéroport, chef privé…)</li>
+<li>Suivre vos <b>demandes</b> et communiquer avec l'équipe</li>
+</ul>
+
+<h3>1.1 Comment accéder à votre espace</h3>
+<p>Vous avez reçu un <b>lien personnel</b> par WhatsApp ou par email de la part de DPM. Ce lien est unique et ne fonctionne que pour votre séjour.</p>
+<div class="step"><div class="num">1</div><div class="txt">Cliquez sur le lien reçu (il ressemble à : .../sejour/#/s/abc123…)</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Votre espace s'ouvre dans le navigateur — aucun compte à créer, aucun mot de passe</div></div>
+<div class="note">💡 Ajoutez la page à vos favoris ou à l'écran d'accueil de votre téléphone pour y accéder facilement pendant tout votre séjour.</div>
+<div class="warn">⚠️ Le lien est personnel et temporaire. Il est actif pendant votre séjour et jusqu'à 30 jours après votre départ.</div>
+</div>
+
+<div class="section">
+<h2>2. Informations de votre logement</h2>
+<p>La page d'accueil de votre espace affiche :</p>
+<table>
+<tr><th style="width:30%">Information</th><th>Détail</th></tr>
+<tr><td><b>Nom du logement</b></td><td>Le nom de votre villa ou riad</td></tr>
+<tr><td><b>Dates du séjour</b></td><td>Vos dates d'arrivée et de départ</td></tr>
+<tr><td><b>Adresse</b></td><td>L'adresse complète avec un lien vers Google Maps</td></tr>
+<tr><td><b>Code Wifi</b></td><td>Nom du réseau et mot de passe</td></tr>
+<tr><td><b>Code de porte</b></td><td>Le code d'accès ou la localisation de la boîte à clés</td></tr>
+<tr><td><b>Instructions d'arrivée</b></td><td>Comment trouver le logement, où se garer, qui contacter</td></tr>
+<tr><td><b>Contact d'urgence</b></td><td>Numéro à appeler en cas de besoin</td></tr>
+<tr><td><b>Règlement intérieur</b></td><td>Les règles du logement</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>3. Commander une prestation</h2>
+<p>DPM Conciergerie vous propose un catalogue de prestations pendant votre séjour. Ouvrez l'onglet <b>« Catalogue »</b> pour découvrir ce qui est disponible :</p>
+
+<h3>Exemples de prestations disponibles :</h3>
+<table>
+<tr><th>Catégorie</th><th>Exemples</th></tr>
+<tr><td>🧖 Bien-être</td><td>Massage à domicile, hammam & gommage, coiffure & beauté</td></tr>
+<tr><td>🍽️ Restauration</td><td>Chef privé, petit-déjeuner livré, dîner au bord de la piscine</td></tr>
+<tr><td>🏜️ Excursions</td><td>Quad dans l'Agafay, journée à Essaouira, vol en montgolfière</td></tr>
+<tr><td>🚘 Transport</td><td>Transfert aéroport, chauffeur à disposition</td></tr>
+<tr><td>🏠 Services</td><td>Ménage supplémentaire, blanchisserie, garde d'enfants</td></tr>
+<tr><td>⛳ Loisirs</td><td>Golf, guide privé dans la médina, séance photo</td></tr>
+</table>
+
+<h3>3.1 Passer une commande</h3>
+<div class="step"><div class="num">1</div><div class="txt">Ouvrez le <b>Catalogue</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Parcourez les prestations — elles sont classées par catégorie</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Cliquez sur <b>« Commander »</b> sur la prestation souhaitée</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Choisissez la <b>date</b> et l'<b>heure</b> souhaitées</div></div>
+<div class="step"><div class="num">5</div><div class="txt">Indiquez le <b>nombre de personnes</b> (ou la quantité)</div></div>
+<div class="step"><div class="num">6</div><div class="txt">Ajoutez un <b>commentaire</b> si besoin (allergie, préférence, précision…)</div></div>
+<div class="step"><div class="num">7</div><div class="txt">Cliquez <b>« Envoyer la demande »</b></div></div>
+
+<div class="note">💡 Votre demande est envoyée à l'équipe DPM qui la confirme avec le prestataire. Vous recevez une notification quand c'est confirmé.</div>
+
+<h3>3.2 Tarifs</h3>
+<p>Les prix affichés sont les prix par personne (ou par unité selon la prestation). Le total est calculé automatiquement selon la quantité choisie. Les prestations sont facturées sur place ou ajoutées à votre note de séjour.</p>
+</div>
+
+<div class="section">
+<h2>4. Suivre vos demandes</h2>
+<p>L'onglet <b>« Mes demandes »</b> liste toutes vos commandes avec leur statut :</p>
+<table>
+<tr><th>Statut</th><th>Signification</th></tr>
+<tr><td style="color:#C9A227"><b>En attente</b></td><td>Votre demande a été envoyée. L'équipe la traite sous quelques heures.</td></tr>
+<tr><td style="color:#2e7d52"><b>Confirmée</b></td><td>La prestation est confirmée. Le prestataire sera là à l'heure convenue.</td></tr>
+<tr><td style="color:#2e7d52"><b>Fait</b></td><td>La prestation a été réalisée.</td></tr>
+<tr><td style="color:#A33A2A"><b>Refusée</b></td><td>La prestation n'est pas disponible à cette date/heure. Essayez une autre date.</td></tr>
+</table>
+
+<h2>5. Messages</h2>
+<p>L'onglet <b>« Messages »</b> vous permet d'échanger directement avec l'équipe DPM pendant votre séjour : questions, besoins spéciaux, retours.</p>
+
+<h2>6. Questions fréquentes</h2>
+
+<h3>Dois-je créer un compte ?</h3>
+<p>Non. Votre lien personnel suffit. Pas de mot de passe, pas d'inscription.</p>
+
+<h3>Le lien ne fonctionne plus ?</h3>
+<p>Le lien est actif pendant votre séjour et 30 jours après votre départ. Si votre séjour n'a pas encore commencé ou est trop ancien, le lien est désactivé. Contactez DPM.</p>
+
+<h3>Puis-je commander pour plusieurs personnes ?</h3>
+<p>Oui. Indiquez la quantité souhaitée lors de la commande (ex : 4 massages, 6 petits-déjeuners).</p>
+
+<h3>Comment annuler une commande ?</h3>
+<p>Contactez l'équipe DPM via l'onglet Messages. Les annulations sont possibles selon le préavis de chaque prestation.</p>
+
+<h3>Puis-je commander pour un autre jour que celui de mon séjour ?</h3>
+<p>Non. Les prestations ne sont disponibles que pendant vos dates de séjour.</p>
+</div>
+</body></html>
