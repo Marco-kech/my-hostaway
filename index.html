@@ -343,6 +343,7 @@ tr:hover td{background:rgba(201,162,39,.04)}
           <div id="notifList" style="padding:8px"></div>
         </div>
       </div>
+      <button class="btn o sm" id="helpBtn" title="Aide" style="font-size:15px;padding:6px 10px" onclick="showHelp()">❓</button>
       <button class="btn g sm" id="topAdd" hidden></button></header>
     <div class="subtabs" id="subtabs" hidden></div>
     <main id="content"><div class="center"><span class="spin"></span></div></main>
@@ -8894,6 +8895,52 @@ document.addEventListener('keydown',e=>{
   /* Alt+P → Print */
   if(e.altKey&&e.key==='p'){e.preventDefault();window.print();return;}
 });
+
+/* ========== AIDE CONTEXTUELLE ========== */
+const AIDE={
+  apercu:{titre:"Vue d'ensemble",desc:"Le tableau de bord affiche vos KPI principaux : commissions DPM, montant à reverser, CA services internes, taux d'occupation du parc. Les demandes de prestations en attente apparaissent en bas.",astuces:["Basculez entre Mois et Année pour changer la période","Les commandes en attente se confirment aussi dans Conciergerie → Demandes"]},
+  calendrier:{titre:"Calendrier",desc:"Visualisez l'occupation de vos biens. La vue Multiple montre tous les biens côte à côte, la vue Mensuelle un calendrier classique, et la vue Annuelle le taux d'occupation par mois.",astuces:["Cliquez sur une réservation pour ouvrir sa fiche","Les couleurs indiquent le statut : vert = confirmée, jaune = en attente, rouge = annulée"]},
+  inbox:{titre:"Boîte de réception",desc:"Centralisez tous les échanges avec vos voyageurs, partenaires et propriétaires. Gérez les modèles de message, les messages automatisés et les réponses IA.",astuces:["Les messages automatisés créent toujours des brouillons, jamais d'envoi direct","La Base de connaissances alimente les réponses IA : ajoutez-y wifi, adresses, recommandations"]},
+  resa:{titre:"Réservations",desc:"Créez, importez et gérez toutes vos réservations. Acceptez ou refusez les demandes, gérez le check-in en ligne et les coupons de réduction.",astuces:["Filtrez par date d'arrivée/départ et par canal","Le bouton 📄 génère un contrat PDF automatique","Le bouton 👁 ouvre la fiche complète du séjour"]},
+  annonces:{titre:"Annonces (Biens)",desc:"Gérez vos biens : informations, photos, équipements, tarification de base, instructions d'arrivée. Le Score ASO analyse la qualité de chaque annonce.",astuces:["Remplissez tous les champs pour maximiser votre Score ASO","Les champs marqués 🏷 Booking sont synchronisés avec Booking.com"]},
+  taches:{titre:"Tâches",desc:"Organisez le travail de votre équipe en Kanban (À faire → En cours → Fait). Créez des tâches automatiques déclenchées par des événements et des modèles de checklist réutilisables.",astuces:["Assignez chaque tâche à un responsable et un bien","Les checklists peuvent être rattachées aux tâches de ménage"]},
+  avis:{titre:"Avis",desc:"Gérez les avis voyageurs, configurez les demandes d'avis automatiques après le départ, et analysez les tendances par bien (points forts et faibles récurrents).",astuces:["Créez des modèles d'avis pour gagner du temps","L'IA analyse les thèmes récurrents dans les avis"]},
+  rapports:{titre:"Rapports financiers",desc:"Tableau de bord financier complet : revenus par mois/bien/canal, taux d'occupation, formules de calcul personnalisables, export comptable CSV et rapport mensuel.",astuces:["Le Prévisionnel projette vos revenus futurs","Le Rapport mensuel est prêt à envoyer au propriétaire"]},
+  depenses:{titre:"Dépenses & suppléments",desc:"Suivez les charges (ménage, entretien, réparations) et les suppléments refacturés aux voyageurs. Organisez par catégorie et automatisez les dépenses récurrentes.",astuces:["Créez vos propres catégories dans l'onglet Catégories","Les automatisations créent une dépense à chaque check-out"]},
+  paiements:{titre:"Paiements voyageurs",desc:"Suivi des encaissements, factures voyageurs, dépôts de garantie (pré-autorisation ou dépôt classique). Configuration PayPal et CMI.",astuces:["La facturation génère un numéro automatique avec TVA configurable","Les dépôts de garantie suivent le cycle : en attente → capturé → libéré/remboursé"]},
+  releves:{titre:"Relevés propriétaire",desc:"Générez les relevés mensuels pour chaque propriétaire : revenus bruts, déduction commission DPM et dépenses, net à reverser. Envoi automatique ou manuel.",astuces:["Le Tableau de bord propriétaire montre une synthèse par bien","Les relevés automatiques peuvent être programmés chaque mois"]},
+  qualite:{titre:"Qualité d'hébergement",desc:"Analysez la qualité de vos annonces (complétude des champs, photos, temps de réponse) et la qualité des avis (note moyenne, tendances).",astuces:["Visez un score annonce > 80 pour chaque bien"]},
+  tarif:{titre:"Tarification",desc:"Gérez vos tarifs saisonniers (par période et priorité), les extras & frais (par nuit, par personne, obligatoires ou optionnels), la tarification dynamique et le minimum de nuits.",astuces:["Les tarifs de priorité élevée l'emportent en cas de chevauchement","Le calendrier tarifaire montre le prix effectif jour par jour"]},
+  gcanaux:{titre:"Gestionnaire de canaux",desc:"Connectez vos biens aux plateformes (Airbnb, Booking, VRBO) pour synchroniser disponibilités, tarifs et réservations. Importez/exportez des calendriers iCal.",astuces:["La synchronisation iCal évite les doubles réservations","L'historique des tâches auto montre les synchro récentes"]},
+  partenaires:{titre:"Partenaires",desc:"Gérez vos prestataires externes (spa, transport, excursions…). Chaque partenaire a sa fiche complète avec interlocuteurs, statistiques, prestations et commandes.",astuces:["Cliquez sur 👁 pour voir la fiche complète d'un partenaire","Le bouton + Ajouter prestation pré-remplit le type « externe »","L'onglet Statistiques montre le CA et le top des prestations par mois"]},
+  proprietaires:{titre:"Propriétaires",desc:"Gérez les propriétaires des biens en gestion. Chaque propriétaire a sa fiche avec biens, revenus, prestations internes et dernières réservations.",astuces:["Le bouton + Ajouter prestation pré-remplit le type « interne »","Les Revenus consolidés montrent le détail par bien et par mois"]},
+  voyageurs:{titre:"Voyageurs",desc:"Le Livre d'or liste tous vos voyageurs. Les Liens d'accès séjour donnent à chaque voyageur un accès personnalisé sans compte : infos logement, catalogue prestations, commandes.",astuces:["Créez un lien pour chaque réservation confirmée","Le lien fonctionne jusqu'à 30 jours après le départ","Envoyez le lien par WhatsApp ou email"]},
+  conciergerie:{titre:"Conciergerie",desc:"Le cœur du système : Demandes de prestations (confirmer/refuser), Statistiques globales, Toutes les prestations (avec onglets de filtrage), Équipes internes et Fiches & droits.",astuces:["Les 4 onglets (Toutes/DPM/Partenaires/Internes) filtrent par type","Le filtre déroulant permet de cibler un fournisseur précis","Fiches & droits centralise propriétaires, partenaires, séjours, collaborateurs et comptes"]},
+  branch:{titre:"Branchements & outils",desc:"Configurez les serrures intelligentes (codes d'accès automatiques par réservation), l'assurance et les intégrations Marketplace.",astuces:["L'historique des accès trace chaque utilisation de code"]},
+  users:{titre:"Utilisateurs & groupes",desc:"Gérez les membres de votre équipe : rôles (admin, gestionnaire, agent ménage, chauffeur…), droits d'accès par rubrique.",astuces:["Un utilisateur sans rubriques cochées est Administrateur complet","Invitez un collaborateur en copiant le lien d'invitation"]},
+  site:{titre:"Moteur de réservation",desc:"Votre site de réservation directe : design, annonces publiées, pages, SEO, livret d'accueil numérique et traductions multilingues.",astuces:["L'aperçu public montre le site tel que le voit le voyageur","Le livret d'accueil remplace le guide papier de la villa"]},
+  params:{titre:"Paramètres",desc:"Configuration du compte, paiement CMI, langues, intégrations email, WhatsApp Business, SMS, webhooks, API, notifications, journal d'activité et politiques d'annulation.",astuces:["Le journal d'activité trace toutes les actions dans l'application","Les webhooks notifient vos outils externes en temps réel"]},
+};
+function showHelp(){
+  const rub=state.rub||'apercu';
+  const h=AIDE[rub]||{titre:'Aide',desc:'Sélectionnez une rubrique dans le menu pour afficher l\'aide correspondante.',astuces:[]};
+  const astuces=h.astuces.map(a=>'<li>'+a+'</li>').join('');
+  ouvrir(`<div class="h"><h3>❓ ${esc(h.titre)}</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b" style="max-height:60vh;overflow:auto">
+      <p style="margin-bottom:12px">${esc(h.desc)}</p>
+      ${astuces?'<div style="background:var(--gold-soft);border-radius:8px;padding:12px;margin-top:8px"><b style="color:var(--gold)">💡 Astuces</b><ul style="margin:6px 0 0;padding-left:18px">'+astuces+'</ul></div>':''}
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)">
+        <b>Raccourcis clavier</b>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:6px;font-size:12px">
+          <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Alt+1→9</code><span>Accès rapide aux rubriques</span>
+          <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Alt+D</code><span>Tableau de bord</span>
+          <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Alt+T</code><span>Mode sombre</span>
+          <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Échap</code><span>Fermer le formulaire</span>
+        </div>
+      </div>
+    </div>
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button><a href="guide-my-hostaway.pdf" target="_blank" class="btn" style="text-decoration:none">📄 Télécharger le guide PDF</a></div>`);
+}
 
 /* ========== NOUVELLES FONCTIONNALITÉS (Nov 2026) ========== */
 
