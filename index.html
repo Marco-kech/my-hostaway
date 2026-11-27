@@ -984,8 +984,7 @@ const MODULES = {
             if(same){ht='🕒 '+(ouv.length===7?'':'')+(j0.de===0&&j0.a===24?'24h/24':`${j0.de}h–${j0.a}h`);if(h.pas)ht+=' ('+h.pas+' min)';if(fermes.length)ht+=' · '+fermes.join(', ')+' fermé';}
             else{ht='🕒 Horaires variables';if(fermes.length)ht+=' · '+fermes.join(', ')+' fermé';}}}
         if(ht)s+='<br><span class="muted" style="font-size:10.5px">'+ht+'</span>';}return s;}],
-      ["type","Type",v=>pill(v)],
-      ["partenaire_id","Fournisseur",(v,r)=>r&&r.type==="interne"?refName("proprietaire",r.proprietaire_id):(v?refName("partenaire",v):"DPM")],
+      ["type","Type · Fournisseur",(v,r)=>{const t=pill(v);const f=r&&r.type==="interne"?refName("proprietaire",r.proprietaire_id):(r&&r.partenaire_id?refName("partenaire",r.partenaire_id):"");return t+(f?' '+esc(f):'');}],
       ["prix_logement","Prix",v=>money(v)],
       ["commission_logement","Commission",(v,r)=>{if(!r||r.type!=='externe')return'<span class="muted">comm. DPM</span>';const m=r.mode_commission_logement==='montant';return v?(v+(m?' DH':' %')):'—';}],
       ["net_partenaire","Net partenaire",v=>money(v)],["actif","Active",v=>v?pill("actif"):pill("inactif")]],
@@ -2587,11 +2586,13 @@ function paintList(k){
   const showing=total?`${start+1}–${Math.min(start+size,total)} sur ${total}`:'0';
   $("#content").innerHTML=`<div class="panel">
     <div class="phead"><h3>${m.title}</h3><span class="sp"></span><span class="muted">${showing}${(q||extra)?' (filtré, '+all.length+' au total)':''}</span></div>
+    ${isPresta?`<p class="muted" style="font-size:12px;padding:2px 14px 0;margin:0">${all.length} prestation(s) — internes (propriétaires) et externes (partenaires), avec commissions DPM.</p>`:''}
     ${isPresta?(()=>{
       const parts=(state.cache&&state.cache.partenaires)||[];
       const props=(state.cache&&state.cache.proprietaires_liste)||[];
-      const fOpts=parts.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🤝 ${esc(p.nom||'')}</option>`).join("")
-        +props.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🏠 ${esc(p.nom||'')}</option>`).join("");
+      const countFor=id=>all.filter(r=>r.partenaire_id===id||r.proprietaire_id===id).length;
+      const fOpts=parts.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🤝 ${esc(p.nom||'')} (${countFor(p.id)})</option>`).join("")
+        +props.map(p=>`<option value="${p.id}" ${st.fournFilter===p.id?'selected':''}>🏠 ${esc(p.nom||'')} (${countFor(p.id)})</option>`).join("");
       const tb=(v,l)=>`<button class="btn sm ${st.typeFilter===v?'':'o'}" data-ptype="${v}">${l}</button>`;
       const cToutes=all.length,cDpm=all.filter(r=>r.type==='dpm').length,cPart=all.filter(r=>r.type==='externe').length,cInt=all.filter(r=>r.type==='interne').length;
       return `<div style="display:flex;gap:6px;align-items:center;padding:10px 14px 0;flex-wrap:wrap;font-size:13px" id="prestaFilters">
