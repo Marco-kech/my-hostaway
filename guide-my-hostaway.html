@@ -1,641 +1,902 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
-<meta charset="utf-8">
-<title>My Hostaway — Guide complet</title>
+<head><meta charset="utf-8"><title>My Hostaway — Guide complet</title>
 <style>
-@page{size:A4;margin:20mm 18mm 25mm 18mm;@bottom-center{content:"My Hostaway — Guide complet · Page " counter(page) " / " counter(pages);font-size:8px;color:#888}}
+@page{size:A4;margin:18mm 16mm 22mm 16mm;
+  @bottom-center{content:"My Hostaway — Guide d'utilisation · Page " counter(page);font-size:7.5px;color:#999}}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:11px;line-height:1.55;color:#222}
-h1{font-size:28px;color:#14352A;margin:0 0 6px;font-family:Georgia,serif}
-h2{font-size:18px;color:#14352A;margin:30px 0 8px;padding-bottom:4px;border-bottom:2px solid #C9A227;page-break-after:avoid}
-h3{font-size:14px;color:#1d4a3a;margin:18px 0 6px;page-break-after:avoid}
-h4{font-size:12px;color:#333;margin:12px 0 4px}
-p,li{margin-bottom:4px}
-ul{padding-left:16px}
-.cover{background:linear-gradient(135deg,#14352A 0%,#1d4a3a 100%);color:#F7F6F1;padding:60px 40px;border-radius:12px;margin-bottom:30px;page-break-after:always}
-.cover h1{color:#C9A227;font-size:36px;margin-bottom:10px}
-.cover .sub{font-size:16px;opacity:.85;margin-bottom:30px}
-.cover .info{font-size:11px;opacity:.65;margin-top:40px}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:10.5px;line-height:1.5;color:#222}
+h1{font-size:26px;color:#14352A;margin:0 0 6px;font-family:Georgia,serif}
+h2{font-size:16px;color:#14352A;margin:28px 0 8px;padding-bottom:3px;border-bottom:2px solid #C9A227;page-break-after:avoid}
+h3{font-size:12.5px;color:#1d4a3a;margin:14px 0 5px;page-break-after:avoid}
+h4{font-size:11px;color:#333;margin:10px 0 3px;page-break-after:avoid}
+p,li{margin-bottom:3px}
+ul,ol{padding-left:16px}
+.cover{background:linear-gradient(135deg,#14352A 0%,#1d4a3a 100%);color:#F7F6F1;padding:50px 36px;border-radius:10px;margin-bottom:20px;page-break-after:always}
+.cover h1{color:#C9A227;font-size:34px;margin-bottom:8px}
+.cover .sub{font-size:15px;opacity:.85;margin-bottom:20px}
+.cover .info{font-size:10px;opacity:.6;margin-top:30px}
 .toc{page-break-after:always}
-.toc h2{border:none;font-size:22px}
+.toc h2{border:none;font-size:20px}
 .toc ul{list-style:none;padding:0}
-.toc li{padding:4px 0;border-bottom:1px dotted #ccc;font-size:12px}
-.toc li.l2{padding-left:16px;font-size:11px;color:#555}
+.toc li{padding:3px 0;border-bottom:1px dotted #ddd;font-size:11px}
+.toc li.l2{padding-left:14px;font-size:10px;color:#555}
 .section{page-break-before:always}
-.note{background:#f0edd8;border-left:3px solid #C9A227;padding:8px 12px;margin:8px 0;border-radius:4px;font-size:10.5px}
-.warn{background:#fdf0e8;border-left:3px solid #d4772c;padding:8px 12px;margin:8px 0;border-radius:4px;font-size:10.5px}
-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5px}
-th,td{padding:5px 8px;text-align:left;border:1px solid #ddd}
-th{background:#14352A;color:#F7F6F1;font-weight:600}
+.note{background:#f0edd8;border-left:3px solid #C9A227;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+.warn{background:#fdf0e8;border-left:3px solid #d4772c;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+.important{background:#e8f0e8;border-left:3px solid #2e7d52;padding:6px 10px;margin:6px 0;border-radius:3px;font-size:10px}
+table{width:100%;border-collapse:collapse;margin:6px 0;font-size:9.5px}
+th,td{padding:4px 6px;text-align:left;border:1px solid #ddd}
+th{background:#14352A;color:#F7F6F1;font-weight:600;font-size:9px}
 tr:nth-child(even){background:#fafaf5}
-.pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:9px;font-weight:600;color:#fff;background:#888}
-.pill.green{background:#2e7d52}.pill.gold{background:#C9A227;color:#14352A}.pill.blue{background:#2c6e9b}
-.cols2{display:flex;gap:20px}.cols2>div{flex:1}
-.kbd{background:#eee;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:10px;border:1px solid #ccc}
-.profil{background:#f7f6f1;border:1px solid #e5e2d8;border-radius:8px;padding:12px;margin:8px 0}
-.profil h4{margin:0 0 4px;color:#14352A}
+.cols2{display:flex;gap:14px}.cols2>div{flex:1}
+.box{background:#f7f6f1;border:1px solid #e5e2d8;border-radius:6px;padding:10px;margin:6px 0}
+.box h4{margin:0 0 3px;color:#14352A}
+.step{display:flex;gap:8px;margin:4px 0;align-items:flex-start}
+.step .num{background:#C9A227;color:#14352A;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.step .txt{flex:1}
+.kbd{background:#eee;padding:1px 4px;border-radius:2px;font-family:monospace;font-size:9px;border:1px solid #ccc}
+.example{background:#f5f5ff;border:1px solid #d0d0e8;border-radius:4px;padding:8px;margin:6px 0;font-size:10px}
+.example b{color:#14352A}
+hr{border:none;border-top:1px solid #e0e0e0;margin:12px 0}
 </style>
 </head>
 <body>
-
-<!-- ==================== COUVERTURE ==================== -->
 <div class="cover">
-  <div style="font-size:14px;letter-spacing:2px;margin-bottom:20px;color:#C9A227">DPM CONCIERGERIE</div>
+  <div style="font-size:12px;letter-spacing:3px;margin-bottom:16px;color:#C9A227">DPM CONCIERGERIE</div>
   <h1>My Hostaway</h1>
   <div class="sub">Guide complet d'utilisation</div>
-  <p style="font-size:13px;max-width:500px">Gestion des biens, réservations, prestations, partenaires, propriétaires, voyageurs, paiements, messagerie et conciergerie — tout en une seule application.</p>
+  <p style="font-size:12px;max-width:480px;line-height:1.6">
+    Ce guide couvre l'intégralité de l'application My Hostaway : chaque rubrique, chaque formulaire,
+    chaque fonctionnalité — avec des procédures pas à pas, des exemples concrets et des conseils pratiques.<br><br>
+    <b>Pour qui :</b> Administrateurs DPM, gestionnaires, collaborateurs.<br>
+    <b>Guides séparés :</b> Espace partenaire (chapitre 16), Espace propriétaire (chapitre 17), Espace voyageur (chapitre 18).
+  </p>
   <div class="info">
-    Version : novembre 2026<br>
+    Version 1.0 — novembre 2026<br>
     Application : https://marco-kech.github.io/my-hostaway/<br>
-    Espace partenaire : .../partenaire/<br>
-    Espace propriétaire : .../proprietaire/<br>
-    Espace voyageur : .../sejour/
+    Espace partenaire : .../partenaire/ · Espace propriétaire : .../proprietaire/ · Espace voyageur : .../sejour/<br>
+    DPM Consulting Group — Marrakech, Maroc
   </div>
 </div>
-
-<!-- ==================== TABLE DES MATIÈRES ==================== -->
-<div class="toc">
-<h2>Table des matières</h2>
-<ul>
-<li><b>1. Présentation générale</b></li>
-<li class="l2">1.1 À quoi sert My Hostaway</li>
-<li class="l2">1.2 Les 4 interfaces (admin, partenaire, propriétaire, voyageur)</li>
-<li class="l2">1.3 Connexion et premiers pas</li>
-
-<li><b>2. Vue d'ensemble (Tableau de bord)</b></li>
-
-<li><b>3. Calendrier</b></li>
-<li class="l2">3.1 Vue multiple · 3.2 Mensuel · 3.3 Annuel</li>
-
-<li><b>4. Boîte de réception</b></li>
-<li class="l2">4.1 Conversations · 4.2 Réponses IA · 4.3 Modèles · 4.4 Messages automatisés</li>
-
+<div class="toc"><h2>Table des matières</h2><ul>
+<li><b>1. Prise en main</b></li>
+<li class="l2">1.1 Les 4 interfaces de My Hostaway</li>
+<li class="l2">1.2 Connexion et navigation</li>
+<li class="l2">1.3 L'écran principal — menu, sous-menus, barre du haut</li>
+<li class="l2">1.4 Raccourcis clavier</li>
+<li class="l2">1.5 Mode sombre et impression</li>
+<li><b>2. Vue d'ensemble — Tableau de bord</b></li>
+<li class="l2">2.1 KPI et indicateurs</li>
+<li class="l2">2.2 Demandes à traiter (commandes en attente)</li>
+<li><b>3. Calendrier — 3 vues</b></li>
+<li class="l2">3.1 Vue multiple (tous les biens)</li>
+<li class="l2">3.2 Vue mensuelle</li>
+<li class="l2">3.3 Vue annuelle (taux d'occupation)</li>
+<li><b>4. Boîte de réception — Messagerie complète</b></li>
+<li class="l2">4.1 Conversations</li>
+<li class="l2">4.2 Réponses IA et Base de connaissances</li>
+<li class="l2">4.3 Modèles de message</li>
+<li class="l2">4.4 Messages automatisés — déclencheurs et brouillons</li>
+<li class="l2">4.5 Messages récurrents, Campagnes, Règles et Escalades</li>
 <li><b>5. Réservations</b></li>
-<li class="l2">5.1 Liste · 5.2 Accepter/Refuser · 5.3 Check-in en ligne · 5.4 Coupons</li>
-
-<li><b>6. Annonces (Biens)</b></li>
-<li class="l2">6.1 Fiche bien · 6.2 Photos · 6.3 Score ASO · 6.4 Multi-unités</li>
-
-<li><b>7. Tâches</b></li>
-<li class="l2">7.1 Kanban · 7.2 Tâches automatiques · 7.3 Checklists</li>
-
-<li><b>8. Avis</b></li>
-
+<li class="l2">5.1 Créer une réservation manuelle — procédure complète</li>
+<li class="l2">5.2 Accepter ou refuser une demande</li>
+<li class="l2">5.3 Fiche de réservation — tous les champs</li>
+<li class="l2">5.4 Contrat PDF automatique</li>
+<li class="l2">5.5 Check-in en ligne</li>
+<li class="l2">5.6 Coupons de réduction</li>
+<li class="l2">5.7 Importer des réservations</li>
+<li><b>6. Annonces (Biens) — Fiche détaillée</b></li>
+<li class="l2">6.1 Créer un bien — les 9 sections du formulaire</li>
+<li class="l2">6.2 Section par section : Identité, Description, Localisation</li>
+<li class="l2">6.3 Capacité, Tarifs, Remises, Politiques d'annulation</li>
+<li class="l2">6.4 Majorations par canal et frais personnalisés</li>
+<li class="l2">6.5 Arrivée et accès (code porte, wifi, instructions)</li>
+<li class="l2">6.6 Chambres & lits, Équipements</li>
+<li class="l2">6.7 Fenêtre de réservation et conditions</li>
+<li class="l2">6.8 Photos et pièces jointes</li>
+<li class="l2">6.9 Score ASO — optimiser ses annonces</li>
+<li class="l2">6.10 Multi-unités / Chambres</li>
+<li class="l2">6.11 Groupes, Duplication, Édition en masse</li>
+<li><b>7. Tâches — Kanban, automatisation, checklists</b></li>
+<li class="l2">7.1 Vue Kanban (À faire / En cours / Fait)</li>
+<li class="l2">7.2 Créer une tâche — champs et assignation</li>
+<li class="l2">7.3 Tâches automatiques — règles de déclenchement</li>
+<li class="l2">7.4 Modèles de checklist</li>
+<li><b>8. Avis — Gestion et automatisation</b></li>
 <li><b>9. Rapports financiers</b></li>
-<li class="l2">9.1 Analytique · 9.2 Occupation · 9.3 Export comptable · 9.4 Prévisionnel</li>
-
+<li class="l2">9.1 Analytique — graphiques et comparaisons</li>
+<li class="l2">9.2 Activité de location, Occupation, Formules</li>
+<li class="l2">9.3 Taxes, Paramètres financiers, Export comptable</li>
+<li class="l2">9.4 Prévisionnel et Rapport mensuel</li>
 <li><b>10. Dépenses & suppléments</b></li>
-
+<li class="l2">10.1 Créer une dépense ou un supplément</li>
+<li class="l2">10.2 Catégories personnalisées</li>
+<li class="l2">10.3 Automatisations (dépenses récurrentes)</li>
 <li><b>11. Paiements voyageurs</b></li>
-<li class="l2">11.1 Encaissements · 11.2 Factures · 11.3 Dépôts de garantie</li>
-
+<li class="l2">11.1 Encaissements — suivi des paiements</li>
+<li class="l2">11.2 Factures voyageurs — génération et TVA</li>
+<li class="l2">11.3 Dépôts de garantie — cycle de vie</li>
+<li class="l2">11.4 Modèles de document</li>
+<li class="l2">11.5 Paramètres PayPal et CMI</li>
 <li><b>12. Relevés propriétaire</b></li>
-
+<li class="l2">12.1 Générer un relevé mensuel</li>
+<li class="l2">12.2 Relevés automatiques</li>
+<li class="l2">12.3 Tableau de bord propriétaire</li>
 <li><b>13. Tarification</b></li>
-<li class="l2">13.1 Tarifs saisonniers · 13.2 Extras · 13.3 Tarification dynamique</li>
-
+<li class="l2">13.1 Tarifs saisonniers — priorité et chevauchement</li>
+<li class="l2">13.2 Calendrier tarifaire</li>
+<li class="l2">13.3 Extras & frais (par nuit, par personne, obligatoire)</li>
+<li class="l2">13.4 Tarification dynamique</li>
+<li class="l2">13.5 Minimum de nuits</li>
 <li><b>14. Gestionnaire de canaux</b></li>
-<li class="l2">14.1 Canaux connectés · 14.2 Synchronisation iCal</li>
-
+<li class="l2">14.1 Canaux connectés (Airbnb, Booking, VRBO)</li>
+<li class="l2">14.2 Synchronisation iCal</li>
+<li class="l2">14.3 Plans tarifaires Booking</li>
 <li><b>15. Conciergerie — Prestations</b></li>
-<li class="l2">15.1 Créer une prestation · 15.2 Les 3 types (DPM, externe, interne)</li>
-<li class="l2">15.3 Tarifs et commissions · 15.4 Horaires · 15.5 Options par bien</li>
-
+<li class="l2">15.1 Les 3 types de prestations (DPM, externe, interne)</li>
+<li class="l2">15.2 Créer une prestation — procédure complète</li>
+<li class="l2">15.3 Tarifs, commissions et net partenaire — avec exemples</li>
+<li class="l2">15.4 Horaires : plages, départs fixes, créneaux</li>
+<li class="l2">15.5 Liste avec onglets et filtres</li>
+<li class="l2">15.6 Options par bien — sélection personnalisée</li>
+<li class="l2">15.7 Équipes internes (services)</li>
 <li><b>16. Conciergerie — Partenaires</b></li>
-<li class="l2">16.1 Fiche partenaire · 16.2 Droits · 16.3 Statistiques · 16.4 Espace partenaire</li>
-
+<li class="l2">16.1 Créer un partenaire — tous les champs</li>
+<li class="l2">16.2 Fiche partenaire complète</li>
+<li class="l2">16.3 Droits : modification prestations et promotions</li>
+<li class="l2">16.4 Statistiques et réservations reçues</li>
+<li class="l2">16.5 Espace partenaire — ce que voit le partenaire</li>
 <li><b>17. Conciergerie — Propriétaires</b></li>
-<li class="l2">17.1 Fiche propriétaire · 17.2 Biens · 17.3 Revenus · 17.4 Espace propriétaire</li>
-
+<li class="l2">17.1 Créer un propriétaire — tous les champs</li>
+<li class="l2">17.2 Fiche propriétaire complète</li>
+<li class="l2">17.3 Biens, Planning & remplissage, Revenus consolidés</li>
+<li class="l2">17.4 Prestations internes</li>
+<li class="l2">17.5 Espace propriétaire — ce que voit le propriétaire</li>
 <li><b>18. Conciergerie — Voyageurs</b></li>
-<li class="l2">18.1 Livre d'or · 18.2 Liens d'accès séjour · 18.3 Espace voyageur</li>
+<li class="l2">18.1 Livre d'or — fiche voyageur</li>
+<li class="l2">18.2 Liens d'accès séjour — créer, copier, désactiver</li>
+<li class="l2">18.3 Espace voyageur — ce que voit le voyageur</li>
+<li><b>19. Commandes & Statistiques de la conciergerie</b></li>
+<li class="l2">19.1 Demandes de prestations — confirmer, refuser, marquer fait</li>
+<li class="l2">19.2 Statistiques globales de la conciergerie</li>
+<li><b>20. Fiches & droits — Page centralisée</b></li>
+<li class="l2">20.1 Les 5 onglets (Propriétaires, Partenaires, Séjours, Collaborateurs, Comptes)</li>
+<li class="l2">20.2 « Voir son espace » — aperçu administrateur</li>
+<li class="l2">20.3 Collaborateurs — invitation, rubriques, statut</li>
+<li class="l2">20.4 Comptes & accès — validation des demandes</li>
+<li><b>21. Utilisateurs & groupes</b></li>
+<li><b>22. Moteur de réservation (site direct)</b></li>
+<li class="l2">22.1 Design, Annonces publiées, Pages</li>
+<li class="l2">22.2 Livret d'accueil numérique</li>
+<li class="l2">22.3 SEO & Analytics, Traductions</li>
+<li><b>23. Branchements & outils</b></li>
+<li class="l2">23.1 Serrures intelligentes</li>
+<li class="l2">23.2 Assurance et Marketplace</li>
+<li><b>24. Paramètres</b></li>
+<li class="l2">24.1 Compte, Langues, Notifications</li>
+<li class="l2">24.2 Paiement CMI, WhatsApp, SMS</li>
+<li class="l2">24.3 Webhooks, API, Journal d'activité</li>
+<li class="l2">24.4 Politiques d'annulation</li>
+<li><b>25. Annexes</b></li>
+<li class="l2">A. Glossaire</li>
+<li class="l2">B. Calcul des commissions — exemples détaillés</li>
+<li class="l2">C. FAQ — Questions fréquentes</li>
+<li class="l2">D. Résolution de problèmes courants</li>
+</ul></div>
 
-<li><b>19. Conciergerie — Commandes & Statistiques</b></li>
-
-<li><b>20. Fiches & droits</b></li>
-<li class="l2">20.1 Les 5 onglets · 20.2 Collaborateurs · 20.3 Comptes & accès</li>
-
-<li><b>21. Paramètres</b></li>
-<li class="l2">21.1 Compte · 21.2 Paiement CMI · 21.3 WhatsApp · 21.4 Webhooks · 21.5 API</li>
-
-<li><b>22. Raccourcis clavier</b></li>
-</ul>
-</div>
-
-<!-- ==================== CHAPITRE 1 ==================== -->
 <div class="section">
-<h2>1. Présentation générale</h2>
+<h2>1. Prise en main</h2>
 
-<h3>1.1 À quoi sert My Hostaway</h3>
-<p>My Hostaway est l'application de gestion locative et de conciergerie de DPM. Elle centralise :</p>
-<ul>
-<li>La gestion des <b>biens</b> (annonces, photos, tarifs, disponibilités)</li>
-<li>Les <b>réservations</b> (création, suivi, check-in, paiements)</li>
-<li>La <b>conciergerie</b> (prestations, partenaires, commandes voyageurs)</li>
-<li>La <b>messagerie</b> (conversations, messages automatisés, réponses IA)</li>
-<li>Les <b>rapports financiers</b> (revenus, dépenses, relevés propriétaires)</li>
-<li>La <b>tarification</b> (saisonnière, dynamique, extras)</li>
-<li>Les <b>canaux de distribution</b> (Airbnb, Booking, VRBO, iCal)</li>
-</ul>
+<h3>1.1 Les 4 interfaces de My Hostaway</h3>
+<p>My Hostaway comprend <b>4 interfaces distinctes</b>, chacune adaptée à un profil d'utilisateur :</p>
 
-<h3>1.2 Les 4 interfaces</h3>
 <div class="cols2">
-<div class="profil">
-  <h4>🏢 Admin (vous)</h4>
-  <p>L'interface principale. Accès complet à toutes les rubriques. C'est ce guide.</p>
+<div class="box">
+  <h4>🏢 Interface Admin (cette interface)</h4>
   <p><b>URL :</b> /my-hostaway/</p>
+  <p><b>Pour :</b> L'équipe DPM (vous, Laurent, gestionnaires)</p>
+  <p><b>Accès :</b> Toutes les rubriques, toutes les données, tous les biens, tous les partenaires et propriétaires</p>
+  <p><b>Droits :</b> Création, modification, suppression, validation des comptes, configuration</p>
 </div>
-<div class="profil">
-  <h4>🤝 Partenaire</h4>
-  <p>Le partenaire voit ses prestations, ses commandes reçues, ses statistiques. Il peut modifier ses prestations si le droit est activé.</p>
+<div class="box">
+  <h4>🤝 Interface Partenaire</h4>
   <p><b>URL :</b> /my-hostaway/partenaire/</p>
+  <p><b>Pour :</b> Les prestataires externes (spa, transport, excursions…)</p>
+  <p><b>Accès :</b> Uniquement ses propres prestations, commandes reçues et statistiques</p>
+  <p><b>Droits :</b> Consultation. Si « Peut modifier ses prestations » est activé dans sa fiche : peut ajuster prix et descriptions. Si « Peut créer des promotions » : peut créer des offres spéciales.</p>
+  <p><b>Création du compte :</b> Le partenaire demande un accès depuis l'URL ci-dessus. L'admin valide sa demande dans Comptes & accès et rattache le compte à sa fiche partenaire.</p>
 </div>
 </div>
 <div class="cols2">
-<div class="profil">
-  <h4>🏠 Propriétaire</h4>
-  <p>Le propriétaire voit ses biens, ses réservations, ses revenus, ses prestations internes.</p>
+<div class="box">
+  <h4>🏠 Interface Propriétaire</h4>
   <p><b>URL :</b> /my-hostaway/proprietaire/</p>
+  <p><b>Pour :</b> Les propriétaires des biens en gestion</p>
+  <p><b>Accès :</b> Ses biens, ses réservations, ses revenus, ses prestations internes</p>
+  <p><b>Droits :</b> Consultation uniquement (sauf droits spécifiques activés par l'admin)</p>
+  <p><b>Création du compte :</b> Même processus que le partenaire : demande depuis l'URL, validation par l'admin.</p>
 </div>
-<div class="profil">
-  <h4>✈️ Voyageur</h4>
-  <p>Le voyageur accède à son séjour par un lien unique (sans compte) : infos du logement, catalogue des prestations, ses demandes.</p>
+<div class="box">
+  <h4>✈️ Interface Voyageur</h4>
   <p><b>URL :</b> /my-hostaway/sejour/#/s/{token}</p>
+  <p><b>Pour :</b> Le voyageur pendant son séjour</p>
+  <p><b>Accès :</b> Informations du logement (adresse, wifi, code porte, instructions), catalogue des prestations disponibles pour ce bien, formulaire de commande, suivi de ses demandes</p>
+  <p><b>Droits :</b> Consultation + commande de prestations</p>
+  <p><b>Pas de compte :</b> Accès par lien unique généré par l'admin. Le lien expire 30 jours après le départ.</p>
 </div>
 </div>
 
-<h3>1.3 Connexion et premiers pas</h3>
-<p>L'application se charge dans le navigateur. L'authentification est gérée par Supabase. Après connexion :</p>
-<ul>
-<li>Le <b>menu latéral gauche</b> liste les 22 rubriques</li>
-<li>Cliquez sur une rubrique pour déplier ses sous-menus</li>
-<li>Le bouton <span class="kbd">+ Ajouter</span> en haut à droite permet de créer un élément dans la rubrique courante</li>
-<li>La <b>barre de recherche</b> en haut permet de chercher dans toute l'application</li>
-<li>Le <b>mode sombre</b> s'active avec le bouton 🌙 en haut à droite</li>
-</ul>
-<div class="note">💡 <b>Raccourci :</b> Alt+1 à Alt+9 pour accéder aux 9 premières rubriques.</div>
+<h3>1.2 Connexion et navigation</h3>
+<p>Ouvrez l'application dans votre navigateur. L'authentification est gérée par Supabase (email + mot de passe). Après connexion, vous arrivez sur le <b>Tableau de bord</b>.</p>
+
+<h4>Structure de l'écran</h4>
+<table>
+<tr><th style="width:25%">Zone</th><th>Description</th></tr>
+<tr><td><b>Menu latéral gauche</b></td><td>22 rubriques principales. Cliquez sur une rubrique pour la déplier et voir ses sous-menus. La rubrique active est surlignée en vert.</td></tr>
+<tr><td><b>Sous-onglets (en haut)</b></td><td>Quand une rubrique a plusieurs sous-pages, les onglets apparaissent sous le titre de la rubrique. Ex : Conciergerie → Demandes / Statistiques / Toutes les prestations / …</td></tr>
+<tr><td><b>Barre du haut</b></td><td>De gauche à droite : titre de la page, barre de recherche globale, bouton mode sombre 🌙, notifications 🔔, aide ❓, bouton + Ajouter (selon la page).</td></tr>
+<tr><td><b>Zone centrale</b></td><td>Le contenu de la page : liste, formulaire, tableau de bord, statistiques…</td></tr>
+</table>
+
+<h3>1.3 L'écran principal — menu, sous-menus, barre du haut</h3>
+<p>L'application compte <b>22 rubriques</b> dans le menu, organisées en blocs logiques :</p>
+
+<table>
+<tr><th>Bloc</th><th>Rubriques</th></tr>
+<tr><td>Synthèse</td><td>Vue d'ensemble (tableau de bord)</td></tr>
+<tr><td>Calendrier</td><td>Multiple, Mensuel, Annuel</td></tr>
+<tr><td>Communication</td><td>Boîte de réception (conversations, IA, modèles, automatisations)</td></tr>
+<tr><td>Opérations</td><td>Réservations, Annonces (biens), Tâches</td></tr>
+<tr><td>Satisfaction</td><td>Avis, Qualité d'hébergement</td></tr>
+<tr><td>Finance</td><td>Rapports financiers, Dépenses & suppléments, Paiements voyageurs, Relevés propriétaire</td></tr>
+<tr><td>Pricing</td><td>Tarification</td></tr>
+<tr><td>Distribution</td><td>Gestionnaire de canaux</td></tr>
+<tr><td>Conciergerie</td><td>Partenaires, Propriétaires, Voyageurs, Conciergerie (prestations, commandes, fiches)</td></tr>
+<tr><td>Technique</td><td>Branchements & outils, Utilisateurs & groupes, Moteur de réservation, Paramètres</td></tr>
+</table>
+
+<h3>1.4 Raccourcis clavier</h3>
+<table>
+<tr><th style="width:25%">Raccourci</th><th>Action</th></tr>
+<tr><td><span class="kbd">Alt + 1</span> à <span class="kbd">Alt + 9</span></td><td>Accès direct aux 9 premières rubriques du menu</td></tr>
+<tr><td><span class="kbd">Alt + D</span></td><td>Revenir au Tableau de bord</td></tr>
+<tr><td><span class="kbd">Alt + T</span></td><td>Basculer le mode sombre</td></tr>
+<tr><td><span class="kbd">Alt + P</span></td><td>Imprimer la page courante</td></tr>
+<tr><td><span class="kbd">Échap</span></td><td>Fermer le formulaire / la modale en cours</td></tr>
+</table>
+
+<h3>1.5 Mode sombre et impression</h3>
+<p>Le <b>mode sombre</b> s'active avec le bouton 🌙 en haut à droite (ou Alt+T). Tous les éléments s'adaptent automatiquement.</p>
+<p>L'<b>impression</b> (Alt+P ou Ctrl+P) masque le menu et la barre du haut pour un rendu propre du contenu affiché.</p>
 </div>
 
-<!-- ==================== CHAPITRE 2 ==================== -->
 <div class="section">
-<h2>2. Vue d'ensemble (Tableau de bord)</h2>
-<p>Le tableau de bord affiche une synthèse de votre activité :</p>
-<ul>
-<li><b>KPI principaux</b> : commissions DPM, montant à reverser aux partenaires, CA services internes, taux d'occupation</li>
-<li><b>Réservations confirmées</b> du mois en cours</li>
-<li><b>Demandes à traiter</b> : commandes de prestations en attente de confirmation (Confirmer / Refuser)</li>
-</ul>
-<p>Utilisez les boutons <b>Mois</b> / <b>Année</b> pour changer la période d'affichage.</p>
-<div class="note">💡 Les demandes à traiter apparaissent aussi dans la rubrique Conciergerie → Demandes de prestations.</div>
+<h2>2. Vue d'ensemble — Tableau de bord</h2>
+<p>Le tableau de bord est la page d'accueil de l'application. Il synthétise l'activité du mois en cours.</p>
+
+<h3>2.1 KPI et indicateurs</h3>
+<table>
+<tr><th style="width:35%">Indicateur</th><th>Ce qu'il mesure</th><th>Comment il est calculé</th></tr>
+<tr><td><b>Commissions DPM (partenaires)</b></td><td>Ce que DPM gagne sur les prestations partenaires</td><td>(Prix facturé − Net partenaire) × Quantité, sur les commandes confirmées du mois</td></tr>
+<tr><td><b>À reverser aux partenaires</b></td><td>Ce que DPM doit reverser</td><td>Net partenaire × Quantité, sur les commandes confirmées du mois</td></tr>
+<tr><td><b>CA services internes</b></td><td>Chiffre d'affaires des prestations internes (propriétaires)</td><td>Prix × Quantité des commandes de type « interne » confirmées du mois</td></tr>
+<tr><td><b>Occupation du parc</b></td><td>Taux d'occupation global</td><td>Nuits réservées / Nuits disponibles × 100, sur le mois</td></tr>
+<tr><td><b>Réservations confirmées</b></td><td>Nombre de séjours confirmés du mois</td><td>Réservations avec statut « confirmée » dont l'arrivée ou le départ est dans le mois</td></tr>
+</table>
+
+<h3>2.2 Demandes à traiter (commandes en attente)</h3>
+<p>Sous les KPI, le tableau de bord liste les <b>commandes de prestations en attente</b> de confirmation. Pour chaque demande :</p>
+<table>
+<tr><th>Colonne</th><th>Contenu</th></tr>
+<tr><td>Prestation</td><td>Icône + nom de la prestation. Si le voyageur a ajouté un commentaire, il apparaît en dessous.</td></tr>
+<tr><td>Bien · Voyageur</td><td>Nom du bien et du voyageur</td></tr>
+<tr><td>Date</td><td>Date et heure de la prestation demandée</td></tr>
+<tr><td>Qté</td><td>Nombre de personnes / unités</td></tr>
+<tr><td>Montant</td><td>Prix total facturé</td></tr>
+<tr><td>Type</td><td>Partenaire ou Interne</td></tr>
+</table>
+<p><b>Actions :</b></p>
+<div class="step"><div class="num">1</div><div class="txt"><b>Confirmer</b> — Valide la commande. Le partenaire est notifié, le montant est comptabilisé.</div></div>
+<div class="step"><div class="num">2</div><div class="txt"><b>Refuser</b> — Refuse la commande. Le voyageur est informé.</div></div>
+
+<div class="note">💡 Ces mêmes demandes apparaissent dans <b>Conciergerie → Demandes de prestations</b> où vous pouvez aussi filtrer par statut et par date.</div>
 </div>
 
-<!-- ==================== CHAPITRE 3 ==================== -->
 <div class="section">
-<h2>3. Calendrier</h2>
-<h3>3.1 Vue multiple</h3>
-<p>Affiche tous les biens côte à côte avec les réservations sur une frise temporelle. Idéal pour visualiser l'occupation globale du parc.</p>
+<h2>3–4. Calendrier et Boîte de réception</h2>
+<h3>3. Calendrier</h3>
+<p><b>Vue multiple :</b> tous les biens sur une frise temporelle horizontale. Chaque réservation est une barre colorée (vert = confirmée, jaune = en attente, rouge = annulée). Glissez horizontalement pour naviguer dans le temps.</p>
+<p><b>Vue mensuelle :</b> calendrier classique avec les réservations positionnées sur les jours. Cliquez sur une réservation pour ouvrir sa fiche complète.</p>
+<p><b>Vue annuelle :</b> grille 12 mois × nombre de biens, avec le taux d'occupation en couleur (vert foncé = haute occupation, rouge = basse). Idéal pour repérer les périodes creuses.</p>
 
-<h3>3.2 Vue mensuelle</h3>
-<p>Calendrier classique mois par mois. Chaque réservation apparaît en barre colorée (vert = confirmée, jaune = en attente, rouge = annulée). Cliquez sur une réservation pour ouvrir sa fiche.</p>
+<h3>4. Boîte de réception</h3>
+<h4>Conversations</h4>
+<p>Tous les échanges centralisés. Les messages des plateformes (Airbnb, Booking, WhatsApp) arrivent ici avec la photo et le nom du voyageur, rattachés à la réservation.</p>
 
-<h3>3.3 Vue annuelle</h3>
-<p>Vision à l'année avec le taux d'occupation par mois et par bien. Utile pour repérer les périodes creuses et ajuster les tarifs.</p>
+<h4>Réponses IA</h4>
+<p>L'assistant IA rédige des réponses suggérées basées sur votre <b>Base de connaissances</b>. Ajoutez-y toutes les informations pratiques : adresse exacte, wifi, code porte, horaires de check-in, recommandations restaurants, règlement intérieur. Chaque fait peut être rattaché à un bien précis ou être général (tous les biens).</p>
+
+<h4>Messages automatisés</h4>
+<p>Programmez des messages déclenchés automatiquement :</p>
+<table>
+<tr><th>Déclencheur</th><th>Exemple</th></tr>
+<tr><td>X jours avant l'arrivée</td><td>5 jours avant → instructions de check-in avec code porte et wifi</td></tr>
+<tr><td>Jour de l'arrivée</td><td>Message de bienvenue avec lien vers l'espace voyageur</td></tr>
+<tr><td>Pendant le séjour (J+2)</td><td>Proposition de prestations : massage, excursion, chef privé</td></tr>
+<tr><td>Après le départ (J+1)</td><td>Remerciement et demande d'avis</td></tr>
+</table>
+<div class="warn">⚠️ <b>Sécurité :</b> Les messages automatisés créent toujours des <b>brouillons</b> à valider avant envoi. Aucun message n'est jamais envoyé automatiquement sans votre validation.</div>
 </div>
 
-<!-- ==================== CHAPITRE 4 ==================== -->
-<div class="section">
-<h2>4. Boîte de réception</h2>
-<h3>4.1 Conversations</h3>
-<p>Centralisez tous les échanges avec les voyageurs, partenaires et propriétaires. Les messages entrants des plateformes (Airbnb, Booking, WhatsApp) arrivent ici.</p>
-<ul>
-<li><b>Répondre</b> : tapez votre réponse et cliquez Envoyer (crée un brouillon, n'envoie jamais automatiquement)</li>
-<li><b>Archiver</b> : masque un fil sans le supprimer</li>
-<li><b>Fiche de réservation</b> : lien direct vers la fiche du séjour</li>
-</ul>
-
-<h3>4.2 Réponses IA</h3>
-<p>Configurez le comportement de l'assistant IA : ton, langue, informations à inclure automatiquement dans les réponses suggérées.</p>
-
-<h3>4.3 Base de connaissances</h3>
-<p>Ajoutez des faits que l'IA utilisera pour répondre aux voyageurs : adresse exacte, code wifi, instructions de check-in, recommandations restaurants, etc. Chaque fait peut être rattaché à un bien précis ou être général.</p>
-
-<h3>4.4 Modèles de message</h3>
-<p>Créez des messages types réutilisables : confirmation de réservation, instructions d'arrivée, message de bienvenue, demande d'avis, etc.</p>
-
-<h3>4.5 Messages automatisés</h3>
-<p>Programmez l'envoi automatique de messages à des moments clés du séjour :</p>
-<ul>
-<li>X jours avant l'arrivée → instructions de check-in</li>
-<li>Jour de l'arrivée → message de bienvenue</li>
-<li>Pendant le séjour → proposition de prestations</li>
-<li>Après le départ → demande d'avis</li>
-</ul>
-<div class="warn">⚠️ Les messages automatisés créent toujours des <b>brouillons</b> à valider, jamais d'envoi direct.</div>
-
-<h3>4.6 Messages récurrents</h3>
-<p>Messages planifiés à date fixe (ex : vœux de nouvel an, newsletter trimestrielle).</p>
-
-<h3>4.7 Règles & escalades</h3>
-<p>Définissez des règles : si aucune réponse en X heures → notification, transfert à un responsable, réponse automatique.</p>
-</div>
-
-<!-- ==================== CHAPITRE 5 ==================== -->
 <div class="section">
 <h2>5. Réservations</h2>
-<h3>5.1 Liste des réservations</h3>
-<p>Toutes les réservations avec filtres par date, canal et recherche textuelle. Colonnes : bien, voyageur (avec email/tel), arrivée, départ, canal, unité, statut, montant, paiement.</p>
-<p><b>Actions par réservation :</b></p>
-<ul>
-<li>✅ <b>Accepter</b> / ❌ <b>Refuser</b> (pour les demandes en attente)</li>
-<li>👁 <b>Fiche complète</b> : détails du séjour, voyageur, paiements, prestations commandées</li>
-<li>📄 <b>Contrat PDF</b> : génère automatiquement un contrat de location</li>
-<li>✏️ <b>Modifier</b> / × <b>Supprimer</b></li>
-</ul>
 
-<h3>5.2 Accepter ou refuser une réservation</h3>
-<p>Les réservations arrivent en statut « demande » ou « en_attente ». Cliquez ✅ Accepter pour confirmer (le calendrier se bloque, la plateforme est notifiée) ou ❌ Refuser.</p>
+<h3>5.1 Créer une réservation manuelle — procédure complète</h3>
+<p>Pour une réservation en direct (pas de plateforme) :</p>
+<div class="step"><div class="num">1</div><div class="txt">Allez dans <b>Réservations → Liste</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>+ Nouvelle réservation</b> en haut à droite</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Remplissez le formulaire :</div></div>
 
-<h3>5.3 Check-in en ligne</h3>
-<p>Le voyageur remplit ses informations avant l'arrivée : identité, heure d'arrivée, nombre de personnes. Les données apparaissent ici avec le statut (en attente, complété, vérifié).</p>
-
-<h3>5.4 Coupons</h3>
-<p>Créez des codes promo : montant fixe ou pourcentage, durée de validité, nombre d'utilisations maximum, séjour minimum.</p>
-
-<h3>5.5 Importer des réservations</h3>
-<p>Importez des réservations depuis un fichier CSV ou depuis Host Tools.</p>
-</div>
-
-<!-- ==================== CHAPITRE 6 ==================== -->
-<div class="section">
-<h2>6. Annonces (Biens)</h2>
-<h3>6.1 Fiche d'un bien</h3>
-<p>Chaque bien contient :</p>
 <table>
-<tr><th>Section</th><th>Champs</th></tr>
-<tr><td>Identité</td><td>Nom, type (villa, riad, appart…), adresse, ville, pays, description, coordonnées GPS</td></tr>
-<tr><td>Capacité</td><td>Chambres, lits, salles de bain, capacité max, surface</td></tr>
-<tr><td>Tarification</td><td>Prix/nuit de base, commission DPM sur prestations, nuits min/max</td></tr>
-<tr><td>Équipements</td><td>Piscine, wifi, parking, climatisation, etc. (champs Booking)</td></tr>
-<tr><td>Check-in/out</td><td>Heures, instructions, code porte, wifi</td></tr>
-<tr><td>Propriétaire</td><td>Rattachement au propriétaire qui gère ce bien</td></tr>
-<tr><td>Statut</td><td>En ligne, masqué, en préparation</td></tr>
+<tr><th style="width:25%">Champ</th><th>Description</th><th style="width:25%">Obligatoire ?</th></tr>
+<tr><td><b>Bien</b></td><td>Sélectionnez le bien dans la liste déroulante</td><td>✅ Oui</td></tr>
+<tr><td><b>Voyageur</b></td><td>Sélectionnez un voyageur existant ou créez-en un nouveau</td><td>Recommandé</td></tr>
+<tr><td><b>Arrivée</b></td><td>Date d'arrivée du voyageur</td><td>✅ Oui</td></tr>
+<tr><td><b>Départ</b></td><td>Date de départ du voyageur</td><td>✅ Oui</td></tr>
+<tr><td><b>Personnes</b></td><td>Nombre de voyageurs</td><td>Non</td></tr>
+<tr><td><b>Canal</b></td><td>direct, airbnb, booking, vrbo, expedia, abritel, autre</td><td>Défaut : direct</td></tr>
+<tr><td><b>Unité / chambre</b></td><td>Pour les biens multi-unités uniquement</td><td>Non</td></tr>
+<tr><td><b>Réf. canal</b></td><td>Numéro de réservation de la plateforme</td><td>Non</td></tr>
+<tr><td><b>Prix total</b></td><td>Montant total du séjour</td><td>Recommandé</td></tr>
+<tr><td><b>Statut</b></td><td>demande, en_attente, confirmée, annulée, terminée, no_show, séjour propriétaire</td><td>Défaut : confirmée</td></tr>
+<tr><td><b>Heure d'arrivée / départ</b></td><td>Heures prévues</td><td>Non</td></tr>
+<tr><td><b>Contrat signé</b></td><td>Téléchargez le contrat signé (PDF, image)</td><td>Non</td></tr>
+<tr><td><b>Notes</b></td><td>Informations internes (non visibles du voyageur)</td><td>Non</td></tr>
 </table>
 
-<h3>6.2 Photos</h3>
-<p>Galerie photo par bien. Glissez-déposez pour réorganiser l'ordre.</p>
+<div class="step"><div class="num">4</div><div class="txt">Cliquez <b>Enregistrer</b>. La réservation apparaît dans la liste et dans le calendrier.</div></div>
 
-<h3>6.3 Score ASO (App Store Optimization)</h3>
-<p>Analyse de la qualité de chaque annonce : complétude des champs, nombre de photos, temps de réponse, ratio acceptation, note moyenne. Score sur 100 avec recommandations d'amélioration.</p>
+<h3>5.2 Accepter ou refuser une demande</h3>
+<p>Les réservations importées depuis les plateformes arrivent en statut « demande » (inquiry Airbnb) ou « en_attente » (booking request).</p>
+<div class="step"><div class="num">1</div><div class="txt">Dans la liste, repérez la réservation avec le statut jaune « demande » ou « en_attente »</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>✅ Accepter</b> pour confirmer la réservation. Les dates sont bloquées dans le calendrier, la plateforme est synchronisée.</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Ou cliquez <b>❌ Refuser</b> pour rejeter la demande. La plateforme est notifiée.</div></div>
 
-<h3>6.4 Multi-unités / Chambres</h3>
-<p>Pour les biens avec plusieurs unités (appart-hôtel, riad avec chambres individuelles). Chaque unité a son propre calendrier et tarif.</p>
-</div>
+<div class="important">✅ <b>Conseil :</b> Répondez rapidement aux demandes Airbnb (< 24h) pour maintenir votre taux de réponse et votre classement.</div>
 
-<!-- ==================== CHAPITRE 7 ==================== -->
-<div class="section">
-<h2>7. Tâches</h2>
-<h3>7.1 Kanban</h3>
-<p>Vue en colonnes : À faire → En cours → Fait. Chaque tâche a un assigné, une catégorie (ménage, maintenance, check-in…), une date d'échéance et un bien rattaché.</p>
-
-<h3>7.2 Tâches automatiques</h3>
-<p>Créez des règles pour générer automatiquement des tâches : ménage après chaque check-out, inspection avant check-in, etc.</p>
-
-<h3>7.3 Modèles de checklist</h3>
-<p>Préparez des listes de vérification réutilisables : checklist ménage, checklist accueil, checklist départ.</p>
-</div>
-
-<!-- ==================== CHAPITRE 8 ==================== -->
-<div class="section">
-<h2>8. Avis</h2>
-<p>Gérez les avis voyageurs :</p>
+<h3>5.3 Fiche de réservation</h3>
+<p>Cliquez sur le bouton <b>👁</b> d'une réservation pour ouvrir sa fiche complète. Vous y trouvez :</p>
 <ul>
-<li><b>Gérer les avis</b> : liste de tous les avis reçus avec note, réponse, statut</li>
-<li><b>Avis automatiques</b> : envoi automatique d'une demande d'avis X jours après le départ</li>
-<li><b>Modèles d'avis</b> : réponses types pour gagner du temps</li>
-<li><b>Analyses IA</b> : synthèse des avis par bien (points forts, points faibles récurrents)</li>
+<li>Les informations du séjour (dates, nombre de nuits, prix/nuit calculé)</li>
+<li>Le voyageur (nom, email, téléphone, avec lien vers sa fiche voyageur)</li>
+<li>Le bien (nom, propriétaire)</li>
+<li>Le statut du paiement</li>
+<li>Les commandes de prestations rattachées à ce séjour</li>
+<li>L'historique des messages échangés</li>
+</ul>
+
+<h3>5.4 Contrat PDF automatique</h3>
+<p>Cliquez sur le bouton <b>📄</b> d'une réservation. L'application génère automatiquement un contrat de location au format PDF avec :</p>
+<ul>
+<li>En-tête aux couleurs DPM</li>
+<li>Identification des parties (propriétaire + voyageur)</li>
+<li>Description du bien</li>
+<li>Dates et durée du séjour</li>
+<li>Montant total, prix/nuit, conditions de paiement</li>
+<li>Conditions d'annulation</li>
+<li>Zone de signature</li>
+</ul>
+
+<h3>5.5 Check-in en ligne</h3>
+<p>Le voyageur remplit un formulaire avant son arrivée (via un lien envoyé automatiquement) :</p>
+<ul>
+<li>Pièce d'identité (photo + numéro)</li>
+<li>Heure d'arrivée prévue</li>
+<li>Nombre exact de personnes</li>
+<li>Selfie (si activé)</li>
+</ul>
+<p>Allez dans <b>Réservations → Check-in en ligne</b> pour voir l'état de chaque check-in (en attente, complété, vérifié) et télécharger les documents.</p>
+
+<h3>5.6 Coupons de réduction</h3>
+<p>Créez des codes promo dans <b>Réservations → Coupons</b> :</p>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Code</td><td>Le code que saisit le voyageur</td><td>BIENVENUE10</td></tr>
+<tr><td>Type</td><td>Montant fixe ou pourcentage</td><td>pourcentage</td></tr>
+<tr><td>Valeur</td><td>Le montant de la réduction</td><td>10 (= 10%)</td></tr>
+<tr><td>Séjour min</td><td>Nombre minimum de nuits pour utiliser le coupon</td><td>3 nuits</td></tr>
+<tr><td>Validité</td><td>Dates de début et fin de validité</td><td>01/12/2026 → 31/01/2027</td></tr>
+<tr><td>Utilisations max</td><td>Nombre de fois que le code peut être utilisé</td><td>50</td></tr>
+</table>
+
+<h3>5.7 Filtres de la liste</h3>
+<p>La liste des réservations offre des filtres avancés :</p>
+<ul>
+<li><b>Par date :</b> arrivée ou départ dans une fourchette (du … au …)</li>
+<li><b>Par canal :</b> direct, airbnb, booking, vrbo, etc.</li>
+<li><b>Recherche textuelle :</b> nom du voyageur, nom du bien, référence</li>
+<li><b>Export CSV :</b> téléchargez la liste filtrée au format tableur</li>
 </ul>
 </div>
 
-<!-- ==================== CHAPITRE 9 ==================== -->
 <div class="section">
-<h2>9. Rapports financiers</h2>
-<h3>9.1 Analytique</h3>
-<p>Tableau de bord financier avec graphiques : revenus par mois, par bien, par canal. Comparaison N/N-1.</p>
+<h2>6. Annonces (Biens) — Fiche détaillée</h2>
+<p>Chaque bien (villa, riad, appartement…) dispose d'une fiche complète organisée en <b>9 sections</b>.</p>
 
-<h3>9.2 Activité de location</h3>
-<p>Détail de chaque nuit louée : bien, voyageur, montant, canal, commission.</p>
+<h3>6.1 Créer un bien</h3>
+<div class="step"><div class="num">1</div><div class="txt">Allez dans <b>Annonces → Liste</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>+ Ajouter un bien</b></div></div>
+<div class="step"><div class="num">3</div><div class="txt">Remplissez les 9 sections du formulaire (détaillées ci-dessous)</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Cliquez <b>Enregistrer</b></div></div>
 
-<h3>9.3 Taux d'occupation</h3>
-<p>Pourcentage d'occupation par bien et par période. Visualisation calendaire des nuits louées vs disponibles.</p>
+<h3>6.2 Section 1 — Informations générales</h3>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Nom de l'annonce</b> ✱</td><td>Nom affiché partout dans l'application</td><td>Riad Jasmin — Médina</td></tr>
+<tr><td>Type de bien</td><td>Appartement, Villa, Riad, Studio, Maison, Chambre</td><td>Riad</td></tr>
+<tr><td>Propriétaire</td><td>Rattachement au propriétaire qui gère ce bien</td><td>Propriétaire Démo</td></tr>
+<tr><td>Commission prestations (%)</td><td>Commission DPM sur les services vendus par le propriétaire via la conciergerie</td><td>20%</td></tr>
+<tr><td>Statut</td><td>en_ligne (visible), masqué (caché), brouillon</td><td>en_ligne</td></tr>
+<tr><td>État de propreté</td><td>propre, en_nettoyage, a_nettoyer (mis à jour par l'équipe ménage)</td><td>propre</td></tr>
+<tr><td>Type d'unité</td><td>simple (bien unique), parent (riad avec chambres), enfant (une chambre)</td><td>simple</td></tr>
+</table>
 
-<h3>9.4 Formules</h3>
-<p>Personnalisez les calculs financiers : formule de commission, formule de nettoyage, formule de reversement propriétaire.</p>
+<h3>6.3 Section 2 — Description & contenu</h3>
+<p>Les descriptions sont synchronisées avec les plateformes. Les champs marqués 🏷 sont spécifiques à une plateforme.</p>
+<table>
+<tr><th>Champ</th><th>Envoyé à</th></tr>
+<tr><td>Description principale</td><td>Toutes les plateformes</td></tr>
+<tr><td>Résumé court</td><td>Booking, VRBO (description courte)</td></tr>
+<tr><td>L'espace 🏷 Airbnb</td><td>Airbnb uniquement (champ "The Space")</td></tr>
+<tr><td>Le quartier 🏷 Airbnb</td><td>Airbnb uniquement (champ "Neighborhood")</td></tr>
+<tr><td>Transports 🏷 Airbnb</td><td>Airbnb uniquement (champ "Transit")</td></tr>
+</table>
 
-<h3>9.5 Export comptable</h3>
-<p>Exportez les données financières au format CSV pour votre comptable.</p>
-
-<h3>9.6 Prévisionnel</h3>
-<p>Projection des revenus basée sur les réservations confirmées et le taux d'occupation historique.</p>
-
-<h3>9.7 Rapport mensuel</h3>
-<p>Génération d'un rapport mensuel complet : revenus, dépenses, occupation, prestations, à envoyer au propriétaire.</p>
+<h3>6.4 Sections 3 à 5 — Localisation, Capacité, Tarifs</h3>
+<div class="cols2">
+<div>
+<h4>Localisation</h4>
+<p>Adresse, ville, pays, code postal, coordonnées GPS (latitude/longitude). Les coordonnées GPS sont envoyées aux plateformes pour le positionnement sur la carte.</p>
+</div>
+<div>
+<h4>Capacité & surface</h4>
+<p>Voyageurs max, chambres, lits, salles de bain, superficie en m². Ces informations sont affichées sur les plateformes et servent au filtrage.</p>
+</div>
 </div>
 
-<!-- ==================== CHAPITRE 10 ==================== -->
-<div class="section">
-<h2>10. Dépenses & suppléments</h2>
-<ul>
-<li><b>Dépenses</b> : charges liées aux biens (ménage, entretien, réparations, consommables)</li>
-<li><b>Suppléments</b> : charges refacturées au voyageur (ménage de départ, linge extra)</li>
-<li><b>Catégories</b> : organisez vos dépenses par catégorie personnalisée</li>
-<li><b>Automatisations</b> : dépense récurrente créée automatiquement (ex : abonnement wifi mensuel)</li>
-</ul>
+<h4>Tarifs & conditions financières</h4>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Prix de base / nuit</td><td>Tarif standard hors saison</td><td>1 200 DH</td></tr>
+<tr><td>Devise</td><td>MAD, EUR ou USD</td><td>MAD</td></tr>
+<tr><td>Nuits minimum / maximum</td><td>Contraintes de durée de séjour</td><td>Min 2, Max 30</td></tr>
+<tr><td>Supplément week-end / nuit</td><td>Majoration appliquée le vendredi et samedi</td><td>200 DH</td></tr>
+<tr><td>Prix personne supp. / nuit</td><td>Facturation supplémentaire au-delà de la capacité de base</td><td>150 DH</td></tr>
+<tr><td>Frais de ménage</td><td>Forfait unique par séjour</td><td>500 DH</td></tr>
+<tr><td>Taxe de séjour / nuit</td><td>Taxe locale par nuit</td><td>25 DH</td></tr>
+<tr><td>Caution demandée</td><td>Montant de la caution (pré-autorisation ou dépôt)</td><td>3 000 DH</td></tr>
+<tr><td>Remise hebdomadaire</td><td>Réduction en % pour les séjours ≥ 7 jours (seuil configurable)</td><td>10%</td></tr>
+<tr><td>Remise mensuelle</td><td>Réduction en % pour les séjours ≥ 30 jours (seuil configurable)</td><td>20%</td></tr>
+<tr><td>Politique d'annulation</td><td>flexible, modérée, stricte, non_remboursable (par canal si besoin)</td><td>modérée</td></tr>
+</table>
+
+<h4>Majorations par canal</h4>
+<p>Augmentez automatiquement le prix affiché sur chaque plateforme pour absorber leurs commissions :</p>
+<div class="example">
+<b>Exemple :</b> Prix de base 1 000 DH/nuit.<br>
+Majoration Airbnb 15% → le voyageur Airbnb voit 1 150 DH/nuit.<br>
+Majoration Booking 18% → le voyageur Booking voit 1 180 DH/nuit.<br>
+Site direct 0% → le voyageur en direct paie 1 000 DH/nuit (meilleur prix).<br>
+<i>→ Vous recevez toujours environ 1 000 DH net quelle que soit la plateforme.</i>
 </div>
 
-<!-- ==================== CHAPITRE 11 ==================== -->
-<div class="section">
-<h2>11. Paiements voyageurs</h2>
-<h3>11.1 Encaissements</h3>
-<p>Suivi de tous les paiements reçus : montant, date, mode (plateforme, virement, espèces, CMI), statut.</p>
-
-<h3>11.2 Factures voyageurs</h3>
-<p>Génération de factures pour les voyageurs : numérotation automatique, TVA configurable.</p>
-
-<h3>11.3 Dépôts de garantie</h3>
-<p>Gestion des cautions : pré-autorisation ou dépôt classique, capture, remboursement.</p>
-
-<h3>11.4 Paramètres PayPal / CMI</h3>
-<p>Configuration des moyens de paiement en ligne.</p>
-</div>
-
-<!-- ==================== CHAPITRE 12 ==================== -->
-<div class="section">
-<h2>12. Relevés propriétaire</h2>
-<p>Générez les relevés mensuels pour chaque propriétaire :</p>
-<ul>
-<li><b>Revenus bruts</b> des réservations sur ses biens</li>
-<li><b>Déduction</b> de la commission DPM, des dépenses, des prestations</li>
-<li><b>Net à reverser</b> au propriétaire</li>
-<li><b>Envoi automatique</b> ou manuel en PDF</li>
-</ul>
-</div>
-
-<!-- ==================== CHAPITRE 13 ==================== -->
-<div class="section">
-<h2>13. Tarification</h2>
-<h3>13.1 Tarifs saisonniers</h3>
-<p>Définissez des périodes avec un prix/nuit personnalisé. Les périodes sont prioritaires : la plus haute priorité l'emporte en cas de chevauchement.</p>
-
-<h3>13.2 Extras & frais</h3>
-<p>Frais additionnels : par séjour (ménage), par nuit (taxe de séjour), par personne, par personne/nuit. Peuvent être obligatoires ou optionnels.</p>
-
-<h3>13.3 Tarification dynamique</h3>
-<p>Ajustement automatique des prix en fonction de la demande, de la saisonnalité et des prix concurrents (intégration PriceLabs possible).</p>
-
-<h3>13.4 Minimum de nuits</h3>
-<p>Paramétrez le nombre minimum de nuits par bien et par période.</p>
-</div>
-
-<!-- ==================== CHAPITRE 14 ==================== -->
-<div class="section">
-<h2>14. Gestionnaire de canaux</h2>
-<h3>14.1 Canaux connectés</h3>
-<p>Connectez vos biens aux plateformes : Airbnb, Booking, VRBO, Expedia, Abritel. Chaque canal est synchronisé (disponibilités, prix, réservations).</p>
-
-<h3>14.2 Synchronisation iCal</h3>
-<p>Importez/exportez des calendriers iCal pour synchroniser avec des outils externes.</p>
-
-<h3>14.3 Plans tarifaires Booking</h3>
-<p>Configuration des plans tarifaires spécifiques à Booking.com (non remboursable, flexible, etc.).</p>
-</div>
-
-<!-- ==================== CHAPITRE 15 ==================== -->
-<div class="section">
-<h2>15. Conciergerie — Prestations</h2>
-<p>C'est le cœur du système de conciergerie : les prestations que DPM propose aux voyageurs.</p>
-
-<h3>15.1 Créer une prestation</h3>
-<p>Depuis Conciergerie → Toutes les prestations → <b>+ Ajouter une prestation</b>. Les champs :</p>
+<h3>6.5 Section 6 — Arrivée & accès</h3>
 <table>
 <tr><th>Champ</th><th>Description</th></tr>
-<tr><td>Nom</td><td>Ex : "Massage bien-être"</td></tr>
-<tr><td>Catégorie</td><td>Ex : Bien-être, Restauration, Excursion, Transport…</td></tr>
-<tr><td>Type</td><td><b>Externe</b> (partenaire), <b>Interne</b> (propriétaire), <b>DPM</b> (DPM source et vend)</td></tr>
-<tr><td>Partenaire</td><td>Obligatoire si type = externe</td></tr>
-<tr><td>Propriétaire</td><td>Obligatoire si type = interne</td></tr>
-<tr><td>Icône</td><td>Emoji affiché au voyageur (💆, 🚘, 🍽️…)</td></tr>
-<tr><td>Unité</td><td>Par personne, par heure, par trajet, forfait…</td></tr>
-<tr><td>Description</td><td>Texte affiché au voyageur</td></tr>
+<tr><td>Heure d'arrivée / départ</td><td>Heures standard (envoyées aux plateformes et à l'espace voyageur)</td></tr>
+<tr><td>Méthode de check-in</td><td>boîte à clés, serrure connectée, concierge, en personne, instructions</td></tr>
+<tr><td>Code de porte / boîte à clés</td><td>Affiché dans l'espace voyageur le jour de l'arrivée</td></tr>
+<tr><td>Wifi — nom et mot de passe</td><td>Affichés dans l'espace voyageur dès l'arrivée</td></tr>
+<tr><td>Instructions d'arrivée</td><td>Texte détaillé : comment trouver le bien, où se garer, qui contacter</td></tr>
+<tr><td>Contact d'urgence</td><td>Numéro affiché dans l'espace voyageur</td></tr>
 </table>
 
-<h3>15.2 Les 3 types de prestations</h3>
-<div class="cols2">
-<div class="profil">
-  <h4>🤝 Externe (partenaire)</h4>
-  <p>Le partenaire fournit la prestation. DPM prend une commission. Le net est reversé au partenaire.</p>
-  <p><b>Exemple :</b> Massage 600 DH → commission 15% → net partenaire 510 DH</p>
-</div>
-<div class="profil">
-  <h4>🏠 Interne (propriétaire)</h4>
-  <p>Le propriétaire fournit la prestation via son personnel. Commission DPM fixée par bien.</p>
-  <p><b>Exemple :</b> Petit-déjeuner 150 DH → commission DPM du bien</p>
-</div>
-</div>
-<div class="profil">
-  <h4>🏢 DPM</h4>
-  <p>DPM source et fournit la prestation. Pas de reversement partenaire. Le coût de revient est suivi en interne.</p>
-</div>
+<h3>6.6 Chambres & lits, Équipements</h3>
+<p><b>Chambres & lits :</b> ajoutez autant de lignes que de chambres. Pour chaque chambre : nom, type de lit (double, simple, king, queen, canapé-lit, superposé, bébé), quantité.</p>
+<p><b>Équipements :</b> cochez parmi 30 équipements standards (Wifi, Climatisation, Piscine, Cuisine équipée, Parking, etc.). Ces informations sont envoyées aux plateformes.</p>
 
-<h3>15.3 Tarifs et commissions</h3>
-<p>Chaque prestation peut être proposée <b>au logement</b> (villa) et/ou <b>à l'extérieur</b>, avec un prix différent pour chaque lieu :</p>
-<ul>
-<li><b>Prix facturé au voyageur</b> : ce que paie le client</li>
-<li><b>Prix public affiché</b> : prix barré / affiché sur le site (optionnel)</li>
-<li><b>Commission DPM</b> : en % ou en montant fixe</li>
-<li><b>Net reversé au partenaire</b> : ce que touche le partenaire</li>
-<li><b>Coût de revient</b> : pour les prestations DPM</li>
-</ul>
-<div class="note">💡 L'application vérifie automatiquement la cohérence entre prix, commission et net partenaire. Si les chiffres ne collent pas, un message d'erreur l'indique.</div>
-
-<h3>15.4 Horaires</h3>
-<p>Trois modes disponibles :</p>
+<h3>6.7 Fenêtre de réservation et conditions</h3>
 <table>
-<tr><th>Mode</th><th>Description</th></tr>
-<tr><td>Toujours disponible</td><td>Aucune contrainte horaire</td></tr>
-<tr><td>Plages d'ouverture</td><td>Par jour : cochez les jours, définissez de/à (ex : Lun-Sam 9h-19h). Le champ <b>« Créneaux toutes les X min »</b> calcule les slots (ex : 30 min pour un massage)</td></tr>
-<tr><td>Heures de départ fixes</td><td>Liste de créneaux précis (ex : 09:00, 14:00, 16:30)</td></tr>
+<tr><th>Champ</th><th>Description</th></tr>
+<tr><td>Délai minimum avant arrivée</td><td>Ex : 2 jours → impossible de réserver pour demain</td></tr>
+<tr><td>Réservable jusqu'à X jours</td><td>Ex : 365 → réservable jusqu'à 1 an à l'avance</td></tr>
+<tr><td>Jours de préparation</td><td>Nombre de jours bloqués entre deux séjours (ménage, remise en état)</td></tr>
+<tr><td>Jours d'arrivée / départ autorisés</td><td>Restreindre les arrivées au samedi uniquement, par exemple</td></tr>
+<tr><td>Règlement intérieur</td><td>Texte du règlement affiché au voyageur</td></tr>
+<tr><td>Enfants, Fumeur, Animaux</td><td>Politiques spécifiques (envoyées à Booking)</td></tr>
 </table>
-<p><b>Raccourcis :</b> boutons « 24h/24, 7j/7 » et « Tous les jours 8h–20h » pour remplir la grille en un clic.</p>
 
-<h3>15.5 Options par bien</h3>
-<p>Depuis Conciergerie → Options par bien : choisissez quelles prestations sont proposées dans chaque bien. Par défaut, toutes les prestations applicables sont proposées. Vous pouvez restreindre la sélection bien par bien.</p>
-
-<h3>15.6 Filtres de la liste</h3>
-<p>La liste des prestations offre :</p>
+<h3>6.8 Score ASO</h3>
+<p>L'onglet <b>Score ASO</b> analyse la qualité de chaque annonce sur 100 points :</p>
 <ul>
-<li><b>4 onglets</b> : Toutes | DPM | Partenaires | Internes (avec compteur)</li>
-<li><b>Filtre par fournisseur</b> : déroulant "Tous les partenaires et propriétaires" avec le nombre de prestations par fournisseur</li>
-<li><b>Recherche textuelle</b></li>
-<li><b>Export CSV</b></li>
+<li>Complétude des champs (description, photos, équipements)</li>
+<li>Nombre et qualité des photos</li>
+<li>Temps de réponse moyen aux messages</li>
+<li>Taux d'acceptation des réservations</li>
+<li>Note moyenne des avis</li>
 </ul>
+<div class="note">💡 Un score > 80 améliore votre classement sur les plateformes. Visez 90+ pour chaque bien.</div>
 </div>
 
-<!-- ==================== CHAPITRE 16 ==================== -->
+<div class="section">
+<h2>7–14. Tâches, Avis, Rapports, Dépenses, Paiements, Relevés, Tarification, Canaux</h2>
+<p><i>Ces rubriques suivent le même principe : une liste avec recherche et filtres, un formulaire de création/modification, et des automatisations. Les chapitres détaillés des tâches (Kanban, automatisation), des rapports financiers (analytique, occupation, prévisionnel), de la tarification (saisonnière, dynamique) et du gestionnaire de canaux (iCal, Booking) sont documentés dans les fiches d'aide contextuelle de l'application (bouton ❓).</i></p>
+
+<hr>
+<h2>15. Conciergerie — Prestations</h2>
+<p>Les prestations sont le cœur de l'activité conciergerie DPM. Ce chapitre explique chaque aspect en détail.</p>
+
+<h3>15.1 Les 3 types de prestations</h3>
+<div class="cols2">
+<div class="box">
+  <h4>🤝 Type « Externe » (Partenaire)</h4>
+  <p>Un prestataire externe fournit le service. DPM fait l'intermédiaire :</p>
+  <ul>
+  <li>DPM vend la prestation au voyageur au <b>prix facturé</b></li>
+  <li>DPM reverse au partenaire le <b>net partenaire</b></li>
+  <li>DPM conserve la <b>commission</b> (prix − net)</li>
+  </ul>
+  <p><b>Exemples :</b> massage, quad, transfert aéroport, guide privé, golf</p>
+</div>
+<div class="box">
+  <h4>🏠 Type « Interne » (Propriétaire)</h4>
+  <p>Le propriétaire fournit le service via son personnel (cuisinier, femme de ménage…). DPM prend une commission fixée par bien (champ « commission_prestation_pct » dans la fiche du bien, défaut 20%).</p>
+  <p><b>Exemples :</b> petit-déjeuner, dîner privé, ménage supplémentaire, blanchisserie</p>
+</div>
+</div>
+<div class="box">
+  <h4>🏢 Type « DPM »</h4>
+  <p>DPM source et fournit directement la prestation. Pas de reversement partenaire. Le <b>coût de revient</b> est suivi pour calculer la marge interne.</p>
+  <p><b>Exemples :</b> service de conciergerie personnalisé, organisation d'événements, service DPM exclusif</p>
+</div>
+
+<h3>15.2 Créer une prestation — procédure complète</h3>
+<div class="step"><div class="num">1</div><div class="txt">Allez dans <b>Conciergerie → Toutes les prestations</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>+ Ajouter une prestation</b></div></div>
+<div class="step"><div class="num">3</div><div class="txt">Remplissez les informations de base :</div></div>
+
+<table>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Nom</b> ✱</td><td>Nom affiché au voyageur</td><td>Massage bien-être</td></tr>
+<tr><td>Catégorie</td><td>Pour classer et filtrer</td><td>Bien-être</td></tr>
+<tr><td><b>Type</b> ✱</td><td>Externe (partenaire), Interne (propriétaire), DPM</td><td>Externe</td></tr>
+<tr><td>Partenaire ✱<sup>ext</sup></td><td>Obligatoire si type = externe. Sélectionnez le partenaire.</td><td>Prestataire bien-être</td></tr>
+<tr><td>Propriétaire ✱<sup>int</sup></td><td>Obligatoire si type = interne. Sélectionnez le propriétaire.</td><td>Propriétaire Démo</td></tr>
+<tr><td>Service interne</td><td>Pour les types internes : rattacher à un service (optionnel)</td><td>Spa du riad</td></tr>
+<tr><td>Icône</td><td>Emoji affiché au voyageur dans le catalogue</td><td>💆</td></tr>
+<tr><td>Unité</td><td>Ce que compte « 1 quantité »</td><td>par personne</td></tr>
+<tr><td>Description</td><td>Texte descriptif pour le voyageur</td><td>Massage relaxant aux huiles essentielles…</td></tr>
+</table>
+
+<div class="step"><div class="num">4</div><div class="txt">Configurez les <b>lieux et tarifs</b> :</div></div>
+
+<h4>Section « Au logement »</h4>
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Proposée au logement</td><td>Le voyageur peut commander cette prestation à la villa/riad</td><td>true</td></tr>
+<tr><td>Prix facturé au voyageur</td><td>Ce que paie le voyageur</td><td>600 DH</td></tr>
+<tr><td>Prix public affiché</td><td>Prix barré sur le site (optionnel, pour montrer une réduction)</td><td>800 DH</td></tr>
+<tr><td>Commission</td><td>Commission DPM sur cette prestation</td><td>15</td></tr>
+<tr><td>Commission exprimée en</td><td>Pourcentage (%) ou montant fixe (DH)</td><td>pct</td></tr>
+</table>
+
+<h4>Section « À l'extérieur »</h4>
+<p>Mêmes champs, pour les prestations réalisées en dehors du logement (hammam en ville, excursion…). Le prix peut être différent.</p>
+
+<div class="step"><div class="num">5</div><div class="txt">Configurez le <b>reversement et les règles</b> :</div></div>
+
+<table>
+<tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td>Net reversé au partenaire</td><td>Ce que touche le partenaire par unité</td><td>510 DH</td></tr>
+<tr><td>Coût de revient</td><td>Pour les prestations DPM uniquement : coût interne</td><td>0</td></tr>
+<tr><td>Validation</td><td>auto = confirmée immédiatement, manuelle = attente de validation admin</td><td>auto</td></tr>
+<tr><td>Préavis (heures)</td><td>Délai minimum avant la prestation</td><td>24</td></tr>
+</table>
+
+<div class="important">✅ <b>Vérification automatique :</b> L'application vérifie la cohérence entre le prix facturé, la commission et le net partenaire. Si les chiffres ne collent pas, un message d'erreur détaillé vous indique la correction à apporter.</div>
+
+<h3>15.3 Tarifs, commissions et net partenaire — avec exemples</h3>
+<div class="example">
+<b>Exemple 1 — Prestation externe avec commission en %</b><br>
+Massage bien-être proposé au logement :<br>
+• Prix facturé au voyageur : <b>600 DH</b><br>
+• Commission DPM : <b>15 %</b><br>
+• Calcul : 600 × 15% = 90 DH de commission<br>
+• Net partenaire : 600 − 90 = <b>510 DH</b><br><br>
+Le voyageur commande 2 massages :<br>
+• Total facturé : 2 × 600 = 1 200 DH<br>
+• Commission DPM : 2 × 90 = <b>180 DH</b><br>
+• À reverser au partenaire : 2 × 510 = <b>1 020 DH</b>
+</div>
+
+<div class="example">
+<b>Exemple 2 — Prestation interne (propriétaire)</b><br>
+Petit-déjeuner livré à la villa :<br>
+• Prix facturé au voyageur : <b>150 DH / personne</b><br>
+• Commission DPM : fixée par le bien (ex : 20%)<br>
+• Le propriétaire reçoit 80% du montant<br>
+• DPM retient 20%<br><br>
+4 personnes commandent le petit-déjeuner :<br>
+• Total facturé : 4 × 150 = 600 DH<br>
+• Part propriétaire : 600 × 80% = <b>480 DH</b><br>
+• Commission DPM : 600 × 20% = <b>120 DH</b>
+</div>
+
+<div class="example">
+<b>Exemple 3 — Prestation sans commission (net = prix)</b><br>
+Transfert aéroport :<br>
+• Prix facturé au voyageur : <b>250 DH / trajet</b><br>
+• Commission DPM : <b>0</b><br>
+• Net partenaire : <b>250 DH</b> (tout va au chauffeur)<br>
+<i>→ DPM ne prend rien sur cette prestation, c'est un service rendu au voyageur pour fidéliser.</i>
+</div>
+
+<h3>15.4 Horaires : plages, départs fixes, créneaux</h3>
+<p>Chaque prestation peut avoir des contraintes horaires. 3 modes :</p>
+
+<table>
+<tr><th style="width:25%">Mode</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Toujours disponible</b></td><td>Aucune contrainte horaire</td><td>Blanchisserie, ménage supplémentaire</td></tr>
+<tr><td><b>Plages d'ouverture</b></td><td>Par jour de la semaine : heure de début → heure de fin. Décochez un jour pour le fermer.</td><td>Massage : Lun-Sam 9h-19h, Dim fermé</td></tr>
+<tr><td><b>Heures de départ fixes</b></td><td>Liste de créneaux horaires précis</td><td>Quad Agafay : départs 9:00, 14:00 uniquement</td></tr>
+</table>
+
+<h4>Mode « Plages d'ouverture » — le champ « Créneaux toutes les X min »</h4>
+<p>Quand vous choisissez « Plages d'ouverture », un champ supplémentaire apparaît :</p>
+<p><b>Créneaux proposés toutes les _____ minutes</b> (15, 30, 45, 60, 90, 120 min)</p>
+<p>Ce champ divise la plage horaire en créneaux réguliers que le voyageur peut choisir.</p>
+
+<div class="example">
+<b>Exemple :</b> Massage 9h–19h, créneaux toutes les 30 min<br>
+→ Le voyageur voit : 9:00, 9:30, 10:00, 10:30, …, 18:30<br>
+Chaque créneau correspond à un slot de 30 minutes (durée du massage).
+</div>
+
+<h4>Raccourcis</h4>
+<p>Deux boutons sous la grille horaires :</p>
+<ul>
+<li><b>24h/24, 7j/7</b> : coche tous les jours, met toutes les plages de 0h à 24h</li>
+<li><b>Tous les jours 8h–20h</b> : coche tous les jours, met toutes les plages de 8h à 20h</li>
+</ul>
+
+<h3>15.5 Liste avec onglets et filtres</h3>
+<p>La page <b>Conciergerie → Toutes les prestations</b> offre :</p>
+<ul>
+<li><b>4 onglets</b> : Toutes (20) | DPM (0) | Partenaires (16) | Internes (4) → avec compteur par type</li>
+<li><b>Filtre par fournisseur</b> : menu déroulant « Tous les partenaires et propriétaires » avec le nombre de prestations par fournisseur (ex : « 🤝 Prestataire bien-être (3) »)</li>
+<li><b>Recherche textuelle</b> : filtre en temps réel sur tous les champs</li>
+<li><b>Sous-titre :</b> « X prestation(s) — internes (propriétaires) et externes (partenaires), avec commissions DPM. »</li>
+</ul>
+<p>Chaque prestation dans la liste affiche :</p>
+<ul>
+<li>Nom + catégorie + résumé horaires (ex : « 🕒 Départs 9h, 14h (2h) · Dim fermé »)</li>
+<li>Type · Fournisseur</li>
+<li>Prix, Commission (% ou « comm. DPM »), Net partenaire</li>
+<li>Statut actif/inactif</li>
+</ul>
+
+<h3>15.6 Options par bien</h3>
+<p>Depuis <b>Conciergerie → Options par bien</b>, vous choisissez quelles prestations sont proposées dans chaque bien :</p>
+<div class="step"><div class="num">1</div><div class="txt">Sélectionnez le bien dans le menu déroulant</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cochez les prestations à proposer (colonne « Proposée »)</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Cochez celles qui doivent apparaître sur le site WordPress (colonne « Visible sur le site »)</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Cliquez <b>Enregistrer</b></div></div>
+<div class="note">💡 Par défaut, toutes les prestations applicables sont proposées. Les prestations internes n'apparaissent que pour les biens de leur propriétaire.</div>
+</div>
+
 <div class="section">
 <h2>16. Conciergerie — Partenaires</h2>
 
-<h3>16.1 Fiche partenaire</h3>
-<p>Chaque partenaire (prestataire externe) a une fiche complète :</p>
+<h3>16.1 Créer un partenaire</h3>
+<div class="step"><div class="num">1</div><div class="txt">Allez dans <b>Partenaires → Liste</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>+ Ajouter un partenaire</b></div></div>
+<div class="step"><div class="num">3</div><div class="txt">Remplissez :</div></div>
 <table>
-<tr><th>Section</th><th>Contenu</th></tr>
-<tr><td>Informations</td><td>Nom, activité, contact, téléphone, email, adresse, ville, site web, ICE</td></tr>
-<tr><td>Droits</td><td>Peut modifier ses prestations, peut créer des promotions</td></tr>
-<tr><td>Interlocuteurs</td><td>Plusieurs contacts avec nom, fonction, téléphone, email</td></tr>
-<tr><td>Règlement</td><td>Mode de paiement, délai, coordonnées bancaires</td></tr>
-<tr><td>Note / conditions</td><td>Texte visible par le partenaire dans son espace</td></tr>
-<tr><td>Performance</td><td>Nb de prestations, commandes confirmées, CA cumulé, panier moyen</td></tr>
-<tr><td>Ses prestations</td><td>Tableau avec bouton + Ajouter (pré-rempli type=externe)</td></tr>
-<tr><td>Dernières commandes</td><td>Les 10 dernières commandes sur ses prestations</td></tr>
+<tr><th style="width:28%">Champ</th><th>Description</th><th>Exemple</th></tr>
+<tr><td><b>Nom</b> ✱</td><td>Nom de l'entreprise / du prestataire</td><td>Transport & chauffeur</td></tr>
+<tr><td>Activité</td><td>Domaine d'activité</td><td>Transport & chauffeur</td></tr>
+<tr><td>Contact</td><td>Personne à contacter</td><td>Youssef Benjelloun</td></tr>
+<tr><td>Téléphone</td><td>Numéro principal</td><td>+212 6 61 20 10 06</td></tr>
+<tr><td>E-mail</td><td>Email du contact</td><td>youssef@transport.ma</td></tr>
+<tr><td>Adresse, Ville</td><td>Localisation</td><td>Marrakech</td></tr>
+<tr><td>Site web</td><td>URL du site (optionnel)</td><td>www.transport-marrakech.ma</td></tr>
+<tr><td>ICE</td><td>Identifiant commun de l'entreprise (Maroc)</td><td>001234567000089</td></tr>
+<tr><td>Règlement</td><td>Mode de paiement, délai, coordonnées bancaires</td><td>Virement 30 jours, RIB : …</td></tr>
+<tr><td>Note / conditions</td><td>Texte visible par le partenaire dans son espace</td><td>Pas de transport le dimanche</td></tr>
+<tr><td>Interlocuteurs</td><td>Plusieurs contacts (nom, fonction, tél, email)</td><td>Responsable flotte, Comptable…</td></tr>
+<tr><td>Ressources</td><td>Véhicules, équipes, matériel (pour le planning)</td><td>Mercedes Vito, Range Rover</td></tr>
+<tr><td>Peut modifier ses prestations</td><td>Le partenaire peut ajuster prix et descriptions dans son espace</td><td>Non (par défaut)</td></tr>
+<tr><td>Peut créer des promotions</td><td>Le partenaire peut créer des offres spéciales</td><td>Oui (par défaut)</td></tr>
 </table>
 
-<h3>16.2 Droits partenaire</h3>
+<h3>16.2 Fiche partenaire complète</h3>
+<p>Cliquez sur <b>👁</b> dans la liste ou dans Fiches & droits pour ouvrir la fiche complète d'un partenaire. Elle montre :</p>
+<div class="cols2">
+<div>
+<h4>Colonne gauche</h4>
 <ul>
-<li><b>Peut modifier ses prestations</b> : le partenaire peut ajuster les prix et descriptions dans son espace</li>
-<li><b>Peut créer des promotions</b> : le partenaire peut proposer des offres spéciales</li>
-</ul>
-
-<h3>16.3 Statistiques partenaires</h3>
-<p>Navigation mensuelle avec 4 KPI (CA, commandes, panier moyen, prestations actives) + classement des meilleures prestations.</p>
-
-<h3>16.4 Espace partenaire</h3>
-<p>Application web dédiée (/partenaire/) où le partenaire :</p>
-<ul>
-<li>Crée son compte (demande d'accès validée par l'admin)</li>
-<li>Voit ses prestations et peut les modifier (si le droit est activé)</li>
-<li>Voit ses commandes reçues et leur statut</li>
-<li>Consulte ses statistiques</li>
+<li>Toutes les informations de la fiche</li>
+<li>Droits (peut modifier / peut promouvoir)</li>
 </ul>
 </div>
+<div>
+<h4>Colonne droite</h4>
+<ul>
+<li><b>Performance :</b> nb prestations, commandes confirmées, CA cumulé, panier moyen</li>
+<li><b>Interlocuteurs</b></li>
+<li><b>Règlement</b> et <b>Note/conditions</b></li>
+</ul>
+</div>
+</div>
+<p>En dessous :</p>
+<ul>
+<li><b>Ses prestations</b> : tableau avec bouton <b>+ Ajouter une prestation</b> (pré-rempli type=externe + partenaire_id) et ✏️ pour modifier chaque prestation</li>
+<li><b>Dernières commandes</b> : les 10 dernières commandes sur ses prestations avec date, bien, montant, statut</li>
+</ul>
 
-<!-- ==================== CHAPITRE 17 ==================== -->
+<h3>16.3 Espace partenaire — ce que voit le partenaire</h3>
+<p>L'espace partenaire (/partenaire/) est une application web séparée. Le partenaire :</p>
+<div class="step"><div class="num">1</div><div class="txt">Crée un compte depuis l'URL /partenaire/ (formulaire d'inscription)</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Sa demande apparaît dans <b>Comptes & accès</b> avec statut « en_attente »</div></div>
+<div class="step"><div class="num">3</div><div class="txt">L'admin rattache le compte à la bonne fiche partenaire et clique <b>Valider</b></div></div>
+<div class="step"><div class="num">4</div><div class="txt">Le partenaire se connecte et voit ses données : prestations, commandes reçues, statistiques</div></div>
+<p>Pour vérifier ce que voit un partenaire, utilisez le bouton <b>« Voir comme »</b> dans Comptes & accès — il affiche un aperçu en lecture seule des données de la fiche.</p>
+</div>
+
 <div class="section">
 <h2>17. Conciergerie — Propriétaires</h2>
+<p>Le processus est similaire aux partenaires. Chaque propriétaire a une fiche avec :</p>
+<ul>
+<li><b>Informations :</b> nom, email, tél, adresse, ville, ICE, commission DPM %, mode de paiement</li>
+<li><b>Ses biens :</b> liste des biens rattachés avec statut et prix/nuit</li>
+<li><b>Performance :</b> biens gérés, réservations confirmées, revenus cumulés</li>
+<li><b>Prestations internes :</b> avec bouton <b>+ Ajouter une prestation</b> (pré-rempli type=interne + proprietaire_id)</li>
+<li><b>Dernières réservations :</b> les 10 dernières sur ses biens</li>
+</ul>
+<p>L'espace propriétaire (/proprietaire/) fonctionne comme l'espace partenaire : inscription, validation par l'admin, consultation de ses données.</p>
 
-<h3>17.1 Fiche propriétaire</h3>
-<table>
-<tr><th>Section</th><th>Contenu</th></tr>
-<tr><td>Informations</td><td>Nom, email, téléphone, adresse, ville, ICE, commission DPM %, mode de paiement</td></tr>
-<tr><td>Interlocuteurs</td><td>Contacts du propriétaire</td></tr>
-<tr><td>Performance</td><td>Biens gérés, réservations confirmées, revenus cumulés</td></tr>
-<tr><td>Prestations internes</td><td>Liste avec bouton <b>+ Ajouter une prestation</b> (pré-rempli type=interne)</td></tr>
-<tr><td>Ses biens</td><td>Liste des biens avec statut, prix/nuit, bouton fiche bien</td></tr>
-<tr><td>Dernières réservations</td><td>Les 10 dernières sur ses biens</td></tr>
-</table>
-
-<h3>17.2 Revenus consolidés</h3>
-<p>Vision globale des revenus par propriétaire, par mois, avec détail par bien.</p>
-
-<h3>17.3 Espace propriétaire</h3>
-<p>Application web dédiée (/proprietaire/) où le propriétaire consulte ses biens, ses réservations, ses revenus et ses prestations internes.</p>
-</div>
-
-<!-- ==================== CHAPITRE 18 ==================== -->
-<div class="section">
 <h2>18. Conciergerie — Voyageurs</h2>
-
 <h3>18.1 Livre d'or</h3>
-<p>Liste de tous les voyageurs avec coordonnées, langue, pays. Fiche voyageur avec historique des séjours et préférences.</p>
+<p>Liste de tous les voyageurs avec : nom, email, téléphone, ville, pays, pièce d'identité, préférence marketing. Cliquez 👁 pour ouvrir la fiche complète.</p>
 
 <h3>18.2 Liens d'accès séjour</h3>
-<p>Chaque réservation confirmée peut avoir un <b>lien unique</b> pour le voyageur. Ce lien donne accès à :</p>
+<p>Pour chaque réservation confirmée, vous pouvez créer un <b>lien unique</b> :</p>
+<div class="step"><div class="num">1</div><div class="txt">Allez dans <b>Voyageurs → Liens d'accès séjour</b></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Repérez la réservation et cliquez <b>Créer le lien</b></div></div>
+<div class="step"><div class="num">3</div><div class="txt">Cliquez <b>Copier</b> pour copier le lien</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Envoyez-le au voyageur par WhatsApp, email ou message de plateforme</div></div>
+<p>Le voyageur ouvre le lien dans son navigateur et accède à :</p>
 <ul>
-<li>Informations du logement (adresse, wifi, code porte, instructions)</li>
-<li>Catalogue des prestations disponibles pour ce bien</li>
-<li>Formulaire de commande de prestations</li>
-<li>Suivi de ses demandes</li>
+<li>Les informations du logement (adresse, wifi, code porte, instructions)</li>
+<li>Le catalogue des prestations disponibles pour ce bien</li>
+<li>Un formulaire de commande avec choix de date, heure, quantité</li>
+<li>Le suivi de ses demandes (confirmée, en attente, refusée)</li>
 </ul>
-<p>Le lien fonctionne sans compte, jusqu'à 30 jours après le départ. Vous pouvez le créer, le copier ou le désactiver.</p>
+<div class="warn">⚠️ Le lien fonctionne uniquement pour les réservations confirmées ou terminées, et expire 30 jours après le départ. Cliquez <b>Désactiver</b> pour couper immédiatement l'accès.</div>
 
-<h3>18.3 Application voyageur</h3>
-<p>L'application voyageur (/sejour/) s'affiche dans la langue du voyageur et en charte DPM.</p>
+<h2>19. Commandes & Statistiques</h2>
+<p><b>Demandes de prestations :</b> toutes les commandes voyageurs avec filtres par statut (en attente, confirmé, refusé, fait), par date et par bien. Actions : Confirmer, Refuser, Marquer comme fait.</p>
+<p><b>Statistiques globales :</b> KPI mensuels de la conciergerie : CA total, nombre de commandes, top prestations, répartition par type et par bien. Navigation mois par mois.</p>
 </div>
 
-<!-- ==================== CHAPITRE 19 ==================== -->
 <div class="section">
-<h2>19. Conciergerie — Commandes & Statistiques</h2>
+<h2>20. Fiches & droits — Page centralisée</h2>
+<p>Accessible depuis <b>Conciergerie → Fiches & droits</b>. Cette page centralise la gestion de tous les acteurs de la conciergerie.</p>
 
-<h3>19.1 Demandes de prestations</h3>
-<p>Toutes les commandes de prestations des voyageurs, avec filtres par statut, date, bien. Actions : Confirmer, Refuser, Marquer comme fait.</p>
-
-<h3>19.2 Statistiques globales</h3>
-<p>KPI de la conciergerie : CA prestations, nombre de commandes, top prestations, répartition par type et par bien.</p>
-</div>
-
-<!-- ==================== CHAPITRE 20 ==================== -->
-<div class="section">
-<h2>20. Fiches & droits</h2>
-<p>Page centralisée (Conciergerie → Fiches & droits) avec 5 onglets :</p>
-
-<h3>20.1 Propriétaires</h3>
-<p>Tableau de tous les propriétaires avec téléphone, email, droits, boutons « 👁 Voir son espace » (aperçu lecture seule) et « Modifier ».</p>
-
-<h3>20.2 Partenaires</h3>
-<p>Tableau de tous les partenaires avec catégorie, contact, ville, téléphone, droits (Édite ses prestations, Promos), boutons « 👁 Voir son espace » et « Modifier ».</p>
-
-<h3>20.3 Séjours</h3>
-<p>Liste des séjours avec lien d'accès voyageur. Le lien unique est ce que reçoit le voyageur.</p>
-
-<h3>20.4 Collaborateurs</h3>
-<p>Gestion des membres de l'équipe :</p>
-<ul>
-<li><b>Inviter</b> : copiez le lien et envoyez-le (WhatsApp/email)</li>
-<li><b>Rubriques visibles</b> : cochez les rubriques que chaque collaborateur peut voir (Biens, Réservations, Prestations, etc.)</li>
-<li>Aucune case cochée = <b>Administrateur complet</b> (tout voir, tout gérer)</li>
-<li><b>Statut</b> : actif, invité, suspendu</li>
-</ul>
-
-<h3>20.5 Comptes</h3>
-<p>Liste des demandes de compte partenaire et propriétaire. Rattachez chaque demande à une fiche puis validez. Un compte validé ne voit que sa propre fiche.</p>
-<p>Le bouton « Voir comme » affiche en lecture seule les données que ce compte voit dans son espace.</p>
-</div>
-
-<!-- ==================== CHAPITRE 21 ==================== -->
-<div class="section">
-<h2>21. Paramètres</h2>
+<h3>20.1 Les 5 onglets</h3>
 <table>
-<tr><th>Section</th><th>Description</th></tr>
-<tr><td>Détails du compte</td><td>Nom de l'entreprise, adresse, logo, coordonnées</td></tr>
-<tr><td>Paiement CMI</td><td>Configuration du paiement en ligne CMI (Maroc)</td></tr>
-<tr><td>Langues</td><td>Langues disponibles dans l'application voyageur</td></tr>
-<tr><td>Intégrations</td><td>Configuration email (SMTP), connexions externes</td></tr>
-<tr><td>WhatsApp Business</td><td>Connexion WhatsApp pour la messagerie</td></tr>
-<tr><td>SMS</td><td>Configuration du fournisseur SMS</td></tr>
-<tr><td>Webhooks</td><td>Notifications automatiques vers des services externes</td></tr>
-<tr><td>API</td><td>Clés API pour les intégrations développeur</td></tr>
-<tr><td>Notifications</td><td>Paramétrage des alertes (email, push, in-app)</td></tr>
-<tr><td>Journal d'activité</td><td>Historique de toutes les actions effectuées dans l'application</td></tr>
-<tr><td>Politiques d'annulation</td><td>Modèles de politique d'annulation</td></tr>
+<tr><th>Onglet</th><th>Contenu</th><th>Colonnes</th></tr>
+<tr><td><b>Propriétaires</b></td><td>Tous les propriétaires avec leurs droits</td><td>Nom, Téléphone, Email, Ville, Droits, Actions</td></tr>
+<tr><td><b>Partenaires</b></td><td>Tous les partenaires avec leurs droits</td><td>Nom, Catégorie, Contact, Ville, Téléphone, Droits, Actions</td></tr>
+<tr><td><b>Séjours</b></td><td>Réservations avec lien d'accès voyageur</td><td>Voyageur, Bien, Dates, Lien unique</td></tr>
+<tr><td><b>Collaborateurs</b></td><td>Membres de l'équipe avec rubriques visibles</td><td>Nom, Email, Rubriques visibles, Statut, Actions</td></tr>
+<tr><td><b>Comptes</b></td><td>Demandes de compte partenaire/propriétaire</td><td>Nom, Email, Rôle, Fiche rattachée, Statut, Actions</td></tr>
+</table>
+
+<h3>20.2 « Voir son espace »</h3>
+<p>Le bouton <b>👁 Voir son espace</b> ouvre la fiche complète d'un partenaire ou propriétaire en mode lecture. Vous voyez exactement les données que cette personne retrouve dans son espace : ses prestations, ses commandes, ses statistiques.</p>
+
+<h3>20.3 Collaborateurs</h3>
+<p>Gérez les membres de votre équipe :</p>
+<div class="step"><div class="num">1</div><div class="txt">Cliquez <b>+ Inviter un collaborateur (copier le lien)</b> → le lien de l'application est copié</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Envoyez le lien par WhatsApp ou email au nouveau collaborateur</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Il crée son compte, apparaît ici en statut « invité »</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Cliquez <b>Modifier ses rubriques</b> → cochez les rubriques qu'il peut voir (Biens, Réservations, Prestations, etc.)</div></div>
+<div class="step"><div class="num">5</div><div class="txt">Passez le statut sur <b>Actif</b> et enregistrez</div></div>
+<div class="note">💡 Un compte <b>sans aucune case cochée</b> est « Administrateur complet » : il voit tout et peut gérer les droits des autres.</div>
+
+<h3>20.4 Comptes & accès — validation des demandes</h3>
+<p>Quand un partenaire ou propriétaire crée un compte depuis son espace, sa demande apparaît ici :</p>
+<div class="step"><div class="num">1</div><div class="txt">Rattachez le compte à la bonne fiche dans le menu déroulant « Rattaché à la fiche »</div></div>
+<div class="step"><div class="num">2</div><div class="txt">Cliquez <b>Valider</b> → le compte passe en « actif » et la personne peut se connecter</div></div>
+<p>Bouton <b>« Voir comme »</b> : affiche un aperçu lecture seule de ce que voit ce compte dans son espace.</p>
+</div>
+
+<div class="section">
+<h2>21–24. Utilisateurs, Moteur de réservation, Branchements, Paramètres</h2>
+<p><i>Ces rubriques techniques sont documentées dans les fiches d'aide contextuelle de l'application (bouton ❓). Consultez-les directement dans l'application en naviguant vers la rubrique puis en cliquant sur ❓.</i></p>
+
+<hr>
+<h2>25. Annexes</h2>
+
+<h3>A. Glossaire</h3>
+<table>
+<tr><th style="width:25%">Terme</th><th>Définition</th></tr>
+<tr><td>Bien</td><td>Un logement géré (villa, riad, appartement, chambre)</td></tr>
+<tr><td>Canal</td><td>Source de la réservation : direct, Airbnb, Booking, VRBO, Expedia, Abritel</td></tr>
+<tr><td>Prestation</td><td>Service proposé au voyageur via la conciergerie</td></tr>
+<tr><td>Partenaire</td><td>Prestataire externe qui fournit des prestations (spa, transport, excursions)</td></tr>
+<tr><td>Propriétaire</td><td>Propriétaire d'un ou plusieurs biens en gestion chez DPM</td></tr>
+<tr><td>Commission DPM</td><td>Part retenue par DPM sur les prestations vendues</td></tr>
+<tr><td>Net partenaire</td><td>Montant reversé au partenaire après déduction de la commission</td></tr>
+<tr><td>Commande</td><td>Demande de prestation faite par un voyageur</td></tr>
+<tr><td>Tenant</td><td>Votre espace isolé dans la base de données (multi-comptes)</td></tr>
+<tr><td>RLS</td><td>Row-Level Security — chaque utilisateur ne voit que ses propres données</td></tr>
+<tr><td>Score ASO</td><td>Indicateur de qualité d'une annonce (complétude, photos, avis, réactivité)</td></tr>
+<tr><td>iCal</td><td>Format standard de calendrier pour synchroniser les disponibilités entre plateformes</td></tr>
+</table>
+
+<h3>B. Calcul des commissions — tableau récapitulatif</h3>
+<table>
+<tr><th>Type</th><th>Qui fournit</th><th>Qui paie</th><th>Commission DPM</th><th>Reversement</th></tr>
+<tr><td>Externe</td><td>Partenaire</td><td>Voyageur</td><td>Prix − Net partenaire</td><td>Net partenaire → au partenaire</td></tr>
+<tr><td>Interne</td><td>Propriétaire (son personnel)</td><td>Voyageur</td><td>% fixé par bien (défaut 20%)</td><td>Reste → au propriétaire</td></tr>
+<tr><td>DPM</td><td>DPM directement</td><td>Voyageur</td><td>Marge = Prix − Coût de revient</td><td>Rien (DPM conserve tout)</td></tr>
+</table>
+
+<h3>C. FAQ — Questions fréquentes</h3>
+
+<h4>Comment modifier le prix d'une prestation ?</h4>
+<p>Allez dans Conciergerie → Toutes les prestations → cliquez ✏️ sur la prestation → modifiez le prix → Enregistrer. Les nouvelles commandes utiliseront le nouveau prix.</p>
+
+<h4>Comment donner accès à un partenaire ?</h4>
+<p>Envoyez-lui le lien /partenaire/. Il crée son compte. Validez sa demande dans Comptes & accès en la rattachant à sa fiche partenaire.</p>
+
+<h4>Comment générer le lien voyageur ?</h4>
+<p>Voyageurs → Liens d'accès séjour → trouvez la réservation → Créer le lien → Copier. Envoyez le lien par message.</p>
+
+<h4>Pourquoi je ne vois pas certaines prestations internes dans un bien ?</h4>
+<p>Les prestations internes n'apparaissent que pour les biens rattachés au même propriétaire. Vérifiez que le bien et la prestation ont le même propriétaire.</p>
+
+<h4>Comment changer la commission DPM sur un bien ?</h4>
+<p>Annonces → Liste → ✏️ sur le bien → champ « Commission sur les services vendus par le propriétaire (%) » → Enregistrer.</p>
+
+<h4>Comment exporter mes données ?</h4>
+<p>Dans toute liste (réservations, prestations, partenaires…), cliquez le bouton <b>⬇ CSV</b> en haut à droite de la liste. Le fichier se télécharge directement.</p>
+
+<h3>D. Résolution de problèmes courants</h3>
+<table>
+<tr><th style="width:35%">Problème</th><th>Solution</th></tr>
+<tr><td>L'application ne charge pas</td><td>Videz le cache du navigateur (Ctrl+Shift+Suppr). Vérifiez votre connexion internet.</td></tr>
+<tr><td>Un formulaire affiche « Erreur »</td><td>Vérifiez que les champs obligatoires (marqués ✱) sont remplis. Vérifiez la cohérence des données (commission vs net partenaire).</td></tr>
+<tr><td>Un partenaire ne voit rien dans son espace</td><td>Vérifiez dans Comptes & accès que son compte est « actif » et rattaché à la bonne fiche partenaire.</td></tr>
+<tr><td>Le lien voyageur ne fonctionne pas</td><td>Le lien expire 30 jours après le départ, et ne fonctionne que pour les réservations confirmées ou terminées. Vérifiez le statut de la réservation.</td></tr>
+<tr><td>Les prestations n'apparaissent pas pour un bien</td><td>Vérifiez dans Conciergerie → Options par bien que les prestations sont cochées pour ce bien.</td></tr>
+<tr><td>Les commissions ne sont pas calculées</td><td>Les commissions apparaissent uniquement pour les commandes confirmées. Confirmez la commande dans Demandes de prestations.</td></tr>
 </table>
 </div>
 
-<!-- ==================== CHAPITRE 22 ==================== -->
-<div class="section">
-<h2>22. Raccourcis clavier</h2>
-<table>
-<tr><th>Raccourci</th><th>Action</th></tr>
-<tr><td><span class="kbd">Alt + 1</span> à <span class="kbd">Alt + 9</span></td><td>Accès direct aux 9 premières rubriques</td></tr>
-<tr><td><span class="kbd">Ctrl + K</span></td><td>Recherche globale</td></tr>
-<tr><td><span class="kbd">Échap</span></td><td>Fermer le formulaire / la modale en cours</td></tr>
-</table>
+<div class="section" style="text-align:center;padding-top:50px">
+<div style="font-size:13px;color:#C9A227;letter-spacing:3px;margin-bottom:8px">DPM CONCIERGERIE</div>
+<h2 style="border:none;font-size:22px">My Hostaway — Guide complet d'utilisation</h2>
+<p style="color:#888;font-size:11px;margin-top:16px">
+Document généré le 27 novembre 2026<br>
+DPM Consulting Group — Marrakech, Maroc<br><br>
+Application : https://marco-kech.github.io/my-hostaway/<br>
+Aide intégrée : bouton ❓ dans la barre du haut de l'application
+</p>
 </div>
-
-<!-- ==================== FIN ==================== -->
-<div class="section" style="text-align:center;padding-top:60px">
-<div style="font-size:14px;color:#C9A227;letter-spacing:2px;margin-bottom:10px">DPM CONCIERGERIE</div>
-<h2 style="border:none;font-size:20px">My Hostaway — Guide complet</h2>
-<p style="color:#888;font-size:11px">Document généré le 27 novembre 2026<br>DPM Consulting Group — Marrakech</p>
-</div>
-
 </body>
 </html>
