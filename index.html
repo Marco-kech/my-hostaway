@@ -797,6 +797,7 @@ async function boot(){
 }
 
 /* ---------- MODULES (data screens) ---------- */
+const CG_DIFF=["application","site","application et site"];
 const MODULES = {
   biens:{title:"Biens",add:"Ajouter un bien",table:"bien",
     cols:[["nom","Nom",(v,r)=>{let n=r&&r.type_unite==='enfant'?'<span class="muted" style="padding-left:18px">↳ '+esc(v)+'</span>':(r&&r.type_unite==='parent'?'<strong>'+esc(v)+'</strong>':esc(v));const tags=(r?._etiquettes||[]);if(tags.length){n+='<br>'+tags.map(e=>`<span style="background:${esc(e.couleur||'#C9A227')}22;color:${esc(e.couleur||'#C9A227')};border:1px solid ${esc(e.couleur||'#C9A227')}44;padding:1px 6px;border-radius:10px;font-size:10px">${esc(e.nom)}</span>`).join(' ');}return n;}],["id","Réf",v=>'<span class="muted" style="font-size:11px">'+esc(String(v||'').slice(0,8))+'</span>'],["type","Type"],["type_unite","Unité",v=>pill(v)],["parametres","Emplacement",v=>{const p=v||{};const loc=[p.ville,p.pays].filter(Boolean).join(', ');return loc?esc(loc):'<span class="muted">—</span>';}],["capacite","Capacité"],["prix_nuit_base","Prix/nuit",v=>money(v)],["statut","Statut",v=>pill(v)],["proprete","Propreté",v=>pill(v)]],
@@ -1000,7 +1001,7 @@ const MODULES = {
       ["preavis_heures","Préavis minimum (heures)",{type:"number"}],
       ["s4","Disponibilité",{section:1}],
       ["horaires","Horaires de la prestation",{horaires:1}],
-      ["visible_site","Visible sur le site",{opts:["false","true"],def:"false"}],
+      ["diffusion","Visible où ? (réglage de départ, ajustable bien par bien)",{opts:CG_DIFF,def:"application"}],
       ["actif","Active",{opts:["true","false"],def:"true"}]],
     valide:d=>{
       if(d.type==="externe"&&!d.partenaire_id) return "Une prestation externe doit être rattachée à un partenaire.";
@@ -1055,7 +1056,8 @@ const MODULES = {
     cols:[["nom","Nom"],["email","E-mail"],["tel","Téléphone"],["ville","Ville"],["commission_pct","Commission (%)",v=>v!=null?v+" %":"—"]],
     fields:[["nom","Nom",{req:1}],["email","E-mail",{}],["tel","Téléphone",{}],["adresse","Adresse",{}],["ville","Ville",{}],["ice","ICE / identifiant fiscal",{}],
       ["commission_pct","Commission DPM (%)",{type:"number"}],["mode_paiement","Mode de paiement (virement, chèque…)",{}],["rib","Coordonnées bancaires (RIB / IBAN)",{long:1}],
-      ["notes","Notes",{long:1}]]},
+      ["reglement","Règlement — précisions pour ses reversements",{long:1}],["interlocuteurs","Interlocuteurs",{interloc:1}],
+      ["notes","Notes (internes, non montrées au propriétaire)",{long:1}]]},
   canaux:{title:"Canaux connectés",add:"Connecter un canal",table:"canal_connexion",
     cols:[["bien_id","Bien",v=>refName("bien",v)],["canal","Canal",v=>pill(v)],["statut_sync","Sync"],["actif","Actif",v=>v?pill("actif"):pill("inactif")]],
     fields:[["bien_id","Bien",{ref:"bien",req:1}],["canal","Canal",{opts:["airbnb","booking","vrbo","expedia","abritel","direct","autre"],def:"airbnb"}],
@@ -1202,7 +1204,6 @@ const RUBRIQUES=[
     ["fparam","Paramètres de facturation",{factparams:1}],
     ["paypal","Paramètres PayPal",{paypalcfg:1}]]},
   {k:"releves",label:"Relevés propriétaire",icon:"◉",subs:[
-    ["prop","Propriétaires",{m:"proprietaires"}],
     ["rel","Relevés",{releves:1}],
     ["auto","Relevés automatiques",{relevesauto:1}],
     ["tbprop","Tableau de bord propriétaire",{dashprop:1}]]},
@@ -1227,6 +1228,8 @@ const RUBRIQUES=[
     ["presta","Leurs prestations",{cgprestapart:1}],
     ["resa","Réservations reçues",{cgresapart:1}],
     ["stats","Statistiques partenaires",{cgstatspart:1}],
+    ["msg","Messages",{cgmessages:1,role:"partenaire"}],
+    ["acces","Comptes & accès",{cgcomptes:1,role:"partenaire"}],
     ["app","Application partenaire ↗",{cgapppart:1}]]},
   {k:"proprietaires",label:"Propriétaires",icon:"🏠",subs:[
     ["liste","Liste des propriétaires",{m:"proprietaires_liste"}],
@@ -1234,19 +1237,19 @@ const RUBRIQUES=[
     ["planning","Planning & remplissage",{cgplanprop:1}],
     ["revenus","Revenus consolidés",{cgrevprop:1}],
     ["presta","Prestations internes",{cgprestaprop:1}],
+    ["msg","Messages",{cgmessages:1,role:"proprietaire"}],
+    ["acces","Comptes & accès",{cgcomptes:1,role:"proprietaire"}],
     ["app","Application propriétaire ↗",{cgappprop:1}]]},
   {k:"voyageurs",label:"Voyageurs",icon:"✈",subs:[
     ["livre","Livre d'or",{m:"voyageurs"}],
     ["liens","Liens d'accès séjour",{cgliens:1}],
+    ["vue","Ce que voit le voyageur",{cgoptions:1}],
     ["app","Application voyageur ↗",{cgappvoy:1}]]},
   {k:"conciergerie",label:"Conciergerie",icon:"✦",subs:[
-    ["cmd","Commandes (toutes)",{cgcommandes:1}],
-    ["stat","Statistiques globales",{cgstats:1}],
-    ["msg","Messages",{cgmessages:1}],
+    ["cmd","Demandes de prestations",{cgcommandes:1}],
+    ["stat","Statistiques des prestations",{cgstats:1}],
     ["presta","Toutes les prestations",{m:"prestations"}],
-    ["serv","Services internes",{m:"services_internes"}],
-    ["opt","Options par bien",{cgoptions:1}],
-    ["cpt","Comptes & accès",{cgcomptes:1}],
+    ["serv","Équipes internes",{m:"services_internes"}],
     ["fiches","Fiches & droits",{cgfiches:1}]]},
   {k:"branch",label:"Branchements & outils",icon:"⊕",subs:[
     ["serr","Serrures intelligentes",{serrures:1}],
@@ -1817,6 +1820,7 @@ function goRub(rk,sk){
   $("#pageTitle").textContent=rub.label;
   renderSubtabs(rub);
   const t=sub[2];
+  state.cgRole=t.role||null;
   $("#topAdd").hidden=true;
   /* Bouton Print sur rapports/relevés/factures/stats */
   const printable=t.fi||t.activite||t.occupation||t.releves||t.factures||t.statsbien||t.dashprop||t.encaissements||t.exportcompta;
@@ -2266,39 +2270,39 @@ async function renderPrestaPartenaires(){
   await Promise.all([loadOpts("partenaire"),loadOpts("prestation")]);
   const parts=state.opts.partenaire||[];
   const sel=state.cgPartSel||"";
-  const prestas=(state.opts.prestation||[]).filter(p=>p.type==='externe'&&(!sel||p.partenaire_id===sel));
-  const rows=prestas.map(p=>`<tr><td><b>${esc(p.nom)}</b></td><td>${esc(p.categorie||'')}</td><td>${sel?'':esc(refName('partenaire',p.partenaire_id))}</td>
-    <td>${money(p.prix_logement)}</td><td>${money(p.prix_exterieur)}</td><td>${money(p.net_partenaire)}</td><td>${pill(p.actif?'actif':'inactif')}</td>
+  const prestas=(state.opts.prestation||[]).filter(p=>sel==='dpm'?p.type==='dpm':sel?(p.type==='externe'&&p.partenaire_id===sel):p.type!=='interne');
+  const rows=prestas.map(p=>`<tr><td><b>${esc(p.nom)}</b></td><td>${esc(p.categorie||'')}</td>${sel?'':`<td>${p.type==='dpm'?'DPM Conciergerie':esc(refName('partenaire',p.partenaire_id))}</td>`}
+    <td>${money(p.prix_logement)}</td><td>${money(p.prix_exterieur)}</td><td>${money(p.net_partenaire)}</td><td>${esc(p.diffusion||'application')}</td><td>${pill(p.actif?'actif':'inactif')}</td>
     <td><button class="btn o sm" onclick="openForm('prestations',state.opts.prestation.find(x=>x.id==='${p.id}'))">✏️</button></td></tr>`).join('');
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Prestations des partenaires</h3><span class="sp"></span>
-    <select id="cgPartF" style="max-width:200px"><option value="">Tous les partenaires</option>${parts.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select>
+    <select id="cgPartF" style="max-width:200px"><option value="">Tous les partenaires</option><option value="dpm" ${sel==='dpm'?'selected':''}>DPM Conciergerie (en direct)</option>${parts.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select>
     <button class="btn g sm" id="cgAddPresta" style="margin-left:8px">+ Ajouter une prestation</button></div>
-    <div style="overflow:auto">${prestas.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Prestation</th><th>Catégorie</th>${sel?'':'<th>Partenaire</th>'}<th>Prix logement</th><th>Prix extérieur</th><th>Net partenaire</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune prestation partenaire.'+(sel?' Cliquez sur + Ajouter pour en créer.':'')+'</div>'}</div></div>`;
+    <div style="overflow:auto">${prestas.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Prestation</th><th>Catégorie</th>${sel?'':'<th>Partenaire</th>'}<th>Prix logement</th><th>Prix extérieur</th><th>Net partenaire</th><th>Visible sur</th><th>Statut</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune prestation partenaire.'+(sel?' Cliquez sur + Ajouter pour en créer.':'')+'</div>'}</div></div>`;
   document.getElementById('cgPartF').onchange=e=>{state.cgPartSel=e.target.value;renderPrestaPartenaires();};
-  document.getElementById('cgAddPresta').onclick=()=>{const pre={type:'externe'};if(sel)pre.partenaire_id=sel;openForm('prestations',pre);};
+  document.getElementById('cgAddPresta').onclick=()=>{const pre=sel==='dpm'?{type:'dpm'}:{type:'externe'};if(sel&&sel!=='dpm')pre.partenaire_id=sel;openForm('prestations',pre);};
 }
 
 async function renderResaPartenaires(){
   $("#topAdd").hidden=true;
-  await Promise.all([loadOpts("partenaire"),loadOpts("prestation"),loadOpts("bien"),loadOpts("voyageur")]);
+  await Promise.all([loadOpts("partenaire"),loadOpts("prestation"),loadOpts("bien"),loadOpts("voyageur"),loadOpts("reservation")]);
   const parts=state.opts.partenaire||[];
   const sel=state.cgPartResaSel||"";
   const statF=state.cgPartResaStatut||"";
   const {data:cmds}=await sb.from("commande").select("*").order("date",{ascending:false}).limit(500);
   const prestas=state.opts.prestation||[];
   const filtered=(cmds||[]).filter(c=>{const p=prestas.find(x=>x.id===c.prestation_id);return p&&p.type==='externe'&&(!sel||p.partenaire_id===sel)&&(!statF||c.statut===statF);});
-  const aConf=filtered.filter(c=>c.statut==='a_confirmer').length;
+  const aConf=filtered.filter(c=>c.statut==='attente').length;
   const rows=filtered.map(c=>{const p=prestas.find(x=>x.id===c.prestation_id);const part=p?refName('partenaire',p.partenaire_id):'?';
     return `<tr><td>${fdate(c.date)}</td><td>${esc(c.heure||'')}</td><td><b>${esc(p?p.nom:'?')}</b></td>${sel?'':`<td>${esc(part)}</td>`}<td>${esc(refName('bien',c.bien_id))}</td>
-      <td>${esc(refName('voyageur',c.voyageur_id))}</td><td style="text-align:center">${c.quantite||1}</td>
+      <td>${esc(refName('voyageur',((state.opts.reservation||[]).find(r=>r.id===c.reservation_id)||{}).voyageur_id))}</td><td style="text-align:center">${c.quantite||1}</td>
       <td style="text-align:right">${money(c.montant)}</td><td>${pill(c.statut)}</td>
-      <td>${c.statut==='a_confirmer'?`<button class="btn g sm" onclick="cgConfirmCmd('${c.id}','confirme')">✓ Confirmer</button> <button class="btn d sm" onclick="cgConfirmCmd('${c.id}','refuse')">✗ Refuser</button>`:(c.statut==='confirme'?`<button class="btn o sm" onclick="cgConfirmCmd('${c.id}','fait')">✅ Fait</button>`:'')}
+      <td>${c.statut==='attente'?`<button class="btn g sm" onclick="cgConfirmCmd('${c.id}','confirme')">✓ Confirmer</button> <button class="btn d sm" onclick="cgConfirmCmd('${c.id}','refuse')">✗ Refuser</button>`:(c.statut==='confirme'?`<button class="btn o sm" onclick="cgConfirmCmd('${c.id}','fait')">✅ Fait</button>`:'')}
       ${c.note?`<span title="${esc(c.note)}" style="cursor:help">💬</span>`:''}</td></tr>`;}).join('');
   $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Réservations reçues (partenaires)</h3><span class="sp"></span>
     ${aConf?`<span class="pill gold" style="font-size:12px">${aConf} en attente</span>`:''}</div>
     <div style="display:flex;gap:8px;padding:8px 14px;flex-wrap:wrap;align-items:center">
       <select id="cgPartRF" style="max-width:200px"><option value="">Tous les partenaires</option>${parts.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.nom)}</option>`).join('')}</select>
-      <select id="cgPartRStat" style="max-width:160px"><option value="">Tous les statuts</option>${['a_confirmer','confirme','refuse','fait','venu','annule'].map(s=>`<option value="${s}" ${s===statF?'selected':''}>${s}</option>`).join('')}</select>
+      <select id="cgPartRStat" style="max-width:160px"><option value="">Tous les statuts</option>${['attente','confirme','refuse','fait','venu','annule'].map(s=>`<option value="${s}" ${s===statF?'selected':''}>${s}</option>`).join('')}</select>
       <span class="muted" style="font-size:12px">${filtered.length} résultat(s)</span></div>
     <div style="overflow:auto">${filtered.length?`<table class="tbl" style="font-size:13px"><thead><tr><th>Date</th><th>Heure</th><th>Prestation</th>${sel?'':'<th>Partenaire</th>'}<th>Bien</th><th>Voyageur</th><th>Qté</th><th>Montant</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty" style="padding:16px">Aucune réservation.</div>'}</div></div>`;
   document.getElementById('cgPartRF').onchange=e=>{state.cgPartResaSel=e.target.value;renderResaPartenaires();};
@@ -4539,8 +4543,8 @@ async function renderCgOptions(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   const [rb,rp,rl]=await Promise.all([
     sb.from("bien").select("id,nom,proprietaire_id,type_logement").order("nom"),
-    sb.from("prestation").select("id,nom,type,categorie,proprietaire_id,partenaire_id,actif").order("nom"),
-    sb.from("bien_prestation").select("bien_id,prestation_id,visible_site")]);
+    sb.from("prestation").select("id,nom,type,categorie,proprietaire_id,partenaire_id,actif,diffusion").order("nom"),
+    sb.from("bien_prestation").select("bien_id,prestation_id,visible_site,diffusion"),loadOpts("partenaire"),loadOpts("proprietaire")]);
   const err=rb.error||rp.error||rl.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
   const biens=rb.data||[],prestas=rp.data||[],liens=rl.data||[];
@@ -4552,16 +4556,16 @@ async function renderCgOptions(){
   const restreint=miens.length>0;
   const lignes=applic.map(p=>{
     const l=miens.find(x=>x.prestation_id===p.id);
-    const coche=!restreint||!!l;
-    return `<tr><td>${esc(p.nom)}</td><td>${esc(p.categorie||"—")}</td><td>${pill(p.type)}</td>
-      <td style="text-align:center"><input type="checkbox" class="cgP" data-p="${p.id}" ${coche?"checked":""}></td>
-      <td style="text-align:center"><input type="checkbox" class="cgS" data-p="${p.id}" ${l&&l.visible_site?"checked":""}></td></tr>`;}).join("");
-  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Options par bien</h3><span class="sp"></span>
+    const val=restreint?(l?(l.diffusion||"application"):""):(p.diffusion||"application");
+    const porteur=p.type==="externe"?refName("partenaire",p.partenaire_id):p.type==="interne"?refName("proprietaire",p.proprietaire_id):"DPM Conciergerie";
+    return `<tr><td>${esc(p.nom)}<br><span class="muted" style="font-size:11px">${esc(porteur||"")}</span></td><td>${esc(p.categorie||"—")}</td><td>${pill(p.type)}</td>
+      <td><select class="cgD" data-p="${p.id}" data-def="${esc(p.diffusion||"application")}"><option value="">Non proposée</option>${CG_DIFF.map(d=>`<option ${val===d?"selected":""}>${d}</option>`).join("")}</select></td></tr>`;}).join("");
+  $("#content").innerHTML=`<div class="panel"><div class="phead"><h3>Ce que voit le voyageur, bien par bien</h3><span class="sp"></span>
       <select id="cgBienSel">${biens.map(x=>`<option value="${x.id}" ${x.id===b.id?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select></div>
     <p class="phnote">Choisissez les prestations proposées dans ce bien. ${restreint?`Sélection personnalisée : <b>${miens.length}</b> prestation(s) retenue(s).`:`Réglage par défaut : <b>toutes</b> les prestations applicables sont proposées.`} Les prestations internes n'apparaissent que pour les biens de leur propriétaire.</p>
-    ${applic.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Catégorie</th><th>Type</th><th style="text-align:center">Proposée</th><th style="text-align:center">Visible sur le site</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    ${applic.length?`<div style="overflow:auto"><table><thead><tr><th>Prestation</th><th>Catégorie</th><th>Type</th><th>Visible sur</th></tr></thead><tbody>${lignes}</tbody></table></div>
     <div style="padding:14px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cgSave">Enregistrer</button><button class="btn o" id="cgReset">Revenir au réglage par défaut</button><span class="err" id="cgErr"></span></div>`
-    :`<div class="empty">Aucune prestation active applicable à ce bien. Créez-en dans Conciergerie → Prestations.</div>`}</div>`;
+    :`<div class="empty">Aucune prestation active applicable à ce bien. Créez-en dans Partenaires → Leurs prestations ou Propriétaires → Prestations internes.</div>`}</div>`;
   $("#cgBienSel").onchange=e=>{state.cgBien=e.target.value;renderCgOptions();};
   if(!applic.length)return;
   const ecrire=async rows=>{
@@ -4571,13 +4575,11 @@ async function renderCgOptions(){
       if(ins.error){$("#cgErr").textContent=ins.error.message;return false;}}
     return true;};
   $("#cgSave").onclick=async()=>{
-    const prop=[...document.querySelectorAll(".cgP")].filter(c=>c.checked).map(c=>c.dataset.p);
-    const site=new Set([...document.querySelectorAll(".cgS")].filter(c=>c.checked).map(c=>c.dataset.p));
-    if(!prop.length){$("#cgErr").textContent="Gardez au moins une prestation cochée. Pour ne rien proposer, désactivez les prestations.";return;}
-    const horsSel=[...site].filter(id=>!prop.includes(id));
-    if(horsSel.length){$("#cgErr").textContent="Une prestation visible sur le site doit aussi être proposée dans le bien.";return;}
-    const toutes=prop.length===applic.length&&site.size===0;
-    const rows=toutes?[]:prop.map(id=>({tenant_id:state.tenant.id,bien_id:b.id,prestation_id:id,visible_site:site.has(id)}));
+    const choix=[...document.querySelectorAll(".cgD")];
+    const prop=choix.filter(c=>c.value);
+    if(!prop.length){$("#cgErr").textContent="Gardez au moins une prestation proposée. Pour ne rien proposer, désactivez les prestations.";return;}
+    const toutes=choix.every(c=>c.value===c.dataset.def);
+    const rows=toutes?[]:prop.map(c=>({tenant_id:state.tenant.id,bien_id:b.id,prestation_id:c.dataset.p,diffusion:c.value}));
     $("#cgSave").disabled=true; const ok=await ecrire(rows); $("#cgSave").disabled=false;
     if(ok){toast("Enregistré");logAction('modification','bien_prestation',b.id,'Options par bien');renderCgOptions();}
   };
@@ -4632,7 +4634,7 @@ async function renderCgCommandes(){
       <div class="kpi"><div class="l">À reverser aux partenaires</div><div class="v" style="font-size:22px">${money(som("reversement"))}</div><div class="s">net dû aux prestataires</div></div>
       <div class="kpi"><div class="l">Part des propriétaires</div><div class="v" style="font-size:22px">${money(som("part_proprietaire"))}</div><div class="s">à porter sur leurs relevés</div></div>
     </div>
-    <div class="panel"><div class="phead" style="flex-wrap:wrap;row-gap:8px"><h3>Commandes</h3>${attente?` <span class="pill gold">${attente} à traiter</span>`:""}<span class="sp"></span>
+    <div class="panel"><div class="phead" style="flex-wrap:wrap;row-gap:8px"><h3>Demandes de prestations</h3>${attente?` <span class="pill gold">${attente} à traiter</span>`:""}<span class="sp"></span>
       ${seg("attente","À traiter")} ${seg("ok","Confirmées")} ${seg("toutes","Toutes")}
       <input type="month" id="cgcMois" value="${st.mois}" title="Mois des chiffres ci-dessus" style="margin-left:8px;width:160px;flex:none">
       <button class="btn g sm" id="cgcAdd" style="margin-left:8px">+ Saisir une commande</button></div>
@@ -4693,7 +4695,7 @@ async function renderCgMessages(){
   const err=rc.error||rm.error||rpa.error||rpr.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
   const msgs=rm.data||[],parts=rpa.data||[],props=rpr.data||[];
-  const comptes=(rc.data||[]).filter(c=>c.statut==="actif"||msgs.some(m=>m.compte_id===c.id));
+  const comptes=(rc.data||[]).filter(c=>!state.cgRole||c.role===state.cgRole).filter(c=>c.statut==="actif"||msgs.some(m=>m.compte_id===c.id));
   const fiche=c=>((c.role==="partenaire"?parts.find(x=>x.id===c.partenaire_id):props.find(x=>x.id===c.proprietaire_id))||{}).nom||c.nom||c.email||"—";
   const fil=id=>msgs.filter(m=>m.compte_id===id);
   const nonLus=id=>fil(id).filter(m=>!m.de_equipe&&!m.lu).length;
@@ -4858,7 +4860,7 @@ async function renderCgComptes(){
     sb.from("proprietaire").select("id,nom").order("nom")]);
   const err=rc.error||rpa.error||rpr.error;
   if(err){$("#content").innerHTML=`<div class="panel"><div class="empty">Erreur : ${esc(err.message)}</div></div>`;return;}
-  const comptes=rc.data||[],parts=rpa.data||[],props=rpr.data||[];
+  const comptes=(rc.data||[]).filter(c=>!state.cgRole||c.role===state.cgRole),parts=rpa.data||[],props=rpr.data||[];
   const libRole={partenaire:"Partenaire",proprietaire:"Propriétaire"};
   const attente=comptes.filter(c=>c.statut==="en_attente").length;
   const infos=c=>{const i=c.inscription||{};const t=Object.keys(i).filter(k=>k!=="demande_le"&&i[k]!=null&&i[k]!==""&&typeof i[k]!=="object").map(k=>`${esc(k)} : ${esc(i[k])}`).join(" · ");
