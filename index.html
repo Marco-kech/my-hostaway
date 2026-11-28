@@ -4898,7 +4898,7 @@ async function renderCgComptes(){
     const liste=c.role==="partenaire"?parts:props, cur=c.role==="partenaire"?c.partenaire_id:c.proprietaire_id;
     const sel=`<select class="cgFiche" data-id="${c.id}" ${c.statut==="actif"?"disabled":""}><option value="">— choisir la fiche —</option>${liste.map(x=>`<option value="${x.id}" ${x.id===cur?"selected":""}>${esc(x.nom||x.id.slice(0,8))}</option>`).join("")}</select>`;
     const act=c.statut==="actif"
-      ?`<button class="btn sm cgVoir" data-id="${c.id}">Voir comme</button> <button class="btn o sm cgOff" data-id="${c.id}">Désactiver</button>`
+      ?`<button class="btn sm cgVoir" data-id="${c.id}">Voir comme</button> <button class="btn g sm cgInvit" data-id="${c.id}">📧 Invitation</button> <button class="btn o sm cgOff" data-id="${c.id}">Désactiver</button>`
       :`<button class="btn sm cgOn" data-id="${c.id}">${c.statut==="desactive"?"Réactiver":"Valider"}</button>${c.statut==="en_attente"?` <button class="btn o sm cgOff" data-id="${c.id}">Refuser</button>`:""}`;
     return `<tr><td><b>${esc(c.nom||"—")}</b>${infos(c)}</td><td>${esc(c.email||"—")}</td><td>${esc(libRole[c.role]||c.role)}</td>
       <td>${fdate((c.cree_le||"").slice(0,10))}</td><td>${sel}</td><td>${pill(c.statut==="desactive"?"inactif":c.statut)}</td><td style="white-space:nowrap">${act}</td></tr>`;}).join("");
@@ -4915,13 +4915,51 @@ async function renderCgComptes(){
     if(error){$("#cgcErr").textContent=error.message;return;}
     if(!data||!data.length){$("#cgcErr").textContent="Action réservée à l'administrateur du compte.";return;}
     toast(msg);logAction('modification','cg_compte',id,msg);renderCgComptes();};
-  document.querySelectorAll(".cgOn").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".cgOn").forEach(b=>b.onclick=async()=>{
     const c=comptes.find(x=>x.id===b.dataset.id), f=document.querySelector(`.cgFiche[data-id="${c.id}"]`).value;
     if(!f){$("#cgcErr").textContent="Choisissez d'abord la fiche à laquelle rattacher ce compte.";return;}
     const patch=c.role==="partenaire"?{statut:"actif",partenaire_id:f,proprietaire_id:null}:{statut:"actif",proprietaire_id:f,partenaire_id:null};
-    maj(c.id,patch,"Compte validé");});
+    await maj(c.id,patch,"Compte validé");
+    /* Ouvre automatiquement la modale d'invitation après validation */
+    const cMaj={...c,...patch,statut:"actif"};
+    cgEnvoyerInvitation(cMaj,parts,props);});
   document.querySelectorAll(".cgOff").forEach(b=>b.onclick=()=>maj(b.dataset.id,{statut:"desactive"},"Compte désactivé"));
   document.querySelectorAll(".cgVoir").forEach(b=>b.onclick=()=>cgVoirComme(comptes.find(x=>x.id===b.dataset.id),parts,props));
+  document.querySelectorAll(".cgInvit").forEach(b=>b.onclick=()=>cgEnvoyerInvitation(comptes.find(x=>x.id===b.dataset.id),parts,props));
+}
+
+/* Invitation propriétaire / partenaire — prépare un message avec le lien d'accès */
+function cgEnvoyerInvitation(c,parts,props){
+  if(!c)return;
+  const estPart=c.role==="partenaire";
+  const fid=estPart?c.partenaire_id:c.proprietaire_id;
+  const fiche=((estPart?parts:props).find(x=>x.id===fid)||{}).nom||"votre fiche";
+  const baseUrl=location.origin+location.pathname.replace(/\/+$/,"");
+  const lien=estPart?baseUrl+"/partenaire/":baseUrl+"/proprietaire/";
+  const roleLabel=estPart?"partenaire":"propriétaire";
+  const msgWhatsApp=`Bonjour ${esc(c.nom||"")},\n\nVotre espace ${roleLabel} DPM Conciergerie est prêt !\n\n🔗 Accédez-y ici : ${lien}\n\n📧 Email de connexion : ${esc(c.email||"")}\n🔑 Mot de passe : celui que vous avez choisi lors de votre inscription\n\nDepuis votre espace, vous pouvez :\n${estPart?"• Consulter vos prestations et leurs tarifs\n• Voir et confirmer les commandes des voyageurs\n• Suivre vos statistiques et vos revenus\n• Échanger avec l'équipe DPM":"• Consulter vos biens et leur occupation\n• Suivre vos réservations en temps réel\n• Consulter vos revenus et relevés mensuels\n• Voir le planning de remplissage\n• Échanger avec l'équipe DPM"}\n\nBonne navigation !\nL'équipe DPM Conciergerie`;
+  const msgEmail=`Bonjour ${esc(c.nom||"")},\n\nNous avons le plaisir de vous informer que votre espace ${roleLabel} DPM Conciergerie est maintenant actif.\n\nVoici vos informations de connexion :\n• Lien d'accès : ${lien}\n• Email : ${esc(c.email||"")}\n• Mot de passe : celui choisi lors de votre inscription\n\nDepuis votre espace, vous pouvez :\n${estPart?"- Consulter vos prestations et leurs tarifs\n- Voir et confirmer les commandes des voyageurs\n- Suivre vos statistiques et vos revenus\n- Échanger avec l'équipe DPM":"- Consulter vos biens et leur occupation\n- Suivre vos réservations en temps réel\n- Consulter vos revenus et relevés mensuels\n- Voir le planning de remplissage\n- Échanger avec l'équipe DPM"}\n\nPour installer l'application sur votre téléphone, ouvrez le lien dans Chrome puis appuyez sur « Ajouter à l'écran d'accueil ».\n\nCordialement,\nDPM Conciergerie`;
+  ouvrir(`<div class="h"><h3>📧 Invitation ${roleLabel} — ${esc(c.nom||c.email)}</h3><button class="x" onclick="fermer()">×</button></div>
+    <div class="b" style="max-height:65vh;overflow:auto">
+      <p style="margin-bottom:8px"><b>Compte :</b> ${esc(c.nom||"")} · ${esc(c.email||"")} · Rattaché à : ${esc(fiche)}</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn g sm" id="invCopyWA">📱 Copier pour WhatsApp</button>
+        <button class="btn sm" id="invCopyMail">📧 Copier pour Email</button>
+        <a href="mailto:${encodeURIComponent(c.email||"")}?subject=${encodeURIComponent("Votre espace "+roleLabel+" DPM Conciergerie est prêt")}&body=${encodeURIComponent(msgEmail.replace(/\n/g,"\r\n"))}" class="btn o sm" target="_blank">📤 Ouvrir dans le client mail</a>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px">Message WhatsApp</label>
+        <textarea id="invTxtWA" rows="10" style="width:100%;font-size:12px;white-space:pre-wrap">${msgWhatsApp}</textarea>
+      </div>
+      <div>
+        <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px">Message Email</label>
+        <textarea id="invTxtMail" rows="12" style="width:100%;font-size:12px;white-space:pre-wrap">${msgEmail}</textarea>
+      </div>
+      <div class="note" style="margin-top:12px">💡 Vous pouvez modifier les messages ci-dessus avant de les copier. Le bouton « Ouvrir dans le client mail » pré-remplit un email dans votre logiciel de messagerie.</div>
+    </div>
+    <div class="f"><button class="btn o" onclick="fermer()">Fermer</button></div>`);
+  document.getElementById("invCopyWA").onclick=()=>{navigator.clipboard.writeText(document.getElementById("invTxtWA").value);toast("Message WhatsApp copié !");};
+  document.getElementById("invCopyMail").onclick=()=>{navigator.clipboard.writeText(document.getElementById("invTxtMail").value);toast("Message Email copié !");};
 }
 
 /* Cohérence commission / net partenaire : c'est le net qui sert au calcul des commandes ;
