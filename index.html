@@ -5281,6 +5281,130 @@ function mapHTStatus(s){
 }
 
 /* ---------- CARTE DES CANAUX ---------- */
+/* ---------- Publier une annonce neuve sur Airbnb, Vrbo ou Booking (via Host Tools : POST /api/publishListing) ----------
+   Rien ne part sans confirmation. La fiche se remplit ici ; Host Tools crée l'annonce chez la plateforme. */
+const PUB_CANAUX={
+  airbnb:{nom:"Airbnb",ht:"Airbnb",delai:"une à deux minutes"},
+  vrbo:{nom:"Vrbo",ht:"HomeAway",delai:"une à deux minutes"},
+  booking:{nom:"Booking.com",ht:"Booking",delai:"jusqu'à une demi-heure"}};
+/* Ce que chaque plateforme exige avant publication (documentation Host Tools). */
+function pubVerifs(b,canal){
+  const p=b.parametres||{}, nom=(b.nom||"").trim(), v=[];
+  const a=(ok,texte,bloquant=true)=>v.push({ok:!!ok,texte,bloquant});
+  a(nom,"Nom de l'annonce");
+  a((b.adresse||"").trim(),"Adresse (rue)");
+  a(p.ville,"Ville");
+  a(p.pays,"Pays");
+  a(b.latitude!=null&&b.longitude!=null,"Position sur la carte (latitude et longitude)");
+  a(b.devise,"Devise");
+  a(Number(b.prix_nuit_base)>0,"Prix de base par nuit");
+  if(canal==="vrbo"){
+    a(nom.length>=10&&nom.length<=80,`Nom de 10 à 80 caractères (actuellement ${nom.length})`);
+    a(p.description,"Description");
+    a(p.code_postal,"Code postal");
+    a(Number(b.capacite)>0,"Nombre maximum de voyageurs");
+  }
+  if(canal==="booking"){
+    a(Number(p.nb_lits)>0||(Array.isArray(b.types_lits)&&b.types_lits.length),"Lits");
+    a(Number(b.capacite)>0,"Nombre maximum de voyageurs");
+    a(p.code_postal,"Code postal (exigé pour un nouvel établissement)",false);
+  }
+  a(p.description,"Description",false);
+  return v.filter((x,i,t)=>t.findIndex(y=>y.texte===x.texte)===i);
+}
+function pubPanneau(biens,liens){
+  const hote=$("#content"); if(!hote||document.getElementById("pubPanel"))return;
+  hote.insertAdjacentHTML("beforeend",`<div class="panel" id="pubPanel" style="margin-top:16px">
+    <div class="phead"><h3>🚀 Publier une annonce neuve sur une plateforme</h3></div>
+    <p class="phnote">Pour un bien qui n'existe pas encore sur Airbnb, Vrbo ou Booking. La fiche se remplit ici, dans My Hostaway ; Host Tools crée l'annonce chez la plateforme. Rien ne part sans votre confirmation.</p>
+    <div style="padding:0 16px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="pubBien"><option value="">— Choisir un bien —</option>${biens.map(b=>`<option value="${b.id}">${esc(b.nom)}</option>`).join("")}</select>
+      <select id="pubCanal">${Object.entries(PUB_CANAUX).map(([k,c])=>`<option value="${k}">${c.nom}</option>`).join("")}</select>
+      <button class="btn g sm" id="pubPrep">Vérifier la fiche</button>
+      <button class="btn o sm" id="pubSuivi">Suivre une publication</button>
+    </div>
+    <div id="pubZone" style="padding:0 16px 16px"></div></div>`);
+  const zone=$("#pubZone");
+  const idHT=bienId=>{const l=liens.find(x=>x.bien_id===bienId&&x.externe_id);return l?l.externe_id:null;};
+  const choix=()=>({bienId:$("#pubBien").value,canal:$("#pubCanal").value});
+  const sansBien=()=>{zone.innerHTML=`<div class="muted">Choisissez d'abord un bien.</div>`;};
+  const sansCoquille=()=>{zone.innerHTML=`<div class="callout" style="border-left:3px solid #e67e22;padding:8px 12px;background:#fff8ef">Ce bien n'est pas encore relié à Host Tools. Créez d'abord l'annonce vide dans Host Tools (nom et adresse suffisent), puis revenez ici et cliquez « Importer annonces » : le bien sera relié et vous pourrez publier.</div>`;};
+
+  $("#pubPrep").onclick=async()=>{
+    const {bienId,canal}=choix(); if(!bienId)return sansBien();
+    const C=PUB_CANAUX[canal], lid=idHT(bienId); if(!lid)return sansCoquille();
+    zone.innerHTML=`<span class="spin"></span>`;
+    const {data:b,error}=await sb.from("bien").select("*").eq("id",bienId).single();
+    if(error||!b){zone.innerHTML=`<div class="muted">Erreur : ${esc(error?error.message:"bien introuvable")}</div>`;return;}
+    const v=pubVerifs(b,canal), manque=v.filter(x=>!x.ok&&x.bloquant);
+    /* Déjà sur la plateforme ? On le lit chez Host Tools, pas dans nos liens (le canal noté à l'import n'est pas fiable). */
+    let deja=false, enCours=false;
+    const rl=await channelBridge("getListing",{listingId:lid});
+    if(rl&&rl.ok!==false){const ht=rl.data||rl;deja=!!(ht.channels&&ht.channels[C.ht]);enCours=!!ht.publishing;}
+    let comptes=null, errComptes="";
+    if(!manque.length&&!deja&&!enCours){const r=await channelBridge("getAccounts",{});
+      if(r&&r.ok!==false){const l=r.data&&(r.data.accounts||r.data)||[];comptes=(Array.isArray(l)?l:[]).filter(a=>String(a.type||a.channel||"").toLowerCase().includes(C.ht.toLowerCase())||String(a.type||a.channel||"").toLowerCase().includes(canal));}
+      else errComptes=(r&&r.error)||"réponse vide";}
+    const liste=v.map(x=>`<div style="color:${x.ok?"#2a7d2a":x.bloquant?"#c0392b":"#b9770e"}">${x.ok?"✓":x.bloquant?"✗":"!"} ${esc(x.texte)}${x.ok?"":x.bloquant?" — manquant":" — conseillé"}</div>`).join("");
+    let suite="";
+    if(deja)suite=`<p style="margin-top:10px"><b>Ce bien est déjà sur ${esc(C.nom)}.</b> Il n'y a rien à publier : utilisez « Pousser contenu » pour mettre l'annonce à jour.</p>`;
+    else if(enCours)suite=`<p style="margin-top:10px"><b>Une publication est déjà en cours pour ce bien.</b> Cliquez « Suivre une publication ».</p>`;
+    else if(manque.length)suite=`<p style="margin-top:10px"><b>${manque.length} information(s) manquante(s).</b> Complétez la fiche du bien, puis revenez vérifier.</p>`;
+    else if(errComptes)suite=`<p style="margin-top:10px;color:#c0392b">La fiche est complète, mais la liste de vos comptes ${esc(C.nom)} n'a pas pu être lue (${esc(String(errComptes).slice(0,120))}). La publication reste bloquée tant que ce point n'est pas réglé.</p>`;
+    else if(!comptes.length)suite=`<p style="margin-top:10px;color:#c0392b">La fiche est complète, mais aucun compte ${esc(C.nom)} n'est relié à Host Tools. Reliez d'abord votre compte ${esc(C.nom)} dans Host Tools.</p>`;
+    else suite=`<div style="margin-top:12px;display:grid;gap:8px;max-width:520px">
+        <label>Compte ${esc(C.nom)}<br><select id="pubCompte">${comptes.map(a=>`<option value="${esc(a._id||a.id)}">${esc(a.name||a.nickname||a.username||a.email||a._id||a.id)}</option>`).join("")}</select></label>
+        ${canal==="vrbo"?`<label>Vous louez en tant que<br><select id="pubHote"><option value="professional">Professionnel</option><option value="private">Particulier</option></select></label>
+        <label>Numéro d'enregistrement (si la commune l'exige)<br><input id="pubReg" maxlength="100"></label>`:""}
+        <div class="callout" style="border-left:3px solid #c0392b;padding:8px 12px;background:#fdf3f2;font-size:13px">
+          ${canal==="booking"?"<b>Booking : un établissement créé ne peut plus être supprimé.</b> Si aucun établissement n'existe à cette adresse, un nouveau sera créé sous votre compte partenaire.<br>":""}
+          ${canal==="vrbo"?"<b>Vrbo : un logement créé ne peut plus être supprimé.</b> Il est mis en ligne tout de suite, toutes dates fermées.<br>":""}
+          La publication active l'envoi du contenu : les textes et photos de cette fiche remplaceront ceux des autres plateformes déjà reliées à ce bien.<br>
+          Les dates restent fermées tant que la synchronisation du calendrier n'est pas activée. Délai habituel : ${C.delai}.</div>
+        <div><button class="btn g" id="pubGo">Publier sur ${esc(C.nom)}…</button></div></div>`;
+    zone.innerHTML=`<div style="font-size:13px"><b>${esc(b.nom)} → ${esc(C.nom)}</b><div style="margin-top:8px">${liste}</div>${suite}</div>`;
+    const go=$("#pubGo"); if(!go)return;
+    go.onclick=()=>{
+      const params={listingId:lid,channel:C.ht,accountID:$("#pubCompte").value};
+      if(canal==="vrbo"){params.hostType=$("#pubHote").value;const reg=$("#pubReg").value.trim();if(reg)params.registrationNumber=reg;}
+      ouvrir(`<div class="h"><h3>Confirmer la publication</h3><button class="x" onclick="fermer()">✕</button></div>
+        <div class="b"><p>Vous allez créer <b>${esc(b.nom)}</b> sur <b>${esc(C.nom)}</b>.</p>
+        <p>${canal==="airbnb"?"L'annonce sera créée sur votre compte Airbnb, toutes dates fermées.":"Cette création ne peut pas être annulée depuis My Hostaway."}</p>
+        <p>Tapez <b>PUBLIER</b> pour confirmer.</p><input id="pubMot" autocomplete="off"><div class="err" id="pubErr"></div></div>
+        <div class="f"><button class="btn o" onclick="fermer()">Annuler</button><button class="btn g" id="pubOk">Publier</button></div>`);
+      $("#pubOk").onclick=async()=>{
+        if($("#pubMot").value.trim().toUpperCase()!=="PUBLIER"){$("#pubErr").textContent="Tapez PUBLIER pour confirmer.";return;}
+        $("#pubOk").disabled=true;$("#pubOk").textContent="Envoi…";
+        const r=await channelBridge("publishListing",params);
+        fermer();
+        if(r&&r.ok!==false){
+          logAction("publication","bien",b.id,{canal:C.nom,annonce:b.nom});
+          const d=r.data||{};
+          zone.innerHTML=`<div style="color:#2a7d2a"><b>Demande envoyée.</b> ${esc(C.nom)} traite la création (${C.delai}).${d.newProperty?" Un nouvel établissement Booking a été créé.":""} Cliquez « Suivre une publication » pour voir le résultat.</div>`;
+          toast("Publication demandée");
+        }else zone.innerHTML=`<div style="color:#c0392b"><b>Publication refusée.</b> ${esc(String((r&&r.error)||"réponse vide").slice(0,300))}</div>`;
+      };
+    };
+  };
+
+  $("#pubSuivi").onclick=async()=>{
+    const {bienId}=choix(); if(!bienId)return sansBien();
+    const lid=idHT(bienId); if(!lid)return sansCoquille();
+    zone.innerHTML=`<span class="spin"></span>`;
+    const [rl,re]=await Promise.all([channelBridge("getListing",{listingId:lid}),channelBridge("getErrors",{})]);
+    if(!rl||rl.ok===false){zone.innerHTML=`<div style="color:#c0392b">Lecture impossible : ${esc(String((rl&&rl.error)||"réponse vide").slice(0,200))}</div>`;return;}
+    const ht=rl.data||rl, ch=ht.channels||{};
+    const noms={Airbnb:"Airbnb",HomeAway:"Vrbo",Booking:"Booking.com",Houfy:"Houfy"};
+    const lignes=Object.keys(noms).filter(k=>ch[k]).map(k=>{const o=ch[k]||{};const att=o.opening&&o.opening.waitingFor;
+      return `<div>✓ ${noms[k]} : en place${att?` — en attente (${esc(att==="calendarSync"?"synchronisation du calendrier à activer":att==="review"?"vérification par Booking":att==="issues"?"contrôles échoués":String(att))})`:""}</div>`;});
+    const enCours=ht.publishing?`<div style="color:#b9770e">⏳ Publication en cours${typeof ht.publishing==="string"?" : "+esc(ht.publishing):""}</div>`:"";
+    const errs=(re&&re.ok!==false?((re.data&&(re.data.errors||re.data))||[]):[]);
+    const refus=(Array.isArray(errs)?errs:[]).filter(e=>/publishFailed|openFailed/.test(String(e.type||e.code||e.name||""))&&(!e.listingID&&!e.listingId||(e.listingID||e.listingId)===lid)).slice(0,5)
+      .map(e=>`<div style="color:#c0392b">✗ ${esc(String(e.channel||""))} ${esc(String(e.message||e.reason||e.error||"refus sans motif").slice(0,240))}</div>`);
+    zone.innerHTML=`<div style="font-size:13px"><b>${esc(ht.name||"Annonce")}</b>${enCours}${lignes.join("")||(enCours?"":`<div class="muted">Cette annonce n'est encore sur aucune plateforme.</div>`)}${refus.join("")}${re&&re.ok===false?`<div class="muted">Motifs de refus non lisibles (${esc(String(re.error||"").slice(0,100))}).</div>`:""}</div>`;
+  };
+}
+
 async function renderCanauxCarte(){
   $("#content").innerHTML=`<div class="center"><span class="spin"></span></div>`;
   await loadOpts("bien");
@@ -5325,6 +5449,7 @@ async function renderCanauxCarte(){
     const csv='﻿'+["Annonce;"+CANAUX.join(';'),...lines].join('\n');
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
     a.href=url;a.download='Canaux_annonces.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Export CSV généré');};
+  pubPanneau(biens,liens||[]);
   /* --- Bridge API handlers --- */
   const bLog=document.getElementById("bridgeLog");
   const bStatus=document.getElementById("bridgeStatus");
